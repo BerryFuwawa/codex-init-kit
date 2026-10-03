@@ -10,12 +10,16 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Windows.Media.Imaging;
+using Ellipse = System.Windows.Shapes.Ellipse;
+using System.Windows.Media.Effects;
 
 namespace CodexKit {
 public class MainWindow : Window {
     static readonly Brush BackgroundBrush=B("#10141E"), PanelBrush=B("#1B2230"), TextBrush=B("#EDF2FC"), MutedBrush=B("#A4B0C5"), Accent=B("#9EBCFF");
     readonly StackPanel content=new StackPanel();
     readonly TextBlock heading=new TextBlock(), subtitle=new TextBlock(), banner=new TextBlock();
+    readonly TextBlock updateStatus=new TextBlock();
+    Button updateNotice;
     readonly TextBox log=new TextBox();
     readonly ProgressBar progress=new ProgressBar();
     readonly List<Button> navigation=new List<Button>();
@@ -24,11 +28,13 @@ public class MainWindow : Window {
     readonly CheckBox guard=new CheckBox();
     Dictionary<string,object> status, update;
     string page="概览", lastLog="", operationTitle="";
-    bool busy, preview;
+    bool busy, preview, checkingUpdate;
     int wizard;
     public void VerifyPages() {
         foreach(var name in new[]{"概览","初始化","维护恢复","更新","日志","初始化"}) { Navigate(name); Measure(new Size(1120,800)); Arrange(new Rect(0,0,1120,800)); UpdateLayout(); }
         wizard=1;Navigate("初始化");UpdateLayout(); wizard=2;Navigate("初始化");UpdateLayout();Navigate("日志");UpdateLayout();
+        update=new Dictionary<string,object>{{"version",Core.Version}};ApplyUpdateState();if(updateNotice.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Update notice shown for current version");
+        var current=new Version(Core.Version);update["version"]=new Version(current.Major,current.Minor,current.Build+1).ToString();ApplyUpdateState();Navigate("概览");UpdateLayout();if(updateNotice.Visibility!=Visibility.Visible||!updateStatus.Text.StartsWith("检测到更新"))throw new InvalidOperationException("Update notice missing");update=null;ApplyUpdateState();
     }
     public void RenderPages(string directory) {
         Directory.CreateDirectory(directory);
@@ -36,26 +42,32 @@ public class MainWindow : Window {
             Navigate(name);var view=(FrameworkElement)Content;view.Measure(new Size(1120,800));view.Arrange(new Rect(0,0,1120,800));view.UpdateLayout();
             var bitmap=new RenderTargetBitmap(1120,800,96,96,PixelFormats.Pbgra32);bitmap.Render(view);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(directory,name+".png")))encoder.Save(file);
         }
+        update=new Dictionary<string,object>{{"version",new Version(new Version(Core.Version).Major,new Version(Core.Version).Minor,new Version(Core.Version).Build+1).ToString()}};ApplyUpdateState();Navigate("概览");var updateView=(FrameworkElement)Content;updateView.Measure(new Size(1120,800));updateView.Arrange(new Rect(0,0,1120,800));updateView.UpdateLayout();var updateBitmap=new RenderTargetBitmap(1120,800,96,96,PixelFormats.Pbgra32);updateBitmap.Render(updateView);var updateEncoder=new PngBitmapEncoder();updateEncoder.Frames.Add(BitmapFrame.Create(updateBitmap));using(var file=File.Create(Path.Combine(directory,"检测到更新.png")))updateEncoder.Save(file);update=null;ApplyUpdateState();
     }
     public MainWindow(bool isPreview) {
         preview=isPreview; Title="Codex Init Kit"; Width=1120; Height=800; MinWidth=940; MinHeight=720; WindowStartupLocation=WindowStartupLocation.CenterScreen;
         Background=BackgroundBrush; Foreground=TextBrush; FontFamily=new FontFamily("Microsoft YaHei UI"); FontSize=14;
         var layout=new Grid{Background=BackgroundBrush}; layout.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(220)}); layout.ColumnDefinitions.Add(new ColumnDefinition()); Content=layout;
-        var rail=new Grid{Background=B("#151B27")}; rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(130)}); rail.RowDefinitions.Add(new RowDefinition()); rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(90)}); layout.Children.Add(rail);
+        var rail=new Grid{Background=B("#151B27")}; rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(130)}); rail.RowDefinitions.Add(new RowDefinition()); rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(130)}); layout.Children.Add(rail);
         var brand=new StackPanel{Margin=new Thickness(25,25,15,10)}; brand.Children.Add(T("C /",30,Accent)); brand.Children.Add(T("CODEX INIT KIT",16,TextBrush)); brand.Children.Add(T("Windows 初始化与维护",11,MutedBrush)); rail.Children.Add(brand);
         var nav=new StackPanel{Margin=new Thickness(14,12,14,0)}; Grid.SetRow(nav,1); rail.Children.Add(nav);
         foreach(var name in new[]{"概览","初始化","维护恢复","更新","日志"}) { var button=Button(name,()=>Navigate(name),false); button.HorizontalContentAlignment=HorizontalAlignment.Left; button.Margin=new Thickness(0,0,0,8); button.Padding=new Thickness(17,14,12,14); nav.Children.Add(button); navigation.Add(button); }
-        var foot=new StackPanel{Margin=new Thickness(25,10,15,15)}; foot.Children.Add(T("v"+Core.Version,12,MutedBrush)); foot.Children.Add(Link("GitHub 项目 ↗",()=>Open("https://github.com/"+Core.Repository))); Grid.SetRow(foot,2); rail.Children.Add(foot);
+        var foot=new StackPanel{Margin=new Thickness(20,10,12,15)};
+        updateNotice=Button("",async()=>await InstallUpdate(),false);updateNotice.Background=Brushes.Transparent;updateNotice.Padding=new Thickness(0,6,0,8);updateNotice.Visibility=Visibility.Collapsed;
+        var noticeContent=new StackPanel{Orientation=Orientation.Horizontal};noticeContent.Children.Add(new Ellipse{Width=8,Height=8,Fill=B("#FF526C"),Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Center,Effect=new DropShadowEffect{Color=Color.FromRgb(255,65,95),BlurRadius=10,ShadowDepth=0,Opacity=.95}});noticeContent.Children.Add(T("检测到更新，点击更新",12,TextBrush));updateNotice.Content=noticeContent;
+        foot.Children.Add(T("v"+Core.Version,12,MutedBrush)); foot.Children.Add(Link("GitHub 项目 ↗",()=>Open("https://github.com/"+Core.Repository))); Grid.SetRow(foot,2); rail.Children.Add(foot);
         var main=new Grid{Margin=new Thickness(32,25,32,20)}; main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto}); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto}); Grid.SetColumn(main,1); layout.Children.Add(main);
         var title=new StackPanel(); heading.FontSize=28; heading.FontWeight=FontWeights.SemiBold; subtitle.Foreground=MutedBrush; subtitle.Margin=new Thickness(0,8,0,22); subtitle.TextWrapping=TextWrapping.Wrap; title.Children.Add(heading); title.Children.Add(subtitle); main.Children.Add(title);
         var scroll=new ScrollViewer{VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Content=content}; Grid.SetRow(scroll,1); main.Children.Add(scroll);
-        var bottom=new StackPanel{Margin=new Thickness(0,15,0,0)}; banner.Foreground=MutedBrush; banner.TextWrapping=TextWrapping.Wrap; banner.Text="准备就绪 · 所有更改都会先展示确认摘要"; banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="点击查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志"); progress.Height=3; progress.Margin=new Thickness(0,10,0,0); progress.Maximum=100; bottom.Children.Add(banner); bottom.Children.Add(progress); Grid.SetRow(bottom,2); main.Children.Add(bottom);
+        var bottom=new StackPanel{Margin=new Thickness(0,15,0,0)}; banner.Foreground=MutedBrush; banner.TextWrapping=TextWrapping.Wrap; banner.Text="准备就绪 · 所有更改都会先展示确认摘要"; banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="点击查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");
+        var footerLine=new Grid();footerLine.ColumnDefinitions.Add(new ColumnDefinition());footerLine.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});banner.Margin=new Thickness(0,0,16,0);footerLine.Children.Add(banner);updateStatus.Foreground=MutedBrush;updateStatus.FontSize=12;updateStatus.Text="自动检查更新";updateStatus.VerticalAlignment=VerticalAlignment.Bottom;var updateArea=new StackPanel{HorizontalAlignment=HorizontalAlignment.Right};updateNotice.HorizontalAlignment=HorizontalAlignment.Right;updateNotice.Margin=new Thickness(0);updateArea.Children.Add(updateNotice);updateArea.Children.Add(updateStatus);Grid.SetColumn(updateArea,1);footerLine.Children.Add(updateArea);
+        progress.Height=3; progress.Margin=new Thickness(0,10,0,0); progress.Maximum=100; bottom.Children.Add(footerLine); bottom.Children.Add(progress); Grid.SetRow(bottom,2); main.Children.Add(bottom);
         log.IsReadOnly=true; log.AcceptsReturn=true; log.TextWrapping=TextWrapping.NoWrap; log.VerticalScrollBarVisibility=ScrollBarVisibility.Auto; log.HorizontalScrollBarVisibility=ScrollBarVisibility.Auto; log.FontFamily=new FontFamily("Consolas"); log.FontSize=12; log.Background=B("#101620"); log.Foreground=TextBrush; log.BorderThickness=new Thickness(0); log.Padding=new Thickness(14); log.Height=350;
         drive.ItemsSource=DriveInfo.GetDrives().Where(x=>x.DriveType==DriveType.Fixed && x.IsReady).Select(x=>x.Name.Substring(0,1)).ToArray(); drive.SelectedItem="D"; if(drive.SelectedIndex<0) drive.SelectedIndex=0;
         drive.Height=38; drive.FontSize=15; port.Text="10808"; port.Height=38; port.Padding=new Thickness(10,6,10,6);
         guard.Content="同时安装启动保护与自动维护"; guard.Foreground=TextBrush; guard.Margin=new Thickness(0,16,0,16);
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
-        Navigate("概览"); Loaded+=async(s,e)=>{if(!preview) { await Run("status","读取当前状态",false); await CheckUpdates(true); }};
+        Navigate("概览"); Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
     }
     static Brush B(string hex) { return (Brush)new BrushConverter().ConvertFromString(hex); }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
@@ -119,7 +131,7 @@ public class MainWindow : Window {
         var p=Card("当前版本  v"+Core.Version,update==null?"尚未获得更新清单。应用启动时会自动检查，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知"));
         Row(p,Button("检查更新",async()=>await CheckUpdates(false),true),Button("打开版本发布页 ↗",()=>Open("https://github.com/"+Core.Repository+"/releases"),false));
         if(update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version)) { p.Children.Add(T(Core.Value(update,"notes","有新版本可用。"),14,Accent)); p.Children.Add(Button("下载并更新",async()=>await InstallUpdate(),true)); }
-        Card("更新如何进行","使用固定 GitHub 提交中的更新清单，校验仓库来源和 SHA-256。确认后下载到当前 EXE 旁；退出后替换并重启，旧版本会留作备份。\n检查失败不影响本地功能。网络请求使用初始化页面中的本地代理端口。");
+        Card("更新如何进行","每次启动自动检查 GitHub 新版，右下角显示检查状态，发现更新时左下角出现红点入口。点击后下载并校验，退出后替换同目录、同文件名的 EXE 并重启；更新成功后自动删除旧版本。\n检查失败不影响本地功能。网络请求使用初始化页面中的本地代理端口。");
     }
     void LogsPage() { subtitle.Text="查看真实执行输出、失败原因和备份位置。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",()=>Clipboard.SetText(log.Text.Length>0?log.Text:"尚无日志"),false)); }
     bool Confirm(string title,string message) { return MessageBox.Show(this,message+"\n\n是否继续？",title,MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes; }
@@ -170,16 +182,21 @@ public class MainWindow : Window {
         return titles.ContainsKey(value)?titles[value]:value;
     }
     async Task CheckUpdates(bool silent) {
-        if(busy)return;
-        try {busy=true;banner.Text="正在检查 GitHub 更新…"; var proxy=Port(); update=await Task.Run(()=>Core.CheckUpdate(proxy)); var newer=new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version); banner.Text=newer?"发现新版本 v"+Core.Value(update,"version","")+" · 在更新页面确认下载":"当前已是最新版本";if(page=="更新")Navigate("更新");}
-        catch(Exception ex){banner.Text="更新检查未完成 · "+ex.Message;if(!silent && page=="更新")Navigate("更新");}
-        finally {busy=false;}
+        if(checkingUpdate)return;
+        try {checkingUpdate=true;updateStatus.Text="自动检查更新中…"; var proxy=Port(); update=await Task.Run(()=>Core.CheckUpdate(proxy));ApplyUpdateState();if(page=="更新")Navigate("更新");}
+        catch(Exception ex){updateStatus.Text="更新检查未完成";updateStatus.ToolTip=ex.Message;if(!silent && page=="更新")Navigate("更新");}
+        finally {checkingUpdate=false;}
+    }
+    void ApplyUpdateState() {
+        var newer=update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version);
+        updateNotice.Visibility=newer?Visibility.Visible:Visibility.Collapsed;updateNotice.ToolTip=newer?"更新到 v"+Core.Value(update,"version",""):null;
+        updateStatus.Text=newer?"检测到更新 v"+Core.Value(update,"version",""):"已是最新版本";updateStatus.ToolTip=null;
     }
     async Task InstallUpdate() {
-        if(busy || update==null)return;
-        if(!Confirm("更新到 v"+Core.Value(update,"version",""),"下载并校验后，应用将退出、替换当前 EXE 并自动重启。原版本保留为备份。"))return;
-        try{busy=true;progress.IsIndeterminate=true;banner.Text="正在下载并校验更新…";var stage=await Core.DownloadUpdate(update,Port());Core.ScheduleUpdate(stage);busy=false;Application.Current.Shutdown();}
-        catch(Exception ex){Error(ex);}finally{busy=false;progress.IsIndeterminate=false;}
+        if(busy){banner.Text="请等待当前操作完成后再更新。";return;}
+        if(update==null || new Version(Core.Value(update,"version","0.0.0"))<=new Version(Core.Version))return;
+        try{busy=true;updateNotice.IsEnabled=false;progress.IsIndeterminate=true;updateStatus.Text="正在下载并校验更新…";var stage=await Core.DownloadUpdate(update,Port());Core.ScheduleUpdate(stage);busy=false;Application.Current.Shutdown();}
+        catch(Exception ex){updateStatus.Text="更新未完成，可点击重试";Error(ex);}finally{busy=false;updateNotice.IsEnabled=true;progress.IsIndeterminate=false;}
     }
 }
 }

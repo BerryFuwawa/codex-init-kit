@@ -60,7 +60,19 @@ public static class Program {
             var valid="{\"schema_version\":1,\"repository\":\""+Core.Repository+"\",\"version\":\"2.0.1\",\"url\":\"https://github.com/"+Core.Repository+"/releases/download/v2.0.1/CodexInitKit.exe\",\"sha256\":\""+new string('a',64)+"\"}";
             Core.ValidateUpdate(valid);checks["update_manifest_valid"]=true;
             foreach(var bad in new[]{valid.Replace(Core.Repository,"other/repo"),valid.Replace("https://github.com/","http://github.com/"),valid.Replace(new string('a',64),"bad")}) { bool rejected=false;try{Core.ValidateUpdate(bad);}catch{rejected=true;}if(!rejected)throw new InvalidDataException("Unsafe update manifest accepted"); }checks["update_manifest_rejects_unsafe"]=true;
-            var current=Path.Combine(dir,"replace-test.exe");var next=current+".next";var backup=current+".bak";File.WriteAllText(current,"old");File.WriteAllText(next,"new");System.IO.File.Replace(next,current,backup);if(File.ReadAllText(current)!="new"||File.ReadAllText(backup)!="old")throw new IOException("Atomic replacement failed");checks["atomic_replacement_and_backup"]=true;
+            foreach(var scenario in new[]{"success","stage_changed","target_changed","restart_failed"}) {
+                var fixture=Path.Combine(dir,scenario);Directory.CreateDirectory(fixture);var current=Path.Combine(fixture,"app.exe");var next=Path.Combine(fixture,"next.exe");var updateLog=Path.Combine(fixture,"update.log");File.WriteAllText(current,"old");File.WriteAllText(next,"new");
+                var replacement=Core.BuildUpdateScript(next,current,0,updateLog,scenario=="restart_failed");
+                if(scenario=="stage_changed")File.WriteAllText(next,"corrupt");
+                if(scenario=="target_changed")File.WriteAllText(current,"changed");
+                if(scenario=="restart_failed")replacement=replacement.Replace("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;","throw 'Simulated restart failure';");
+                info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(replacement));
+                using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();if((proc.ExitCode==0)!=(scenario=="success"))throw new IOException("Updater exit status: "+scenario+" "+output);}
+                var expected=scenario=="success"?"new":scenario=="target_changed"?"changed":"old";
+                if(File.ReadAllText(current)!=expected||File.Exists(next)||Directory.GetFiles(fixture,"*.tmp").Length!=0||!File.Exists(updateLog))throw new IOException("Updater regression: "+scenario);
+                if(scenario=="restart_failed"&&!File.ReadAllText(updateLog).Contains("rollback succeeded"))throw new IOException("Updater rollback missing");
+                checks["updater_"+scenario]=true;
+            }
         }catch(Exception ex){errors.Add(ex.ToString());}
         finally {if(Directory.Exists(dir))Directory.Delete(dir,true);}
         var report=new Dictionary<string,object>{{"version",Core.Version},{"passed",errors.Count==0},{"checks",checks},{"errors",errors.ToArray()}};

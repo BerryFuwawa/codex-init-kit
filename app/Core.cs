@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.0.1";
+    public const string Version = "2.0.2";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
@@ -118,12 +118,58 @@ public static class Core {
             } catch { if(File.Exists(stage)) File.Delete(stage); throw; }
         }
     }
+    static string PowerShellLiteral(string value) {
+        if(value==null) throw new ArgumentNullException("value");
+        return "'"+value.Replace("'","''")+"'";
+    }
+    public static string BuildUpdateScript(string stage,string target,int pid,string logPath,bool restart) {
+        if(String.IsNullOrWhiteSpace(stage)) throw new ArgumentException("Update stage is required", "stage");
+        if(String.IsNullOrWhiteSpace(target)) throw new ArgumentException("Update target is required", "target");
+        if(String.IsNullOrWhiteSpace(logPath)) throw new ArgumentException("Update log path is required", "logPath");
+        var stagePath=Path.GetFullPath(stage); var targetPath=Path.GetFullPath(target); var resultLog=Path.GetFullPath(logPath);
+        if(String.Equals(stagePath,targetPath,StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Update stage and target must differ");
+        var expectedStageHash=Hash(stagePath); var expectedTargetHash=Hash(targetPath);
+        var backupPath=targetPath+".codex-update-backup-"+Guid.NewGuid().ToString("N")+".tmp";
+        var rollbackPath=targetPath+".codex-update-rollback-"+Guid.NewGuid().ToString("N")+".tmp";
+        var script=new StringBuilder();
+        script.Append("$ErrorActionPreference='Stop';");
+        script.Append("$stage=").Append(PowerShellLiteral(stagePath)).Append(";");
+        script.Append("$target=").Append(PowerShellLiteral(targetPath)).Append(";");
+        script.Append("$log=").Append(PowerShellLiteral(resultLog)).Append(";");
+        script.Append("$backup=").Append(PowerShellLiteral(backupPath)).Append(";");
+        script.Append("$rollback=").Append(PowerShellLiteral(rollbackPath)).Append(";");
+        script.Append("$expectedStageHash=").Append(PowerShellLiteral(expectedStageHash)).Append(";");
+        script.Append("$expectedTargetHash=").Append(PowerShellLiteral(expectedTargetHash)).Append(";");
+        script.Append("$replaced=$false;$exitCode=1;");
+        script.Append("function Get-Sha([string]$Path){if(-not [IO.File]::Exists($Path)){throw 'File not found: '+$Path};$stream=[IO.File]::OpenRead($Path);$hash=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose();$hash.Dispose()}};");
+        script.Append("function Test-Sha([string]$Path,[string]$Expected){try{if(-not [IO.File]::Exists($Path)){return $false};return ((Get-Sha $Path) -ceq $Expected)}catch{return $false}};");
+        script.Append("function Write-UpdateLog([string]$Status,[string]$Message){try{$parent=[IO.Path]::GetDirectoryName($log);if($parent){[IO.Directory]::CreateDirectory($parent)|Out-Null};$line=(Get-Date -Format o)+' ['+$Status+'] '+$Message;[IO.File]::AppendAllText($log,$line+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))}catch{}};");
+        if(pid>0) script.Append("Wait-Process -Id ").Append(pid.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" -ErrorAction SilentlyContinue;");
+        script.Append("try{");
+        script.Append("if(-not (Test-Sha $stage $expectedStageHash)){throw 'Update stage checksum mismatch'};");
+        script.Append("if(-not (Test-Sha $target $expectedTargetHash)){throw 'Current executable changed before update'};");
+        script.Append("[IO.File]::Replace($stage,$target,$backup);$replaced=$true;");
+        script.Append("if(-not (Test-Sha $target $expectedStageHash)){throw 'Updated executable checksum mismatch'};");
+        if(restart) script.Append("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;");
+        script.Append("if([IO.File]::Exists($backup)){[IO.File]::Delete($backup)};");
+        script.Append("Write-UpdateLog 'success' 'Update installed';$exitCode=0;");
+        script.Append("}catch{$failure=$_.Exception.Message;if($replaced -and (Test-Sha $target $expectedStageHash) -and (Test-Sha $backup $expectedTargetHash)){try{[IO.File]::Replace($backup,$target,$rollback);if(-not (Test-Sha $target $expectedTargetHash)){throw 'Rollback checksum mismatch'};if([IO.File]::Exists($rollback)){[IO.File]::Delete($rollback)};$replaced=$false;$failure=$failure+'; rollback succeeded'}catch{$failure=$failure+'; rollback failed: '+$_.Exception.Message}};Write-UpdateLog 'failure' $failure;}");
+        script.Append("finally{if([IO.File]::Exists($stage)){try{[IO.File]::Delete($stage)}catch{}};if($exitCode -eq 0 -or -not $replaced){if([IO.File]::Exists($backup)){try{[IO.File]::Delete($backup)}catch{}};if([IO.File]::Exists($rollback)){try{[IO.File]::Delete($rollback)}catch{}}}};exit $exitCode;");
+        return script.ToString();
+    }
     public static void ScheduleUpdate(string stage) {
-        var target=Exe; var backup=target+".before-update-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".bak";
-        Func<string,string> ps=v=>"'"+v.Replace("'","''")+"'";
-        var script="$ErrorActionPreference='Stop'; function Get-Sha($p){$s=[IO.File]::OpenRead($p);$h=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($h.ComputeHash($s)).Replace('-','').ToLowerInvariant()}finally{$s.Dispose();$h.Dispose()}}; Wait-Process -Id "+Process.GetCurrentProcess().Id+" -ErrorAction SilentlyContinue; try { if((Get-Sha "+ps(stage)+") -ne "+ps(Hash(stage))+"){throw 'Checksum mismatch'}; if((Get-Sha "+ps(target)+") -ne "+ps(Hash(target))+"){throw 'Current executable changed'}; [IO.File]::Replace("+ps(stage)+","+ps(target)+","+ps(backup)+"); Start-Process -FilePath "+ps(target)+" } catch { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('更新失败，原版本保留。'+$_.Exception.Message,'Codex Init Kit') | Out-Null }";
-        var info=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe"),"-NoProfile -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(script)));
-        info.UseShellExecute=false; info.CreateNoWindow=true; Process.Start(info);
+        var target=Exe; var logPath=Path.Combine(Logs,"update.log");
+        try {
+            var script=BuildUpdateScript(stage,target,Process.GetCurrentProcess().Id,logPath,true);
+            var powershell=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe");
+            var encoded=Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+            var info=new ProcessStartInfo(powershell,"-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+encoded);
+            info.UseShellExecute=false; info.CreateNoWindow=true; info.WindowStyle=ProcessWindowStyle.Hidden;
+            using(var process=Process.Start(info)) { }
+        } catch {
+            try { if(File.Exists(stage)) File.Delete(stage); } catch { }
+            throw;
+        }
     }
 }
 }

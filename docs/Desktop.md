@@ -1,14 +1,14 @@
-# Codex Init Kit Desktop 2.0.1
+# Codex Init Kit Desktop 2.0.2
 
 桌面版是两个主脚本的 GUI 入口。`CodexInitKit.exe` 将 Step1、Step2、CUA 修复脚本和 Backend worker 嵌入单个 Windows EXE；界面负责确认范围、启动 worker、显示日志和处理更新。
 
 ## 获取与启动
 
-v2.0.1 已发布：[BerryFuwawa/codex-init-kit v2.0.1](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.1)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.1/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.0.2 已发布：[BerryFuwawa/codex-init-kit v2.0.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.2)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.1/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.2/SHA256SUMS.txt) 中核对。
 
-使用旧版时，请手动下载此版本替换原 EXE；后续可通过更新页面检查新版。
+首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
 下载后双击 EXE，先在概览查看状态。需要配置时进入初始化向导，选择盘符与代理，查看变更摘要后确认执行；日常维护使用维护恢复页面。管理员授权只在修改操作开始时触发。自验可使用下文 CLI，命令中的 `$exe` 改为实际下载路径。
 
@@ -21,7 +21,7 @@ v2.0.1 已发布：[BerryFuwawa/codex-init-kit v2.0.1](https://github.com/BerryF
 | 概览 | 查看最近状态、默认模型和当前环境 | 刷新只读状态、进入初始化 |
 | 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置、创建并绑定工作目录、检查／修复 CUA、写入 Luna 规则；可选安装启动保护 |
 | 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、恢复桌面原生模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
-| 更新 | 查看版本、确认下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
+| 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
 
 初始化向导第二步会展示实际工作盘、代理端口、模型和启动保护选择，并在执行前弹出确认。修改操作在独立 worker 中运行，页面关闭会被阻止到当前操作结束；管理员授权取消时不会开始执行。
@@ -30,7 +30,7 @@ v2.0.1 已发布：[BerryFuwawa/codex-init-kit v2.0.1](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.0.1` |
+| 版本 | `2.0.2` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
 | 父模型 | `gpt-6.1-sol`，`medium` |
@@ -45,9 +45,9 @@ v2.0.1 已发布：[BerryFuwawa/codex-init-kit v2.0.1](https://github.com/BerryF
 
 1. 启动或更新页面调用 GitHub API，获得 `main` 的完整提交 SHA。
 2. 从该提交读取 `desktop-update.json`，校验仓库、清单版本、GitHub release URL 和 64 位 SHA-256。
-3. 用户在更新页面确认后，下载到当前 EXE 旁的 `.CodexInitKit-update-<guid>.exe` 临时文件。
+3. 每次启动时右下角显示自动检查状态；发现新版后右下角显示红色亮点和「检测到更新，点击更新」。点击直接下载到当前 EXE 旁的 `.CodexInitKit-update-<guid>.exe` 临时文件。
 4. 再次校验 SHA-256 和 Windows EXE 的 `MZ` 标记；失败时删除临时文件并保留当前版本。
-5. GUI 退出后由独立 PowerShell 进程执行 `File.Replace` 原子替换，备份为 `.before-update-<时间戳>.bak`，随后启动新 EXE。替换失败时原版本保留。
+5. GUI 退出后由独立 PowerShell 进程执行 `File.Replace`，保持原 EXE 的目录和文件名，并启动新版。成功后删除临时旧版文件；失败时尝试恢复原可用版本。更新日志保存在桌面日志目录。
 
 ## 构建与验证边界
 
@@ -93,7 +93,7 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 - 初始化会真实备份并重置当前用户 Codex 配置，可能关闭或停止 Codex 进程，写入 `.env`、规则、工作目录和用户 PATH。开始前保存工作并关闭 Codex。
 - 初始化回滚只恢复最近一次初始化备份；它不恢复 CUA 运行时备份，也不删除初始化期间已创建的标准工作目录。
 - CUA 修复保留自己的运行时备份。启动保护的安装、更新、切换、回滚和卸载使用保护器自己的状态与备份，不等同于初始化回滚。
-- 更新器只替换当前桌面 EXE，并留下替换前备份；更新清单或下载校验失败时不改动当前版本。
+- 更新器只替换当前桌面 EXE，成功后删除旧版；更新清单或下载校验失败时不改动当前版本。脚本独立更新器仍按各自规则保留脚本备份。
 
 ## 视觉参考
 

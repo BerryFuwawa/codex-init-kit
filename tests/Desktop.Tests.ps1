@@ -25,4 +25,4 @@ Invoke-DesktopCli '--status-json' $status
 $state=[IO.File]::ReadAllText($status,[Text.Encoding]::UTF8)|ConvertFrom-Json
 if($state.exit_code -ne 0 -or $null -eq $state.status){throw 'No valid status report.'}
 if($CheckLiveUpdate){Invoke-DesktopCli '--check-update-json' (Join-Path $ReportDirectory 'update.json')}
-Write-Output ('PASS: headless resources, PowerShell syntax, page navigation, worker input, update validation, atomic backup and read-only status. Reports: '+$ReportDirectory)
+Write-Output ('PASS: headless resources, PowerShell syntax, page navigation, worker input, update validation, replacement, rollback, cleanup and read-only status. Reports: '+$ReportDirectory)
