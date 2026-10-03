@@ -1,12 +1,12 @@
-# Codex Init Kit Desktop 2.0.2
+# Codex Init Kit Desktop 2.0.3
 
 桌面版是两个主脚本的 GUI 入口。`CodexInitKit.exe` 将 Step1、Step2、CUA 修复脚本和 Backend worker 嵌入单个 Windows EXE；界面负责确认范围、启动 worker、显示日志和处理更新。
 
 ## 获取与启动
 
-v2.0.2 已发布：[BerryFuwawa/codex-init-kit v2.0.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.2)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.0.3 已发布：[BerryFuwawa/codex-init-kit v2.0.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.3)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.2/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.3/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -30,7 +30,7 @@ v2.0.2 已发布：[BerryFuwawa/codex-init-kit v2.0.2](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.0.2` |
+| 版本 | `2.0.3` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
 | 父模型 | `gpt-6.1-sol`，`medium` |
@@ -50,6 +50,8 @@ v2.0.2 已发布：[BerryFuwawa/codex-init-kit v2.0.2](https://github.com/BerryF
 5. GUI 退出后由独立 PowerShell 进程执行 `File.Replace`，保持原 EXE 的目录和文件名，并启动新版。成功后删除临时旧版文件；失败时尝试恢复原可用版本。更新日志保存在桌面日志目录。
 
 ## 构建与验证边界
+
+Logo 素材位于 `assets/`：`logo.svg` 为矢量版本，`logo.png` 为透明背景图片，`app.ico` 包含 16、24、32、48、64、128 和 256 像素图标。可通过 `powershell -Sta -NoProfile -ExecutionPolicy Bypass -File tools/Build-BrandAssets.ps1` 重新生成 PNG 与 ICO。
 
 `tools/Build-Desktop.ps1` 使用 .NET Framework 4.8 的 `Framework64\v4.0.30319\csc.exe`，以 WPF、Win64、`winexe` 目标编译，并把 payload 作为资源写入 EXE：
 

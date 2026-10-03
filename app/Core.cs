@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.0.2";
+    public const string Version = "2.0.3";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();

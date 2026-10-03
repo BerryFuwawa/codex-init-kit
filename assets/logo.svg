@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Codex Init Kit</title>
+  <desc>A blue C update loop around a terminal prompt, with a mint completion check.</desc>
+  <rect width="256" height="256" rx="52" fill="#151B27"/>
+  <path d="M177 66 C146 39 94 42 65 74 C35 108 39 160 72 188 C96 209 127 214 154 205" fill="none" stroke="#9EBCFF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M158 45 L199 69 L165 94 Z" fill="#9EBCFF"/>
+  <path d="M94 99 L118 123 L94 147" fill="none" stroke="#EDF2FC" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M135 148 L154 148" stroke="#EDF2FC" stroke-width="13" stroke-linecap="round"/>
+  <path d="M166 179 L184 197 L216 162" fill="none" stroke="#70DFC0" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

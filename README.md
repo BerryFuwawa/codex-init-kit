@@ -1,5 +1,7 @@
 # Codex Init Kit
 
+<img src="assets/logo.svg" alt="Codex Init Kit Logo" width="96" height="96">
+
 面向 Windows 的 Codex 初始化与维护工具。用一个 EXE 完成工作区配置、CUA 检查与修复、Luna 子代理规则设置，以及启动运行时的日常维护。
 
 **[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md) · [脚本说明](docs/Scripts.md)
