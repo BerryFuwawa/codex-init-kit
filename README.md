@@ -8,6 +8,18 @@
 
 **[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md) · [脚本说明](docs/Scripts.md)
 
+## 界面看看就懂
+
+**概览：** 查看默认模型和当前状态，从这里进入初始化。
+
+![Codex Init Kit 概览页面](assets/screenshots/overview.png)
+
+**维护恢复：** 检查／修复 CUA，修复启动保护，切换桌面自带或官方独立 CLI，也能诊断和回滚。
+
+![Codex Init Kit 维护恢复页面](assets/screenshots/maintenance.png)
+
+图片为 2.0.3 的离线界面预览，未执行初始化或修复；实际状态以你电脑上的检测结果为准。
+
 ## 它能解决什么问题？
 
 | 你遇到的情况 | 工具能帮你做什么 | 从哪里操作 |
