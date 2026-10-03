@@ -123,4 +123,6 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 ## 视觉参考
 
+README 中的界面图片直接从当前 EXE 离线渲染，使用 192 DPI（200% 缩放）。维护截图可运行 `tools/Render-Documentation.ps1 -Executable <EXE路径> -Dpi 192`；普通页面输出为 2240 × 1600 像素，完整设置图为 2240 × 2800 像素，不打开窗口或执行初始化。
+
 界面布局与交互取 [WPF UI](https://github.com/lepoco/wpfui) 和 [Microsoft PowerToys](https://github.com/microsoft/PowerToys) 作为视觉参考。它们不属于运行时依赖；本项目未复制其代码或组件。

@@ -6,7 +6,7 @@
 
 **适合这些情况：刚装好 Codex 不知道怎么配置；改过配置后想重新整理；电脑操作功能缺组件；启动使用的程序路径出了问题。** 已经正常使用的人，也可以只做检查或单项修复。
 
-**[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md) · [脚本说明](docs/Scripts.md)
+**[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md)
 
 ## 它能解决什么问题？
 
@@ -83,7 +83,7 @@
 | 子代理规则 | 写入子代理用什么模型、最多同时调用几个、能否继续委派 |
 | 启动保护（可选） | 检查启动组件，准备官方备用程序，并安装登录时的自动维护任务 |
 
-桌面版提供「概览、初始化、维护恢复、更新、日志」五个页面。也保留独立脚本入口，适合已有批处理使用习惯的用户。
+桌面版提供「概览、初始化、维护恢复、更新、日志」五个页面，直接下载 EXE 即可使用。
 
 ### 初始化顺序
 
@@ -143,17 +143,7 @@
 
 ![Codex Init Kit 维护恢复页面](assets/screenshots/maintenance.png)
 
-图片为 2.0.4 的离线界面预览，未执行初始化或修复；设置图展开了完整内容，实际窗口可滚动。实际状态以你电脑上的检测结果为准。
-
-## 脚本入口
-
-| 入口 | 用途 | 内部版本 |
-| --- | --- | --- |
-| [第 1 步：初始化管理](scripts/第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd) | 配置初始化、目录管理、CUA、RTK 与 Luna 规则 | `4.8.1` |
-| [第 2 步：启动保护与更新管理](scripts/第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd) | 运行时保护、登录维护、更新、诊断、切换与回滚 | `5.2.1` |
-| [CUA 独立入口](scripts/Codex_CUA_Repair.cmd) | 单独检查或修复 CUA | — |
-
-两个主脚本保留原文件名，版本以内部标记为准。完整菜单、执行细节及备份位置见 [脚本使用说明](docs/Scripts.md)。
+图片来自当前 2.0.4 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。初始化设置图包含代理开关、四项功能选择和自定义模型；图中展开了完整内容，实际窗口可滚动。未执行真实初始化或修复，状态以你电脑上的检测结果为准。
 
 ## CLI 验证与源码构建
 
@@ -178,7 +168,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\Build-Desktop.ps1
 
 ```text
 app/                     桌面界面、worker 与 CLI
-scripts/                 独立批处理入口
+scripts/                 EXE 内嵌组件源码
 src/GitHubUpdate.ps1      脚本更新模块
 tools/                   构建和发布准备工具
 tests/                   脚本更新与后台回归测试
