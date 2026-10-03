@@ -1,0 +1,19 @@
+{
+    "schema_version":  1,
+    "repository":  "BerryFuwawa/codex-init-kit",
+    "channel":  "stable",
+    "components":  {
+                       "init":  {
+                                    "version":  "4.8.1",
+                                    "path":  "scripts/第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd",
+                                    "encoding":  "gbk",
+                                    "sha256":  "2d64177e404c98119e7f894087a356b7a8cab666db61988b05ff1570519cce93"
+                                },
+                       "guard":  {
+                                     "version":  "5.2.1",
+                                     "path":  "scripts/第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd",
+                                     "encoding":  "utf-8",
+                                     "sha256":  "c8bc51cb48de76b3cbabd34ac902f4a544d44683b92531aaf59bc72eaa6873ee"
+                                 }
+                   }
+}

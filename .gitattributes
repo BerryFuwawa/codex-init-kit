@@ -1,0 +1,3 @@
+# .cmd 文件保留原始编码（含 GBK）和 CRLF，不做 Git 文本转换。
+* text=auto eol=lf
+*.cmd -text

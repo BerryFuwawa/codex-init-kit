@@ -1,0 +1,36 @@
+# 用户密钥和本机环境
+.env
+.env.*
+*.env
+*.env.*
+*.secret
+*.secrets
+secrets/
+config.local.*
+config.machine.*
+machine-config/
+machine-configs/
+*.local.json
+*.local.yaml
+*.local.yml
+
+# 运行时输出、日志和回滚备份
+logs/
+*.log
+backups/
+backup/
+*.bak
+*.backup
+
+# 本地依赖和临时目录
+node_modules/
+work/
+Temp/
+temp/
+
+# 本机安装器产物
+Installer.exe
+*Installer*.exe
+build/
+bin/
+obj/
