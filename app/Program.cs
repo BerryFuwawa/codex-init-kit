@@ -57,6 +57,8 @@ public static class Program {
             var app=new Application(); var window=new MainWindow(true);window.VerifyPages(); checks["pages_and_navigation"]=true; window.Close();
             checks["worker_rejects_invalid_operation"]=Core.Worker(new[]{"--worker","invalid",Guid.NewGuid().ToString("N"),"D","10808","0",Core.Sid})==64;
             checks["worker_rejects_invalid_drive"]=Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"&","10808","0",Core.Sid})==64;
+            var options=Core.NormalizeOptions(new Dictionary<string,object>{{"folderManagement",false},{"subagents",false},{"cuaRepair",false},{"parentModel","custom-parent"},{"childModel","custom-child"}});if((bool)options["folderManagement"]||(bool)options["subagents"]||(bool)options["cuaRepair"]||Convert.ToString(options["parentModel"])!="custom-parent")throw new InvalidDataException("Setup options were not preserved");checks["setup_options"]=true;
+            var unsafeOptions=Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"parentModel\":\"bad & model\"}"));if(Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"D","0","0",Core.Sid,unsafeOptions})!=64)throw new InvalidDataException("Unsafe worker model accepted");checks["worker_rejects_unsafe_model"]=true;
             checks["operation_count"]=Core.Operations.Length;
             var valid="{\"schema_version\":1,\"repository\":\""+Core.Repository+"\",\"version\":\"2.0.1\",\"url\":\"https://github.com/"+Core.Repository+"/releases/download/v2.0.1/CodexInitKit.exe\",\"sha256\":\""+new string('a',64)+"\"}";
             Core.ValidateUpdate(valid);checks["update_manifest_valid"]=true;

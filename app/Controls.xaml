@@ -1,0 +1,49 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style x:Key="KitInput" TargetType="TextBox">
+    <Setter Property="Background" Value="#101620"/><Setter Property="Foreground" Value="#EDF2FC"/>
+    <Setter Property="BorderBrush" Value="#39465D"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="12,9"/><Setter Property="FontSize" Value="14"/>
+    <Setter Property="Height" Value="42"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8"><ScrollViewer x:Name="PART_ContentHost"/></Border></ControlTemplate></Setter.Value></Setter>
+    <Style.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="#9EBCFF"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.65"/></Trigger></Style.Triggers>
+  </Style>
+  <Style x:Key="KitCheck" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="#EDF2FC"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Margin" Value="0,6,0,6"/><Setter Property="Padding" Value="0"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border x:Name="Box" Width="20" Height="20" CornerRadius="5" Background="#101620" BorderBrush="#61718E" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
+          <Path x:Name="Tick" Data="M 4,9 L 8,13 L 15,5" Stroke="#101B31" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+        </Border>
+        <ContentPresenter Grid.Column="1" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#9EBCFF"/><Setter TargetName="Box" Property="BorderBrush" Value="#9EBCFF"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#C9D9FF"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#70DFC0"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="KitComboItem" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="#EDF2FC"/><Setter Property="Padding" Value="12,10"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Item" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="#293348"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Item" Property="Background" Value="#2E4063"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="KitCombo" TargetType="ComboBox">
+    <Setter Property="Foreground" Value="#EDF2FC"/><Setter Property="Height" Value="44"/>
+    <Setter Property="Background" Value="#101620"/><Setter Property="BorderBrush" Value="#39465D"/>
+    <Setter Property="ItemContainerStyle" Value="{StaticResource KitComboItem}"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+      <Grid>
+        <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press">
+          <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border x:Name="Surface" Background="#101620" BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=ComboBox}}" BorderThickness="1" CornerRadius="8"><Path Data="M 0,0 L 5,5 L 10,0" Stroke="#9EBCFF" StrokeThickness="1.8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#9EBCFF"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#9EBCFF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></ToggleButton.Template>
+        </ToggleButton>
+        <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="13,0,40,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+        <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False" StaysOpen="False" IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Fade">
+          <Border Background="#1B2230" BorderBrush="#39465D" BorderThickness="1" CornerRadius="9" Padding="5" Margin="0,5,0,0" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><ScrollViewer MaxHeight="260" CanContentScroll="True"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer></Border>
+        </Popup>
+      </Grid>
+      <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#70DFC0"/></Trigger></ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+</ResourceDictionary>

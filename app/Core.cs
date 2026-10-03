@@ -11,15 +11,22 @@ using System.Security.AccessControl;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using System.Text.RegularExpressions;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.0.3";
+    public const string Version = "2.0.4";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
+    const string DefaultParentModel = "gpt-6.1-sol";
+    const string DefaultChildModel = "gpt-5.6-luna";
+    const string DefaultParentEffort = "medium";
+    const string DefaultChildEffort = "max";
+    static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
+    static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
     public static string Sid { get { return WindowsIdentity.GetCurrent().User.Value; } }
     public static bool Admin { get { return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); } }
     public static string Hash(string path) { using(var s=File.OpenRead(path)) using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(s)).Replace("-", "").ToLowerInvariant(); }
@@ -44,12 +51,59 @@ public static class Core {
         return directory;
     }
     public static bool NeedsAdmin(string operation) { return operation!="status" && operation!="cua-check" && operation!="doctor"; }
+
+    static Dictionary<string,object> DefaultOptions() {
+        return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
+            {"folderManagement", true}, {"subagents", true}, {"cuaRepair", true},
+            {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
+            {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort}
+        };
+    }
+    static bool ReadOptionBoolean(Dictionary<string,object> source,string key,bool fallback) {
+        object value;
+        if(source==null || !source.TryGetValue(key,out value) || value==null) return fallback;
+        if(value is bool) return (bool)value;
+        throw new ArgumentException("Option "+key+" must be boolean");
+    }
+    static string ReadOptionString(Dictionary<string,object> source,string key,string fallback) {
+        object value;
+        if(source==null || !source.TryGetValue(key,out value) || value==null) return fallback;
+        var text=value as string;
+        if(text==null || String.IsNullOrWhiteSpace(text)) throw new ArgumentException("Option "+key+" must be a non-empty string");
+        if((key=="parentModel" || key=="childModel") && !ModelIdPattern.IsMatch(text)) throw new ArgumentException("Option "+key+" contains an invalid model id");
+        if((key=="parentEffort" || key=="childEffort") && !EffortPattern.IsMatch(text)) throw new ArgumentException("Option "+key+" contains an invalid effort");
+        return text;
+    }
+    public static Dictionary<string,object> NormalizeOptions(Dictionary<string,object> source) {
+        var normalized=DefaultOptions();
+        if(source==null) return normalized;
+        normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
+        normalized["subagents"]=ReadOptionBoolean(source,"subagents",true);
+        normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
+        normalized["parentModel"]=ReadOptionString(source,"parentModel",DefaultParentModel);
+        normalized["childModel"]=ReadOptionString(source,"childModel",DefaultChildModel);
+        normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);
+        normalized["childEffort"]=ReadOptionString(source,"childEffort",DefaultChildEffort);
+        return normalized;
+    }
+    static Dictionary<string,object> DecodeOptions(string value) {
+        if(String.IsNullOrWhiteSpace(value)) throw new ArgumentException("Worker options are empty");
+        var bytes=Convert.FromBase64String(value);
+        var json= new UTF8Encoding(false,true).GetString(bytes);
+        return NormalizeOptions(Json.Deserialize<Dictionary<string,object>>(json));
+    }
+    static string EncodeOptions(Dictionary<string,object> options) {
+        var json=Json.Serialize(NormalizeOptions(options));
+        return Convert.ToBase64String(new UTF8Encoding(false).GetBytes(json));
+    }
     public static int Worker(string[] args) {
         // All executable code comes from this EXE's embedded resources, never a supplied job/script path.
-        if(args.Length!=7 || !Operations.Contains(args[1])) return 64;
+        if((args.Length!=7 && args.Length!=8) || args.Length<2 || !Operations.Contains(args[1])) return 64;
         Guid id; int port;
-        if(!Guid.TryParseExact(args[2],"N",out id) || !int.TryParse(args[4],out port) || port<1 || port>65535) return 64;
+        Dictionary<string,object> options=null;
+        if(!Guid.TryParseExact(args[2],"N",out id) || !int.TryParse(args[4],out port) || port<0 || port>65535) return 64;
         if(args[3].Length!=1 || args[3][0]<'A' || args[3][0]>'Z' || (args[5]!="0" && args[5]!="1")) return 64;
+        if(args.Length==8) { try { options=DecodeOptions(args[7]); } catch { return 64; } }
         var log=Path.Combine(Logs,args[2]+".log");
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
         if(NeedsAdmin(args[1]) && !Admin) return 66;
@@ -62,7 +116,8 @@ public static class Core {
                 var psi=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe"));
                 psi.UseShellExecute=false; psi.CreateNoWindow=true; psi.RedirectStandardOutput=true; psi.RedirectStandardError=true;
                 psi.StandardOutputEncoding=Encoding.UTF8; psi.StandardErrorEncoding=Encoding.UTF8;
-                psi.Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Quote(Path.Combine(payload,"Backend.ps1"))+" -Operation "+Quote(args[1])+" -PayloadRoot "+Quote(payload)+" -Drive "+Quote(args[3])+" -ProxyPort "+port+(args[1]=="initialize"&&args[5]=="1"?" -InstallProtection":"");
+                var optionsArgument=options==null?"":" -OptionsBase64 "+Quote(EncodeOptions(options));
+                psi.Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Quote(Path.Combine(payload,"Backend.ps1"))+" -Operation "+Quote(args[1])+" -PayloadRoot "+Quote(payload)+" -Drive "+Quote(args[3])+" -ProxyPort "+port+(args[1]=="initialize"&&args[5]=="1"?" -InstallProtection":"")+optionsArgument;
                 using(var process=new Process()) {
                     process.StartInfo=psi;
                     process.OutputDataReceived+=(s,e)=>{if(e.Data!=null) lock(gate) writer.WriteLine(e.Data);};
@@ -75,8 +130,14 @@ public static class Core {
         finally { try { if(Directory.Exists(job) && (File.GetAttributes(job)&FileAttributes.ReparsePoint)==0) Directory.Delete(job,true); } catch { } }
     }
     public static Process StartWorker(string operation,string id,string drive,int port,bool guard) {
+        return StartWorker(operation,id,drive,port,guard,null);
+    }
+    public static Process StartWorker(string operation,string id,string drive,int port,bool guard,Dictionary<string,object> options) {
         if(!Operations.Contains(operation)) throw new ArgumentException("Unsupported operation");
-        var info=new ProcessStartInfo(Exe,"--worker "+operation+" "+id+" "+drive+" "+port+" "+(guard?"1":"0")+" "+Sid);
+        if(port<0 || port>65535) throw new ArgumentOutOfRangeException("port");
+        var args="--worker "+operation+" "+id+" "+drive+" "+port+" "+(guard?"1":"0")+" "+Sid;
+        if(options!=null) args+=" "+EncodeOptions(options);
+        var info=new ProcessStartInfo(Exe,args);
         info.UseShellExecute=true; info.WindowStyle=ProcessWindowStyle.Hidden;
         if(NeedsAdmin(operation) && !Admin) info.Verb="runas";
         return Process.Start(info);
@@ -87,7 +148,7 @@ public static class Core {
         ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
         var request=(HttpWebRequest)WebRequest.Create(url); request.UserAgent="CodexInitKitDesktop/"+Version;
         request.Timeout=12000; request.ReadWriteTimeout=12000;
-        if(proxyPort>0) request.Proxy=new WebProxy("http://127.0.0.1:"+proxyPort);
+        request.Proxy=proxyPort>0?new WebProxy("http://127.0.0.1:"+proxyPort):null;
         using(var response=request.GetResponse()) using(var reader=new StreamReader(response.GetResponseStream(),Encoding.UTF8)) return reader.ReadToEnd();
     }
     public static Dictionary<string,object> CheckUpdate(int port) {
@@ -108,7 +169,7 @@ public static class Core {
         var stage=Path.Combine(Path.GetDirectoryName(Exe),".CodexInitKit-update-"+Guid.NewGuid().ToString("N")+".exe");
         using(var client=new WebClient()) {
             client.Headers[HttpRequestHeader.UserAgent]="CodexInitKitDesktop/"+Version;
-            if(port>0) client.Proxy=new WebProxy("http://127.0.0.1:"+port);
+            client.Proxy=port>0?new WebProxy("http://127.0.0.1:"+port):null;
             try {
                 await client.DownloadFileTaskAsync(new Uri(Value(manifest,"url","")),stage);
                 if(Hash(stage)!=Value(manifest,"sha256","")) throw new InvalidDataException("下载校验失败，当前版本保持不变");

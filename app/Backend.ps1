@@ -12,7 +12,8 @@ param(
     [string]$Drive,
     [int]$ProxyPort = 10808,
     [switch]$InstallProtection,
-    [string]$JobFile
+    [string]$JobFile,
+    [string]$OptionsBase64
 )
 
 $script:BackendVersion = '1.0.0'
@@ -21,6 +22,16 @@ $script:InputEncoding = [System.Text.Encoding]::GetEncoding(936)
 $script:ProxyPortWasBound = $PSBoundParameters.ContainsKey('ProxyPort')
 $script:InstallProtectionWasBound = $PSBoundParameters.ContainsKey('InstallProtection')
 $script:JobWasBound = $PSBoundParameters.ContainsKey('JobFile')
+$script:OptionsWasBound = $PSBoundParameters.ContainsKey('OptionsBase64')
+$script:DefaultOptions = [ordered]@{
+    folderManagement = $true
+    subagents = $true
+    cuaRepair = $true
+    parentModel = 'gpt-6.1-sol'
+    childModel = 'gpt-5.6-luna'
+    parentEffort = 'medium'
+    childEffort = 'max'
+}
 
 function Set-BackendOutputEncoding {
     try { [Console]::OutputEncoding = $script:Utf8NoBom } catch {}
@@ -49,6 +60,11 @@ function Write-BackendStatus {
 function Get-ObjectPropertyValue {
     param([AllowNull()][object]$Object,[Parameter(Mandatory=$true)][string]$Name)
     if ($null -eq $Object) { return $null }
+    if ($Object -is [System.Collections.IDictionary]) {
+        foreach ($key in $Object.Keys) {
+            if ([string]$key -ieq $Name) { return $Object[$key] }
+        }
+    }
     $property = $Object.PSObject.Properties | Where-Object { $_.Name -ieq $Name } | Select-Object -First 1
     if ($property) { return $property.Value }
     return $null
@@ -58,6 +74,50 @@ function Convert-ToBoolean {
     if ($null -eq $Value) { return $false }
     if ($Value -is [bool]) { return [bool]$Value }
     return (([string]$Value).Trim() -match '^(?i:true|yes|y|1|on)$')
+}
+function Convert-BackendOptionBoolean {
+    param([AllowNull()][object]$Value,[Parameter(Mandatory=$true)][string]$Name,[bool]$Default=$true)
+    if ($null -eq $Value) { return $Default }
+    if ($Value -is [bool]) { return [bool]$Value }
+    throw ('Option ' + $Name + ' must be boolean.')
+}
+function Convert-BackendOptionString {
+    param([AllowNull()][object]$Value,[Parameter(Mandatory=$true)][string]$Name,[Parameter(Mandatory=$true)][string]$Default,[switch]$Model)
+    if ($null -eq $Value) { return $Default }
+    if ($Value -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$Value)) { throw ('Option ' + $Name + ' must be a non-empty string.') }
+    $text = [string]$Value
+    if ($Model -and $text -notmatch '^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$') { throw ('Option ' + $Name + ' contains an invalid model id.') }
+    if (-not $Model -and $text -notmatch '^[A-Za-z][A-Za-z0-9_-]{0,31}$') { throw ('Option ' + $Name + ' contains an invalid effort.') }
+    return $text
+}
+function Convert-BackendOptions {
+    param([AllowNull()][object]$Value,[string]$Base64)
+    $source = $Value
+    if (-not [string]::IsNullOrWhiteSpace($Base64)) {
+        try {
+            $bytes = [Convert]::FromBase64String($Base64)
+            $source = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -ErrorAction Stop
+        } catch { throw ('OptionsBase64 is not valid UTF-8 JSON: ' + $_.Exception.Message) }
+    }
+    $get = { param([string]$Name) Get-ObjectPropertyValue $source $Name }
+    $options = [ordered]@{}
+    $options.folderManagement = & $get 'folderManagement'
+    $options.subagents = & $get 'subagents'
+    $options.cuaRepair = & $get 'cuaRepair'
+    $options.parentModel = & $get 'parentModel'
+    $options.childModel = & $get 'childModel'
+    $options.parentEffort = & $get 'parentEffort'
+    $options.childEffort = & $get 'childEffort'
+    $normalized = [ordered]@{
+        folderManagement = Convert-BackendOptionBoolean $options.folderManagement 'folderManagement' $script:DefaultOptions.folderManagement
+        subagents = Convert-BackendOptionBoolean $options.subagents 'subagents' $script:DefaultOptions.subagents
+        cuaRepair = Convert-BackendOptionBoolean $options.cuaRepair 'cuaRepair' $script:DefaultOptions.cuaRepair
+        parentModel = Convert-BackendOptionString $options.parentModel 'parentModel' $script:DefaultOptions.parentModel -Model
+        childModel = Convert-BackendOptionString $options.childModel 'childModel' $script:DefaultOptions.childModel -Model
+        parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
+        childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
+    }
+    return $normalized
 }
 function Get-DocumentsPath {
     $documents = $null
@@ -95,13 +155,16 @@ function Normalize-DriveLetter {
 function Resolve-BackendInput {
     param(
         [string]$RequestedOperation,[string]$RequestedPayloadRoot,[string]$RequestedDrive,
-        [int]$RequestedProxyPort,[switch]$RequestedInstallProtection,[string]$RequestedJobFile
+        [int]$RequestedProxyPort,[switch]$RequestedInstallProtection,[string]$RequestedJobFile,
+        [string]$RequestedOptionsBase64
     )
     $operation = $RequestedOperation
     $payloadRoot = $RequestedPayloadRoot
     $drive = $RequestedDrive
     $proxyPort = $RequestedProxyPort
     $installProtection = [bool]$RequestedInstallProtection
+    $optionsBase64 = $RequestedOptionsBase64
+    $optionsValue = $null
     if (-not [string]::IsNullOrWhiteSpace($RequestedJobFile)) {
         if (-not (Test-Path -LiteralPath $RequestedJobFile -PathType Leaf)) { throw ('JobFile was not found: ' + $RequestedJobFile) }
         try { $job = Get-Content -LiteralPath $RequestedJobFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop }
@@ -126,6 +189,11 @@ function Resolve-BackendInput {
             $jobInstall = Get-ObjectPropertyValue $job 'InstallProtection'
             if ($null -ne $jobInstall) { $installProtection = Convert-ToBoolean $jobInstall }
         }
+        if (-not $script:OptionsWasBound) {
+            $jobOptionsBase64 = Get-ObjectPropertyValue $job 'OptionsBase64'
+            if ($null -ne $jobOptionsBase64) { $optionsBase64 = [string]$jobOptionsBase64 }
+            $optionsValue = Get-ObjectPropertyValue $job 'Options'
+        }
     }
     if ([string]::IsNullOrWhiteSpace($operation)) { throw 'Operation is required.' }
     $operation = $operation.Trim().ToLowerInvariant()
@@ -134,13 +202,13 @@ function Resolve-BackendInput {
         'init-rollback-latest' = 'init-rollback'; 'cua' = 'cua-repair'; 'guard' = 'guard-install'
     }
     if ($aliases.ContainsKey($operation)) { $operation = $aliases[$operation] }
-    if ($proxyPort -lt 1 -or $proxyPort -gt 65535) { throw 'ProxyPort must be between 1 and 65535.' }
+    if ($proxyPort -lt 0 -or $proxyPort -gt 65535) { throw 'ProxyPort must be between 0 and 65535.' }
     if (-not [string]::IsNullOrWhiteSpace($payloadRoot)) {
         try { $payloadRoot = [IO.Path]::GetFullPath($payloadRoot) } catch { throw ('Invalid PayloadRoot: ' + $payloadRoot) }
     }
     return [pscustomobject]@{
         Operation=$operation; PayloadRoot=$payloadRoot; Drive=$drive; ProxyPort=$proxyPort
-        InstallProtection=$installProtection; JobFile=$RequestedJobFile
+        InstallProtection=$installProtection; JobFile=$RequestedJobFile; Options=(Convert-BackendOptions $optionsValue $optionsBase64)
     }
 }
 function Assert-PayloadFile {
@@ -169,7 +237,7 @@ function Invoke-ChildProcess {
     param(
         [Parameter(Mandatory=$true)][string]$FilePath,[string[]]$Arguments=@(),
         [string]$WorkingDirectory,[hashtable]$Environment=@{},
-        [System.Text.Encoding]$OutputEncoding=$script:Utf8NoBom
+        [System.Text.Encoding]$OutputEncoding=$script:Utf8NoBom,[switch]$ClearProxyEnvironment
     )
     if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) { throw ('Executable was not found: ' + $FilePath) }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -181,6 +249,13 @@ function Invoke-ChildProcess {
     $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     try { $psi.StandardOutputEncoding = $OutputEncoding } catch {}
     try { $psi.StandardErrorEncoding = $OutputEncoding } catch {}
+    if ($ClearProxyEnvironment) {
+        foreach ($key in @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy')) {
+            [void]$psi.EnvironmentVariables.Remove($key)
+        }
+        $psi.EnvironmentVariables['NO_PROXY'] = 'localhost,127.0.0.1,::1'
+        $psi.EnvironmentVariables['no_proxy'] = 'localhost,127.0.0.1,::1'
+    }
     foreach ($key in $Environment.Keys) {
         if ($null -ne $Environment[$key]) { $psi.EnvironmentVariables[$key] = [string]$Environment[$key] }
     }
@@ -207,9 +282,19 @@ function Invoke-ChildProcess {
 function New-InitAdapter {
     param(
         [Parameter(Mandatory=$true)][string]$SourcePath,[Parameter(Mandatory=$true)][string]$PayloadRoot,
-        [AllowNull()][string]$DriveLetter,[Parameter(Mandatory=$true)][int]$ProxyPortValue
+        [AllowNull()][string]$DriveLetter,[Parameter(Mandatory=$true)][int]$ProxyPortValue,
+        [AllowNull()][object]$Options
     )
-    $sourceText = [IO.File]::ReadAllText($SourcePath, $script:InputEncoding)
+    $rawSource = [IO.File]::ReadAllBytes($SourcePath)
+    $sourceText = $script:InputEncoding.GetString($rawSource)
+    if ($sourceText.Length -gt 0 -and $sourceText[0] -eq [char]0xFEFF) { $sourceText = $sourceText.Substring(1) }
+    if ($sourceText.Contains([char]0xFFFD)) { throw 'init.cmd is not valid GBK text.' }
+    $resolvedOptions = Convert-BackendOptions $Options
+    $folderEnabled = [bool]$resolvedOptions.folderManagement
+    $subagentsEnabled = [bool]$resolvedOptions.subagents
+    $cuaEnabled = [bool]$resolvedOptions.cuaRepair
+    $proxyDisabled = ($ProxyPortValue -eq 0)
+    $defaultProxyPort = if ($proxyDisabled) { '0' } else { '10808' }
     $marker = 'if /i "%~1"=="--check-update" ('
     if (-not $sourceText.Contains($marker)) { throw 'init.cmd entry marker is missing.' }
     $guiEntry = @'
@@ -225,7 +310,14 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine + 'if not defined PROXY_PORT set "PROXY_PORT=10808"')
+    $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
+        ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
+    $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%")')
+    $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=medium"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
+    $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
+    $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
     $driveBlock = @'
 :SELECT_FOLDER_DRIVE
 set "FOLDER_MANAGEMENT_DRIVE=%CODEX_GUI_DRIVE%"
@@ -241,10 +333,10 @@ exit /b 0
     # Add protocol markers at the existing call sites so progress is emitted
     # only when the corresponding batch stage is entered.
     $stageMarkers = @(
-        @('(?m)^call :FULL_INIT\r?$', 'echo @@PROGRESS@@{"step":2,"total":5,"title":"Run full initialization and backup"}' + [Environment]::NewLine + '$0'),
-        @('(?m)^call :INSTALL_FOLDER_MANAGEMENT\r?$', 'echo @@PROGRESS@@{"step":3,"total":5,"title":"Install folder management and binding"}' + [Environment]::NewLine + '$0'),
-        @('(?m)^call :RUN_CUA_REPAIR\r?$', 'echo @@PROGRESS@@{"step":4,"total":5,"title":"Check and repair CUA runtime"}' + [Environment]::NewLine + '$0'),
-        @('(?m)^call :INSTALL_LUNA_PROMPT\r?$', 'echo @@PROGRESS@@{"step":5,"total":5,"title":"Install and verify Luna configuration"}' + [Environment]::NewLine + '$0')
+        @('(?m)^call :FULL_INIT\r?$', 'echo @@PROGRESS@@{"step":2,"total":5,"title":"Run full initialization and backup"}' + [Environment]::NewLine + 'call :FULL_INIT'),
+        @('(?m)^call :INSTALL_FOLDER_MANAGEMENT\r?$', 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" echo @@PROGRESS@@{"step":3,"total":5,"title":"Install folder management and binding"}' + [Environment]::NewLine + 'call :INSTALL_FOLDER_MANAGEMENT'),
+        @('(?m)^call :RUN_CUA_REPAIR\r?$', 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" echo @@PROGRESS@@{"step":4,"total":5,"title":"Check and repair CUA runtime"}' + [Environment]::NewLine + 'call :RUN_CUA_REPAIR'),
+        @('(?m)^call :INSTALL_LUNA_PROMPT\r?$', 'if /i "%CODEX_GUI_SUBAGENTS%"=="1" echo @@PROGRESS@@{"step":5,"total":5,"title":"Install and verify Luna configuration"}' + [Environment]::NewLine + 'call :INSTALL_LUNA_PROMPT')
     )
     foreach ($markerEntry in $stageMarkers) {
         # Replace every matching call site.  The one-click flow contains the
@@ -261,35 +353,236 @@ exit /b 0
     $confirmPattern = '(?ms)^:CONFIRM\r?\n.*?(?=^:CHECK_GITHUB_UPDATE\r?$)'
     $sourceText = [regex]::Replace($sourceText, $confirmPattern, $confirmBlock)
     if ($sourceText -notmatch '(?m)^:CONFIRM\r?$') { throw 'Unable to patch init.cmd confirmation block.' }
+    $oneClickDefaults = @"
+:ONE_CLICK_INIT
+set "FOLDER_RESULT=PASS"
+set "CUA_RESULT=PASS"
+set "LUNA_PROMPT_RESULT=PASS"
+set "LUNA_PROMPT_COUNT=SKIPPED"
+set "CODEX_FOLDER_DRIVE=%CODEX_GUI_DRIVE%"
+"@
+    $sourceText = [regex]::Replace($sourceText, '(?m)^:ONE_CLICK_INIT\r?$', $oneClickDefaults.TrimEnd())
+    $sourceText = [regex]::Replace($sourceText, '(?m)^call :SELECT_FOLDER_DRIVE\r?$', 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :SELECT_FOLDER_DRIVE')
+    $sourceText = [regex]::Replace($sourceText, '(?m)^call :INSTALL_FOLDER_MANAGEMENT\r?$', 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :INSTALL_FOLDER_MANAGEMENT')
+    $sourceText = [regex]::Replace($sourceText, '(?m)^call :VERIFY_FOLDER_BINDING\r?$', 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING')
+    $sourceText = [regex]::Replace($sourceText, '(?m)^call :RUN_CUA_REPAIR\r?$', 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR')
+    $sourceText = [regex]::Replace($sourceText, '(?m)^call :INSTALL_LUNA_PROMPT\r?$', 'if /i "%CODEX_GUI_SUBAGENTS%"=="1" call :INSTALL_LUNA_PROMPT')
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :SELECT_FOLDER_DRIVE\r?\nif errorlevel 1 goto :ONE_CLICK_INIT_FAIL',
+        @'
+if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" (
+    call :SELECT_FOLDER_DRIVE
+    if errorlevel 1 goto :ONE_CLICK_INIT_FAIL
+) else (
+    set "SELECT_DRIVE_RC=0"
+)
+'@.TrimEnd())
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :INSTALL_FOLDER_MANAGEMENT\r?\nif errorlevel 1 \(.*?^\)\r?\nif /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING\r?\nif errorlevel 1 \(.*?^\)',
+        @'
+if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" (
+    call :INSTALL_FOLDER_MANAGEMENT
+    if errorlevel 1 (
+        echo 文件夹管理安装失败，已停止 CUA 修复和多线程安装。
+        goto :ONE_CLICK_INIT_FAIL
+    )
+    call :VERIFY_FOLDER_BINDING
+    if errorlevel 1 (
+        set "FOLDER_RESULT=FAIL"
+        echo Folder-management and projectless-task-folder binding verification failed.
+        goto :ONE_CLICK_INIT_FAIL
+    )
+)
+'@.TrimEnd())
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR\r?\nif errorlevel 1 \(.*?^\)\r?\n\r?\necho 阶段 5/5',
+        @'
+if /i "%CODEX_GUI_CUA_REPAIR%"=="1" (
+    call :RUN_CUA_REPAIR
+    if errorlevel 1 (
+        echo CUA 运行时检查或修复失败，已停止后续安装。
+        set "RESULT=FAIL"
+        call :WRITE_REPORT "一键初始化 - CUA 检查或修复失败"
+        call :WRITE_ROLLBACK
+        goto :ONE_CLICK_INIT_FAIL
+    )
+)
+
+echo 阶段 5/5
+'@.TrimEnd())
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^if /i "%CODEX_GUI_SUBAGENTS%"=="1" call :INSTALL_LUNA_PROMPT\r?\nif errorlevel 1 \(.*?^\)\r?\n\r?\nset "CONFIG_RESULT=FAIL"',
+        @'
+if /i "%CODEX_GUI_SUBAGENTS%"=="1" (
+    call :INSTALL_LUNA_PROMPT
+    if errorlevel 1 (
+        echo Luna 多线程提示词安装失败。
+        goto :ONE_CLICK_INIT_FAIL
+    )
+)
+
+set "CONFIG_RESULT=FAIL"
+'@.TrimEnd())
+    # Keep the stage calls and their failure checks together after all marker
+    # edits.  This also makes a skipped stage independent of a stale errorlevel.
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^(if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" echo @@PROGRESS@@\{"step":3.*?\})\r?\n.*?(?=^echo 阶段 4/5)',
+        '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :INSTALL_FOLDER_MANAGEMENT' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo Folder-management stage failed.' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine)
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^(if /i "%CODEX_GUI_CUA_REPAIR%"=="1" echo @@PROGRESS@@\{"step":4.*?\})\r?\n.*?(?=^echo 阶段 5/5)',
+        '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR' + [Environment]::NewLine + 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo CUA 运行时检查或修复失败，已停止后续安装。' + [Environment]::NewLine + '    set "RESULT=FAIL"' + [Environment]::NewLine + '    call :WRITE_REPORT "一键初始化 - CUA 检查或修复失败"' + [Environment]::NewLine + '    call :WRITE_ROLLBACK' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine)
+    $sourceText = [regex]::Replace($sourceText,
+        '(?ms)^(if /i "%CODEX_GUI_SUBAGENTS%"=="1" echo @@PROGRESS@@\{"step":5.*?\})\r?\n.*?(?=^set "CONFIG_RESULT=FAIL")',
+        '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_SUBAGENTS%"=="1" call :INSTALL_LUNA_PROMPT' + [Environment]::NewLine + 'if /i "%CODEX_GUI_SUBAGENTS%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo Luna 多线程提示词安装失败.' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine)
+    $sourceText = [regex]::Replace($sourceText,
+        '(?m)^(echo @@PROGRESS@@\{"step":2.*?\})\r?\n(?!call :FULL_INIT)',
+        '$1' + [Environment]::NewLine + 'call :FULL_INIT' + [Environment]::NewLine)
+    if ($sourceText -match '(?m)^:WRITE_ENV\r?$') {
+        $sourceText = $sourceText.Replace('echo 已写入：%ENV_FILE%', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" echo 已清理代理：%ENV_FILE%' + [Environment]::NewLine + 'if not "%CODEX_GUI_PROXY_DISABLED%"=="1" echo 已写入：%ENV_FILE%')
+    }
     $workRoot = Join-Path $PayloadRoot '.backend'
     [void][IO.Directory]::CreateDirectory($workRoot)
     $adapterPath = Join-Path $workRoot ('init-adapter-' + [Guid]::NewGuid().ToString('N') + '.cmd')
     [IO.File]::WriteAllText($adapterPath, $sourceText, $script:InputEncoding)
     return $adapterPath
 }
+function Read-Utf8FileSafe {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try { $text = [IO.File]::ReadAllText($Path,(New-Object Text.UTF8Encoding($false,$true))) }
+    catch { $text = [IO.File]::ReadAllText($Path) }
+    if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { return $text.Substring(1) }
+    return $text
+}
+function Write-Utf8NoBomFile {
+    param([Parameter(Mandatory=$true)][string]$Path,[Parameter(Mandatory=$true)][string]$Text)
+    $parent = Split-Path -Parent $Path
+    if ($parent) { [void][IO.Directory]::CreateDirectory($parent) }
+    [IO.File]::WriteAllText($Path,$Text,$script:Utf8NoBom)
+}
+function Set-ProxyEnvironmentFile {
+    param([Parameter(Mandatory=$true)][int]$ProxyPortValue,[AllowNull()][string]$OriginalText)
+    $path = Join-Path (Get-CodexHomePath) '.env'
+    $current = if ($null -ne $OriginalText) { $OriginalText } else { Read-Utf8FileSafe $path }
+    $lines = if ($null -eq $current) { @() } else { @($current -split "\r?\n") }
+    $kept = @($lines | Where-Object { $_ -notmatch '(?i)^\s*(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY)\s*=' })
+    if ($ProxyPortValue -gt 0) {
+        $proxy = 'http://127.0.0.1:' + $ProxyPortValue
+        $kept += 'HTTP_PROXY=' + $proxy
+        $kept += 'HTTPS_PROXY=' + $proxy
+    }
+    $kept += 'NO_PROXY=localhost,127.0.0.1,::1'
+    $text = (($kept | Where-Object { $null -ne $_ }) -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+    Write-Utf8NoBomFile $path $text
+    return $path
+}
+function Set-TransientProxyEnvironment {
+    param([Parameter(Mandatory=$true)][int]$ProxyPortValue)
+    $names = @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy')
+    $snapshot = [ordered]@{}
+    $snapshot['__DefaultWebProxy'] = [Net.WebRequest]::DefaultWebProxy
+    if ($ProxyPortValue -eq 0) { [Net.WebRequest]::DefaultWebProxy = $null }
+    foreach ($name in $names) { $snapshot[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
+    foreach ($name in @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy')) {
+        [Environment]::SetEnvironmentVariable($name,$null,'Process')
+    }
+    if ($ProxyPortValue -eq 0) {
+        [Environment]::SetEnvironmentVariable('NO_PROXY','localhost,127.0.0.1,::1','Process')
+        [Environment]::SetEnvironmentVariable('no_proxy','localhost,127.0.0.1,::1','Process')
+    } else {
+        $proxy = 'http://127.0.0.1:' + $ProxyPortValue
+        [Environment]::SetEnvironmentVariable('HTTP_PROXY',$proxy,'Process')
+        [Environment]::SetEnvironmentVariable('HTTPS_PROXY',$proxy,'Process')
+        [Environment]::SetEnvironmentVariable('ALL_PROXY',$proxy,'Process')
+    }
+    return $snapshot
+}
+function Restore-TransientProxyEnvironment {
+    param([Parameter(Mandatory=$true)][System.Collections.IDictionary]$Snapshot)
+    foreach ($name in $Snapshot.Keys) { if ($name -eq '__DefaultWebProxy') { [Net.WebRequest]::DefaultWebProxy = $Snapshot[$name] } else { [Environment]::SetEnvironmentVariable([string]$name,$Snapshot[$name],'Process') } }
+}
+function Set-ScopedModelSettings {
+    param([AllowNull()][object]$Options)
+    $resolved = Convert-BackendOptions $Options
+    $codeHome = Get-CodexHomePath
+    $configPath = Join-Path $codeHome 'config.toml'
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        $config = Read-Utf8FileSafe $configPath
+        if ($null -ne $config) {
+            $lines = @($config -split "\r?\n")
+            $section = ''
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '^\s*\[([^\]]+)\]\s*$') { $section = $Matches[1]; continue }
+                if ([string]::IsNullOrEmpty($section) -and $lines[$i] -match '^(\s*model\s*=\s*)(.*?)(\s*(?:#.*)?)$') {
+                    $lines[$i] = $Matches[1] + '"' + [string]$resolved.parentModel + '"' + $Matches[3]
+                } elseif ([string]::IsNullOrEmpty($section) -and $lines[$i] -match '^(\s*model_reasoning_effort\s*=\s*)(.*?)(\s*(?:#.*)?)$') {
+                    $lines[$i] = $Matches[1] + '"' + [string]$resolved.parentEffort + '"' + $Matches[3]
+                }
+            }
+            Write-Utf8NoBomFile $configPath (($lines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine)
+        }
+    }
+    if ([bool]$resolved.subagents) {
+        $agentsPath = Join-Path $codeHome 'AGENTS.md'
+        $agents = Read-Utf8FileSafe $agentsPath
+        if ($null -ne $agents) {
+            $pattern = '(?ms)^[ \t]*BEGIN CODEX LUNA PROMPT V[^\r\n]*\r?\n.*?^[ \t]*END CODEX LUNA PROMPT V[^\r\n]*$'
+            $evaluator = [System.Text.RegularExpressions.MatchEvaluator]{
+                param($match)
+                $block = $match.Value
+                $block = [regex]::Replace($block,'(?m)^([ \t]*model\s*=\s*).*$',[System.Text.RegularExpressions.MatchEvaluator]{ param($m) $m.Groups[1].Value + [string]$resolved.childModel })
+                $block = [regex]::Replace($block,'(?m)^([ \t]*model_reasoning_effort\s*=\s*).*$',[System.Text.RegularExpressions.MatchEvaluator]{ param($m) $m.Groups[1].Value + [string]$resolved.childEffort })
+                $block = $block.Replace('This is the GPT5.6 LUNA MAX child configuration. Do not substitute another child model or reasoning effort.', 'Use the configured child model and reasoning effort above for temporary child agents.')
+                $block = $block.Replace('Do not create Sol, Terra, GPT-6, Astra, or any other non-Luna child under this protocol.', 'Use the configured child model above; do not substitute another child model.')
+                $block = $block.Replace('gpt-5.6-luna',[string]$resolved.childModel)
+                $block = $block.Replace('GPT5.6 LUNA MAX',([string]$resolved.childModel + ' ' + [string]$resolved.childEffort))
+                $block = $block.Replace('GPT5.6 LUNA',[string]$resolved.childModel)
+                return $block
+            }
+            $updated = [regex]::Replace($agents,$pattern,$evaluator)
+            if ($updated -ne $agents) { Write-Utf8NoBomFile $agentsPath $updated }
+        }
+    }
+}
 function Invoke-InitOperation {
     param([Parameter(Mandatory=$true)][string]$Action,[Parameter(Mandatory=$true)][string]$PayloadRoot,
-          [string]$DriveLetter,[int]$ProxyPortValue=10808)
+          [string]$DriveLetter,[int]$ProxyPortValue=10808,[AllowNull()][object]$Options)
     $init = Assert-PayloadFile $PayloadRoot 'init.cmd'
     $drive = $null
     if ($Action -eq 'one-click') { $drive = Normalize-DriveLetter $DriveLetter }
+    $resolvedOptions = Convert-BackendOptions $Options
+    $envFile = Join-Path (Get-CodexHomePath) '.env'
+    $originalEnv = Read-Utf8FileSafe $envFile
     $adapter = $null
     try {
-        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue
+        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue $resolvedOptions
         if ($Action -eq 'one-click') {
-            Write-BackendProgress 1 5 'Confirm folder-management drive'
+            if ([bool]$resolvedOptions.folderManagement) { Write-BackendProgress 1 5 'Confirm folder-management drive' }
+            else { Write-BackendProgress 1 5 'Skip folder-management drive confirmation' }
         } else { Write-BackendProgress 1 1 'Rebuild proxy configuration' }
-        $result = Invoke-ChildProcess $adapter @('--codex-gui-action',$Action) $PayloadRoot @{
+        $childEnvironment = @{
             CODEX_GUI_DRIVE=$drive; CODEX_GUI_PROXY_PORT=[string]$ProxyPortValue; CODEX_GUI_NO_PAUSE='1'
-        } $script:InputEncoding
+            CODEX_GUI_PROXY_DISABLED=if ($ProxyPortValue -eq 0) { '1' } else { '0' }
+            CODEX_GUI_FOLDER_MANAGEMENT=if ([bool]$resolvedOptions.folderManagement) { '1' } else { '0' }
+            CODEX_GUI_SUBAGENTS=if ([bool]$resolvedOptions.subagents) { '1' } else { '0' }
+            CODEX_GUI_CUA_REPAIR=if ([bool]$resolvedOptions.cuaRepair) { '1' } else { '0' }
+            CODEX_GUI_PARENT_MODEL=[string]$resolvedOptions.parentModel; CODEX_GUI_CHILD_MODEL=[string]$resolvedOptions.childModel
+            CODEX_GUI_PARENT_EFFORT=[string]$resolvedOptions.parentEffort; CODEX_GUI_CHILD_EFFORT=[string]$resolvedOptions.childEffort
+            CODEX_GUI_ENV_FILE=$envFile; CODEX_GUI_PROXY_URL=if ($ProxyPortValue -gt 0) { 'http://127.0.0.1:' + $ProxyPortValue } else { '' }
+        }
+        $result = Invoke-ChildProcess $adapter @('--codex-gui-action',$Action) $PayloadRoot $childEnvironment $script:InputEncoding -ClearProxyEnvironment:($ProxyPortValue -eq 0)
         if ($result.ExitCode -ne 0) { throw ('init.cmd failed with exit code ' + $result.ExitCode) }
         if ($result.Output -match '(?im)RESULT\s*=\s*FAIL|FAIL') { throw 'init.cmd reported a failed result.' }
+        if ($Action -eq 'proxy' -or $Action -eq 'one-click') { [void](Set-ProxyEnvironmentFile $ProxyPortValue $originalEnv) }
+        if ($Action -eq 'one-click') { Set-ScopedModelSettings $resolvedOptions }
         if ($Action -eq 'proxy') {
             $envFile = Join-Path (Get-CodexHomePath) '.env'
             if (-not (Test-Path -LiteralPath $envFile -PathType Leaf)) { throw '.env was not written by proxy operation.' }
             $envText = [IO.File]::ReadAllText($envFile)
             $proxy = 'http://127.0.0.1:' + $ProxyPortValue
-            if ($envText -notmatch ('(?m)^HTTP_PROXY=' + [regex]::Escape($proxy) + '$') -or
+            if ($ProxyPortValue -eq 0) {
+                if ($envText -match '(?im)^\s*(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY)\s*=') { throw 'Proxy operation did not remove proxy environment entries.' }
+            } elseif ($envText -notmatch ('(?m)^HTTP_PROXY=' + [regex]::Escape($proxy) + '$') -or
                 $envText -notmatch ('(?m)^HTTPS_PROXY=' + [regex]::Escape($proxy) + '$')) { throw 'Proxy operation did not write the requested proxy endpoint.' }
         }
         return 0
@@ -303,16 +596,17 @@ function Resolve-InitRollbackPath {
     return $latest
 }
 function Invoke-InitRollback {
-    param([Parameter(Mandatory=$true)][string]$PayloadRoot)
+    param([Parameter(Mandatory=$true)][string]$PayloadRoot,[int]$ProxyPortValue=0)
     $init = Assert-PayloadFile $PayloadRoot 'init.cmd'
     $rollback = Resolve-InitRollbackPath
     $adapter = $null
     try {
-        $adapter = New-InitAdapter $init $PayloadRoot '' 10808
+        $adapter = New-InitAdapter $init $PayloadRoot '' $ProxyPortValue
         Write-BackendProgress 1 1 'Rollback latest initialization backup'
         $result = Invoke-ChildProcess $adapter @('--codex-gui-rollback') $PayloadRoot @{
-            CODEX_GUI_ROLLBACK_PATH=$rollback; CODEX_GUI_NO_PAUSE='1'; CODEX_GUI_PROXY_PORT='10808'
-        } $script:InputEncoding
+            CODEX_GUI_ROLLBACK_PATH=$rollback; CODEX_GUI_NO_PAUSE='1'; CODEX_GUI_PROXY_PORT=[string]$ProxyPortValue
+            CODEX_GUI_PROXY_DISABLED=if ($ProxyPortValue -eq 0) { '1' } else { '0' }
+        } $script:InputEncoding -ClearProxyEnvironment:($ProxyPortValue -eq 0)
         if ($result.ExitCode -ne 0) { throw ('init rollback failed with exit code ' + $result.ExitCode) }
         if ($result.Output -match '(?im)FAIL|rollback.*failed') { throw 'init rollback reported a failure.' }
         return 0
@@ -368,6 +662,9 @@ function Initialize-GuardRuntime {
         # scope, so Invoke-GuardOperation could not see them afterwards.
         Set-Item -Path ('Function:\script:' + $functionAst.Name) -Value $functionAst.Body.GetScriptBlock()
     }
+    # GUI workers already receive the selected proxy through their process
+    # environment. Do not reload an older .env value over the GUI selection.
+    Set-Item -Path 'Function:\script:Load-ProxyEnvironment' -Value { }
     if ($ForModification) {
         [void][IO.Directory]::CreateDirectory($script:InstallRoot); [void][IO.Directory]::CreateDirectory($script:StateDir); [void][IO.Directory]::CreateDirectory($script:LogDir)
         Set-Item -Path 'Function:\script:Read-Host' -Value {
@@ -473,15 +770,17 @@ function Get-ReadOnlyStatus {
     }
 }
 function Invoke-BackendMain {
-    param([string]$RequestedOperation,[string]$RequestedPayloadRoot,[string]$RequestedDrive,[int]$RequestedProxyPort=10808,[switch]$RequestedInstallProtection,[string]$RequestedJobFile)
+    param([string]$RequestedOperation,[string]$RequestedPayloadRoot,[string]$RequestedDrive,[int]$RequestedProxyPort=10808,[switch]$RequestedInstallProtection,[string]$RequestedJobFile,[string]$RequestedOptionsBase64)
     Set-BackendOutputEncoding
+    $proxySnapshot = $null
     try {
-        $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile
+        $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
+        if ($input.Operation -ne 'status') { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
-            'initialize' { [void](Invoke-InitOperation 'one-click' $input.PayloadRoot $input.Drive $input.ProxyPort); if($input.InstallProtection){[void](Invoke-GuardOperation 'guard-install' $input.PayloadRoot)}; return 0 }
-            'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort) }
-            'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot) }
+            'initialize' { [void](Invoke-InitOperation 'one-click' $input.PayloadRoot $input.Drive $input.ProxyPort $input.Options); if($input.InstallProtection){[void](Invoke-GuardOperation 'guard-install' $input.PayloadRoot)}; return 0 }
+            'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
+            'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }
             'cua-check' { return (Invoke-CuaOperation 'check' $input.PayloadRoot) }
             'cua-repair' { return (Invoke-CuaOperation 'repair' $input.PayloadRoot) }
             'guard-install' { return (Invoke-GuardOperation 'guard-install' $input.PayloadRoot) }
@@ -496,9 +795,11 @@ function Invoke-BackendMain {
     } catch {
         Write-BackendLine ('[FAIL] ' + $_.Exception.Message)
         return 1
+    } finally {
+        if ($null -ne $proxySnapshot) { Restore-TransientProxyEnvironment $proxySnapshot }
     }
 }
 # Dot-sourcing exposes helpers for adapter tests without starting a worker.
 if ($MyInvocation.InvocationName -ne '.') {
-    exit (Invoke-BackendMain -RequestedOperation $Operation -RequestedPayloadRoot $PayloadRoot -RequestedDrive $Drive -RequestedProxyPort $ProxyPort -RequestedInstallProtection:$InstallProtection.IsPresent -RequestedJobFile $JobFile)
+    exit (Invoke-BackendMain -RequestedOperation $Operation -RequestedPayloadRoot $PayloadRoot -RequestedDrive $Drive -RequestedProxyPort $ProxyPort -RequestedInstallProtection:$InstallProtection.IsPresent -RequestedJobFile $JobFile -RequestedOptionsBase64 $OptionsBase64)
 }
