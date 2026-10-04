@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.1.1
+# Codex Init Kit Desktop 2.1.2
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -10,25 +10,29 @@
 | 电脑操作功能不可用，怀疑缺组件 | 「维护恢复」→ CUA 检查；需要时再修复 | 修复会对照官方应用文件恢复本地组件，并保留修复前备份 |
 | 启动很慢，CUA 目录大量读写小文件，甚至拖慢电脑 | 保存工作并退出 Codex，检查 CUA；发现异常后「检查并修复」 | 提前准备并校验当前版本的完整组件，处理失败复制或反复准备引起的启动问题 |
 | 启动不正常，想检查启动组件 | 「维护恢复」→ 安装／修复启动保护 | 检查内置与官方备用程序，必要时修复备用组件，安装登录维护任务 |
-| 提示找不到 CLI、CLI 路径错误或组件损坏 | 先「诊断」，再选择「安装 / 修复保护」或「恢复桌面原生」 | 检查启动路径和组件，必要时准备官方独立 CLI 或恢复内置 CLI |
-| 想切换桌面版自带 CLI／官方独立 CLI | 「恢复桌面原生」／「切换官方独立 CLI」 | 检查目标是否可用，再按所选方式设置桌面应用使用的 CLI |
+| 提示找不到 CLI、CLI 路径错误或组件损坏 | 先「诊断助手」，再选择「安装 / 修复保护」或「切换桌面原生 CLI」 | 检查启动路径和组件，必要时准备官方独立 CLI 或恢复内置 CLI |
+| 想切换桌面版自带 CLI／官方独立 CLI | 「切换桌面原生 CLI」／「切换官方独立 CLI」 | 检查目标是否可用，再按所选方式设置桌面应用使用的 CLI |
 | 之前换过启动程序，想恢复桌面版自带的程序 | 「维护恢复」→ 恢复 Desktop 原生兼容模式 | 内置组件完整时，清除本工具设置的启动路径覆盖 |
 | 备用程序更新后不正常，想退回旧版 | 「维护恢复」→ 回滚运行时 | 验证并恢复启动保护记录的上一可用版本 |
 | 本地代理换了端口，想改配置 | 在「初始化」页面填写端口，再到「维护恢复」点击「更新代理」 | 备份并重写代理设置；不会启动代理软件 |
 | 想重新配置目录、模型和规则 | 「初始化」 | 备份并重建配置；开始前保存工作 |
-| 想看哪里失败了 | 「日志」，或「维护恢复」→ Doctor | 显示执行记录或运行诊断 |
+| 想看哪里失败了 | 「日志」，或「维护恢复」→ 诊断助手 | 显示执行记录或运行诊断 |
 
 这里的 CUA 检查针对电脑操作功能使用的本地浏览器自动化组件；“运行时”指 Codex 启动和工作时使用的程序组件。这些功能能处理相应的本地配置或文件问题。账号权限、服务端故障和代理服务自身的问题，需要另行排查。完整初始化会改动多项配置，单项修复请从「维护恢复」进入。
 
 桌面版自带 CLI 和官方独立 CLI 都来自 OpenAI。可以按需要切换；切换前保存工作并退出 Codex，目标组件需要通过检查。这里管理的是桌面应用使用的 CLI，终端找不到 `codex` 命令时仍需检查终端安装和 PATH。
 
+维护恢复中的启动保护栏右侧显示当前模式。按钮顺序为「安装 / 修复保护」「切换 CLI」「更新官方 CLI」「诊断助手」。桌面原生模式只显示「切换官方独立 CLI」；独立模式只显示「切换桌面原生 CLI」。未读到状态或模式异常时显示重新检测入口。
+
+诊断助手会检查独立 CLI 和桌面组件，并运行 Codex Doctor。结束后弹出大白话建议，同时保留在启动保护栏下方。组件缺失时建议安装／修复；识别到代理、登录、模型权限或文件权限等明确错误提示时，给出对应排查步骤。不能可靠判断时会提示查看详细日志，不会把运行完成当作所有功能都正常。诊断助手不会自动执行修复或初始化。
+
 CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Windows 版本曾出现组件复制失败、逐文件重试或反复生成 `.staging-*` 目录的问题，使 Codex 启动很慢。修复会对照官方源补齐正确版本的组件，再完整校验；若整机卡顿源于这段读写，也可能改善。它不保证解决其他原因的卡顿，不修改官方复制逻辑，也不批量删除旧临时目录。相关现象见 [启动缓慢报告](https://github.com/openai/codex/issues/41822) 和 [组件复制失败报告](https://github.com/openai/codex/issues/42501)。
 
 ## 获取与启动
 
-v2.1.1 已发布：[BerryFuwawa/codex-init-kit v2.1.1](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.1)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.1/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.1.2 已发布：[BerryFuwawa/codex-init-kit v2.1.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.2)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.1/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.2/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -46,7 +50,7 @@ v2.1.1 已发布：[BerryFuwawa/codex-init-kit v2.1.1](https://github.com/BerryF
 | --- | --- | --- |
 | 概览 | 查看最近状态、默认模型和当前环境 | 刷新只读状态、进入初始化 |
 | 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置与全局规则、按选择创建并绑定工作目录、检查／修复 CUA、按选择写入 Luna 规则；可选安装启动保护 |
-| 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、恢复桌面原生模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
+| 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、切换桌面原生 CLI模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
 
@@ -56,7 +60,7 @@ v2.1.1 已发布：[BerryFuwawa/codex-init-kit v2.1.1](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.1` |
+| 版本 | `2.1.2` |
 | 内嵌初始化组件 | `4.8.3` |
 | 内嵌启动保护组件 | `5.2.1` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |

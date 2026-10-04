@@ -771,6 +771,16 @@ function Invoke-GuardOperation {
     $beforeInstalled = if ($beforeState.ContainsKey('Installed')) { $beforeState['Installed'] } else { $false }
     $doctorStartedUtc = $null
     if ($Action -eq 'doctor') {
+        try {
+            $diagnosticPaths = Get-ManagedPaths
+            $diagnosticPackage = Test-CanonicalPackage $diagnosticPaths.Root
+            $diagnosticDesktop = Get-DesktopInfo
+            Write-BackendLine ('@@DIAGNOSIS@@' + ([ordered]@{
+                standaloneHealthy = [bool]$diagnosticPackage.Healthy
+                desktopFound = [bool]$diagnosticDesktop.Found
+                desktopHealthy = [bool]$diagnosticDesktop.BundleHealthy
+            } | ConvertTo-Json -Compress))
+        } catch { Write-BackendLog 'Component details unavailable; diagnosis will use the execution result.' }
         # The Guard script's doctor pipeline can inherit a stale native exit
         # code and an old doctor_*.txt file. Reset and timestamp before it is
         # invoked so the postcondition belongs to this request.

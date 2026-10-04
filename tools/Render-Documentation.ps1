@@ -34,6 +34,8 @@ class DocumentationRenderer {
             var pages=new[]{"概览","维护恢复"};
             var files=new[]{"overview","maintenance"};
             for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:900,dpi);}
+            var adviceType=assembly.GetType("CodexKit.DiagnosticAdvice",true);var example=(string)adviceType.GetMethod("Build").Invoke(null,new object[]{new Dictionary<string,object>{{"standaloneHealthy",false},{"desktopFound",true},{"desktopHealthy",true}},1,""});type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,example);
+            var diagnosis=(Window)type.GetMethod("CreateDiagnosticDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);var adviceView=(FrameworkElement)diagnosis.Content;adviceView.Measure(new Size(660,Double.PositiveInfinity));SaveView(adviceView,directory,"diagnosis",660,(int)Math.Ceiling(adviceView.DesiredSize.Height),dpi);diagnosis.Close();type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");
             navigate.Invoke(window,new object[]{"初始化"});type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window).GetType().GetProperty("SelectedIndex").SetValue(type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window),1,null);Save(window,directory,"settings-scroll",900,dpi);Save(window,directory,"settings",1700,dpi);
             var completion=(Window)type.GetMethod("CreateInitializationCompletedDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);
             var popup=(FrameworkElement)completion.Content;popup.Measure(new Size(520,Double.PositiveInfinity));
