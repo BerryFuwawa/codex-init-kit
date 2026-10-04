@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.1.2
+# Codex Init Kit Desktop 2.1.3
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -24,15 +24,15 @@
 
 维护恢复中的启动保护栏右侧显示当前模式。按钮顺序为「安装 / 修复保护」「切换 CLI」「更新官方 CLI」「诊断助手」。桌面原生模式只显示「切换官方独立 CLI」；独立模式只显示「切换桌面原生 CLI」。未读到状态或模式异常时显示重新检测入口。
 
-诊断助手会检查独立 CLI 和桌面组件，并运行 Codex Doctor。结束后弹出大白话建议，同时保留在启动保护栏下方。组件缺失时建议安装／修复；识别到代理、登录、模型权限或文件权限等明确错误提示时，给出对应排查步骤。不能可靠判断时会提示查看详细日志，不会把运行完成当作所有功能都正常。诊断助手不会自动执行修复或初始化。
+诊断助手会检查独立 CLI 和桌面组件，并运行 Codex Doctor。支持识别 Doctor 的 [!!] 和 [XX] 提示，区分检查发现失败项与程序未能完成执行。更新配置一致和会话文件容量统计会作为信息提示展示。结束后弹出大白话建议，同时保留在启动保护栏下方。组件缺失时建议安装／修复；识别到代理、登录、模型权限或文件权限等明确错误提示时，给出对应排查步骤。不能可靠判断时会提示查看详细日志，不会把运行完成当作所有功能都正常。诊断助手不会自动执行修复或初始化。
 
 CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Windows 版本曾出现组件复制失败、逐文件重试或反复生成 `.staging-*` 目录的问题，使 Codex 启动很慢。修复会对照官方源补齐正确版本的组件，再完整校验；若整机卡顿源于这段读写，也可能改善。它不保证解决其他原因的卡顿，不修改官方复制逻辑，也不批量删除旧临时目录。相关现象见 [启动缓慢报告](https://github.com/openai/codex/issues/41822) 和 [组件复制失败报告](https://github.com/openai/codex/issues/42501)。
 
 ## 获取与启动
 
-v2.1.2 已发布：[BerryFuwawa/codex-init-kit v2.1.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.2)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.1.3 已发布：[BerryFuwawa/codex-init-kit v2.1.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.3)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.2/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -60,7 +60,7 @@ v2.1.2 已发布：[BerryFuwawa/codex-init-kit v2.1.2](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.2` |
+| 版本 | `2.1.3` |
 | 内嵌初始化组件 | `4.8.3` |
 | 内嵌启动保护组件 | `5.2.1` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
@@ -131,6 +131,6 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 ## 视觉参考
 
-README 中的界面图片直接从当前 EXE 离线渲染，使用 192 DPI（200% 缩放）。维护截图可运行 `tools/Render-Documentation.ps1 -Executable <EXE路径> -Dpi 192`；普通页面输出为 2240 × 1600 像素，完整设置图为 2240 × 2800 像素，不打开窗口或执行初始化。
+README 中的界面图片直接从当前 EXE 离线渲染，使用 192 DPI（200% 缩放）。维护截图可运行 `tools/Render-Documentation.ps1 -Executable <EXE路径> -Dpi 192`；概览为 2240 × 2000 像素，维护恢复为 2240 × 1800 像素，完整设置图为 2240 × 3000 像素，不打开窗口或执行初始化。
 
 界面布局与交互取 [WPF UI](https://github.com/lepoco/wpfui) 和 [Microsoft PowerToys](https://github.com/microsoft/PowerToys) 作为视觉参考。它们不属于运行时依赖；本项目未复制其代码或组件。

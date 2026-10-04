@@ -798,10 +798,18 @@ function Invoke-GuardOperation {
     }
     if ($Action -eq 'doctor') {
         $doctorExitCode = if ($null -eq $global:LASTEXITCODE) { 0 } else { [int]$global:LASTEXITCODE }
-        if ($doctorExitCode -ne 0) { throw ('codex doctor failed with native exit code ' + $doctorExitCode + '.') }
         $newDoctorLogs = @(Get-ChildItem -LiteralPath $script:LogDir -Filter 'doctor_*.txt' -File -ErrorAction SilentlyContinue |
             Where-Object { $_.LastWriteTimeUtc -ge $doctorStartedUtc })
         if ($newDoctorLogs.Count -eq 0) { throw 'Codex doctor did not produce a new diagnostic log.' }
+        if ($doctorExitCode -ne 0) {
+            $newestDoctorLog = $newDoctorLogs | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            $doctorReport = [IO.File]::ReadAllText($newestDoctorLog.FullName)
+            if ($doctorExitCode -eq 1 -and $doctorReport -match '(?im)^\s*\d+\s+ok\s*\|[^\r\n]*\d+\s+fail\b') {
+                Write-BackendLog 'Doctor 已完成检查，报告中存在失败项；请查看诊断建议。'
+                return 1
+            }
+            throw ('codex doctor failed with native exit code ' + $doctorExitCode + '.')
+        }
     }
     $afterState = Load-State
     $afterInstalled = if ($afterState.ContainsKey('Installed')) { $afterState['Installed'] } else { $false }
