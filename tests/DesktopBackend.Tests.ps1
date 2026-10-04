@@ -64,6 +64,11 @@ try {
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
+    Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
+    Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
+    Assert ((Convert-BackendOptions @{proxyHost='192.168.1.1'}).proxyHost -eq '192.168.1.1') 'Router proxy IP was not preserved.'
+    Assert ((Get-ProxyUrl 7890 '2001:db8::1') -eq 'http://[2001:db8::1]:7890') 'IPv6 proxy URL is invalid.'
+    try { Convert-BackendOptions @{proxyHost='192.168.1.1 & echo bad'} | Out-Null; throw 'Unsafe proxy IP was accepted.' } catch { if ($_.Exception.Message -eq 'Unsafe proxy IP was accepted.') { throw } }
 
     # Port zero is an explicit no-proxy mode, and the optional settings are
     # normalized without accepting shell-significant model characters.
@@ -84,6 +89,21 @@ try {
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
     Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
+    $configVerifier = [regex]::Match($adapterText,'(?ms)^:VERIFY_CONFIG\r?\n.*?(?=^:VERIFY_FULL\r?$)').Value
+    $configFixturePath = Join-Path $codeHome 'config-validation.toml'
+    $configAgentsPath = Join-Path $codeHome 'config-validation-agents.md'
+    $configFixtureText = "model = `"gpt-6.1-sol`"`r`nmodel_reasoning_effort = `"medium`"`r`nenabled-reasoning-efforts = [low, medium, high, xhigh, max, ultra]`r`ncontext_management.experimental_mode = true`r`nmulti_agent = false`r`n"
+    [IO.File]::WriteAllText($configFixturePath,$configFixtureText,[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($configAgentsPath,"BEGIN CODEX LUNA PROMPT V1.3`r`nEND CODEX LUNA PROMPT V1.3`r`n",[Text.UTF8Encoding]::new($false))
+    $configFlowPath = Join-Path $scratch 'config-validation.cmd'
+    $configHeader = @('@echo off','setlocal EnableExtensions EnableDelayedExpansion','set "CONFIG_FILE=%CODEX_TEST_CONFIG%"','set "AGENTS_FILE=%CODEX_TEST_AGENTS%"','set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"','set "DEFAULT_PARENT_REASONING_EFFORT=medium"','set "LUNA_MAX_THREADS=6"','call :VERIFY_CONFIG','exit /b !errorlevel!') -join "`r`n"
+    [IO.File]::WriteAllText($configFlowPath,$configHeader + "`r`n" + $configVerifier,[Text.Encoding]::GetEncoding(936))
+    $configEnvironment = @{CODEX_TEST_CONFIG=$configFixturePath;CODEX_TEST_AGENTS=$configAgentsPath;CODEX_GUI_SUBAGENTS='0'}
+    $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
+    Assert ($configResult.ExitCode -eq 0) 'Unchecked subagents failed config validation because old rules existed.'
+    $configEnvironment.CODEX_GUI_SUBAGENTS = '1'
+    $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
+    Assert ($configResult.ExitCode -ne 0) 'Enabled subagents passed config validation with multi_agent disabled.'
 
     # Exercise the actual embedded verifier against the marker names written
     # by the installer, rather than a mock verifier that always returns PASS.
@@ -312,12 +332,32 @@ function Install-Or-RepairProtection {
     $status = @($statusLines | Where-Object { $_ -like '@@STATUS@*' })
     Assert ($status.Count -eq 1) 'Status did not emit exactly one @@STATUS@@ line.'
     $statusObject = ($status[0].Substring('@@STATUS@@'.Length) | ConvertFrom-Json)
-    foreach ($name in @('desktopVersion','desktopHealth','desktopHealthy','configModel','configEffort','protectionInstalled','root','processRunning','backupPath')) {
+    foreach ($name in @('desktopVersion','desktopHealth','desktopHealthy','configModel','configEffort','protectionInstalled','runtimeMode','runtimeModeDetail','currentCliPath','root','processRunning','backupPath')) {
         Assert ($null -ne $statusObject.PSObject.Properties[$name]) ('Status field missing: ' + $name)
     }
     Assert ($statusObject.configModel -eq 'gpt-6.1-sol') 'Status config model parser failed.'
     Assert ($statusObject.configEffort -eq 'medium') 'Status config effort parser failed.'
     Assert ($statusObject.root -eq [IO.Path]::GetFullPath($payload)) 'Status root field is wrong.'
+
+    # Current persisted overrides take precedence over a stale Guard mode.
+    # Protection installation alone never means the standalone CLI is active.
+    $runtimeRoot = Join-Path $scratch 'runtime-mode'
+    $nativeRoot = Join-Path $scratch 'desktop-mode'
+    [void][IO.Directory]::CreateDirectory($runtimeRoot)
+    [void][IO.Directory]::CreateDirectory($nativeRoot)
+    $managedExe = Join-Path $runtimeRoot 'current\bin\codex.exe'
+    [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($managedExe))
+    $nativeExe = Join-Path $nativeRoot 'codex.exe'
+    $externalExe = Join-Path $scratch 'external.exe'
+    foreach ($exe in @($managedExe,$nativeExe,$externalExe)) { [IO.File]::WriteAllText($exe,'fixture') }
+    $staleState = @{ActiveMode='OfficialCurrent';ActiveCliPath=$managedExe;Installed=$true}
+    Assert ((Resolve-RuntimeModeInfo '' '' $staleState $runtimeRoot $nativeRoot).Mode -eq 'DesktopNative') 'Stale Guard state overrode native selection.'
+    Assert ((Resolve-RuntimeModeInfo $managedExe '' @{ActiveMode='DesktopNativeProtected'} $runtimeRoot $nativeRoot).Mode -eq 'OfficialStandalone') 'A selected managed standalone CLI was reported as native.'
+    Assert ((Resolve-RuntimeModeInfo $managedExe '' @{ActiveMode='Rollback';ActiveCliPath=$managedExe} $runtimeRoot $nativeRoot).Mode -eq 'OfficialStandalone') 'Standalone rollback mode was not recognized.'
+    Assert ((Resolve-RuntimeModeInfo $nativeExe '' $staleState $runtimeRoot $nativeRoot).Mode -eq 'DesktopNative') 'Desktop component path was not recognized.'
+    Assert ((Resolve-RuntimeModeInfo $externalExe '' $null $runtimeRoot $nativeRoot).Mode -eq 'Unknown') 'Unidentified external CLI was claimed to be official.'
+    Assert ((Resolve-RuntimeModeInfo (Join-Path $scratch 'missing.exe') '' $staleState $runtimeRoot $nativeRoot).Mode -eq 'Unknown') 'Missing CLI path was claimed to be usable.'
+    Assert ((Resolve-RuntimeModeInfo '' 'external-host.exe' $staleState $runtimeRoot $nativeRoot).Mode -eq 'Unknown') 'Host override was ignored.'
 
     # Proxy updates preserve unrelated .env entries while removing local proxy
     # endpoints when disabled.
@@ -333,6 +373,11 @@ function Install-Or-RepairProtection {
     $envEnabled = [IO.File]::ReadAllText($envFile)
     Assert ($envEnabled -match '(?m)^HTTP_PROXY=http://127\.0\.0\.1:23456\r?$' -and $envEnabled -match '(?m)^HTTPS_PROXY=http://127\.0\.0\.1:23456\r?$') 'Proxy enable did not write the requested endpoint.'
     Assert ($envEnabled.Contains('CUSTOM_FLAG=keep')) 'Proxy enable did not preserve unrelated .env entries.'
+    [void](Set-ProxyEnvironmentFile 7890 $envEnabled '192.168.1.1')
+    Assert ([IO.File]::ReadAllText($envFile).Contains('HTTPS_PROXY=http://192.168.1.1:7890')) 'Router proxy endpoint was not written to the config file.'
+    $routerSnapshot = Set-TransientProxyEnvironment 7890 '192.168.1.1'
+    try { Assert ($env:HTTPS_PROXY -eq 'http://192.168.1.1:7890') 'Router proxy was not passed to worker requests.' }
+    finally { Restore-TransientProxyEnvironment $routerSnapshot }
 
     # Model replacement is structural: root config keys and the managed Luna
     # block change, while similarly named lines in unrelated sections/docs do not.

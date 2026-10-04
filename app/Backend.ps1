@@ -24,8 +24,9 @@ $script:InstallProtectionWasBound = $PSBoundParameters.ContainsKey('InstallProte
 $script:JobWasBound = $PSBoundParameters.ContainsKey('JobFile')
 $script:OptionsWasBound = $PSBoundParameters.ContainsKey('OptionsBase64')
 $script:DefaultOptions = [ordered]@{
+    proxyHost = '127.0.0.1'
     folderManagement = $true
-    subagents = $true
+    subagents = $false
     cuaRepair = $true
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-5.6-luna'
@@ -109,6 +110,7 @@ function Convert-BackendOptions {
     $options.parentEffort = & $get 'parentEffort'
     $options.childEffort = & $get 'childEffort'
     $normalized = [ordered]@{
+        proxyHost = Convert-ProxyHost (& $get 'proxyHost')
         folderManagement = Convert-BackendOptionBoolean $options.folderManagement 'folderManagement' $script:DefaultOptions.folderManagement
         subagents = Convert-BackendOptionBoolean $options.subagents 'subagents' $script:DefaultOptions.subagents
         cuaRepair = Convert-BackendOptionBoolean $options.cuaRepair 'cuaRepair' $script:DefaultOptions.cuaRepair
@@ -118,6 +120,21 @@ function Convert-BackendOptions {
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
     return $normalized
+}
+function Convert-ProxyHost {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrWhiteSpace($Value))) { return '127.0.0.1' }
+    if ($Value -isnot [string]) { throw 'Proxy IP must be a string.' }
+    $address = $null
+    if (-not [Net.IPAddress]::TryParse($Value.Trim(),[ref]$address)) { throw 'Proxy IP must be a valid IPv4 or IPv6 address.' }
+    return $address.ToString()
+}
+function Get-ProxyUrl {
+    param([int]$Port,[AllowNull()][string]$HostValue)
+    if ($Port -eq 0) { return '' }
+    $hostText = Convert-ProxyHost $HostValue
+    if ($hostText.Contains(':')) { $hostText = '[' + $hostText + ']' }
+    return 'http://' + $hostText + ':' + $Port
 }
 function Get-DocumentsPath {
     $documents = $null
@@ -346,12 +363,15 @@ if /i "%~1"=="--codex-gui-rollback" (
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
-    $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%")')
+    $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
     $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
     $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
     $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=medium"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
+    # Existing managed rules are preserved when a feature is unchecked. Their
+    # presence must not force the base config validator to require that feature.
+    $sourceText = [regex]::Replace($sourceText,'(?m)^if exist "%AGENTS_FILE%" \(\r?\n(?=    findstr /x /l /c:"BEGIN CODEX LUNA PROMPT V1.3")','if /i "%CODEX_GUI_SUBAGENTS%"=="1" if exist "%AGENTS_FILE%" (' + [Environment]::NewLine)
     $driveBlock = @'
 :SELECT_FOLDER_DRIVE
 set "FOLDER_MANAGEMENT_DRIVE=%CODEX_GUI_DRIVE%"
@@ -509,13 +529,13 @@ function Write-Utf8NoBomFile {
     [IO.File]::WriteAllText($Path,$Text,$script:Utf8NoBom)
 }
 function Set-ProxyEnvironmentFile {
-    param([Parameter(Mandatory=$true)][int]$ProxyPortValue,[AllowNull()][string]$OriginalText)
+    param([Parameter(Mandatory=$true)][int]$ProxyPortValue,[AllowNull()][string]$OriginalText,[string]$ProxyHostValue='127.0.0.1')
     $path = Join-Path (Get-CodexHomePath) '.env'
     $current = if ($null -ne $OriginalText) { $OriginalText } else { Read-Utf8FileSafe $path }
     $lines = if ($null -eq $current) { @() } else { @($current -split "\r?\n") }
     $kept = @($lines | Where-Object { $_ -notmatch '(?i)^\s*(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY)\s*=' })
     if ($ProxyPortValue -gt 0) {
-        $proxy = 'http://127.0.0.1:' + $ProxyPortValue
+        $proxy = Get-ProxyUrl $ProxyPortValue $ProxyHostValue
         $kept += 'HTTP_PROXY=' + $proxy
         $kept += 'HTTPS_PROXY=' + $proxy
     }
@@ -525,7 +545,7 @@ function Set-ProxyEnvironmentFile {
     return $path
 }
 function Set-TransientProxyEnvironment {
-    param([Parameter(Mandatory=$true)][int]$ProxyPortValue)
+    param([Parameter(Mandatory=$true)][int]$ProxyPortValue,[string]$ProxyHostValue='127.0.0.1')
     $names = @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy')
     $snapshot = [ordered]@{}
     $snapshot['__DefaultWebProxy'] = [Net.WebRequest]::DefaultWebProxy
@@ -538,7 +558,7 @@ function Set-TransientProxyEnvironment {
         [Environment]::SetEnvironmentVariable('NO_PROXY','localhost,127.0.0.1,::1','Process')
         [Environment]::SetEnvironmentVariable('no_proxy','localhost,127.0.0.1,::1','Process')
     } else {
-        $proxy = 'http://127.0.0.1:' + $ProxyPortValue
+        $proxy = Get-ProxyUrl $ProxyPortValue $ProxyHostValue
         [Environment]::SetEnvironmentVariable('HTTP_PROXY',$proxy,'Process')
         [Environment]::SetEnvironmentVariable('HTTPS_PROXY',$proxy,'Process')
         [Environment]::SetEnvironmentVariable('ALL_PROXY',$proxy,'Process')
@@ -616,22 +636,22 @@ function Invoke-InitOperation {
             CODEX_GUI_CUA_REPAIR=if ([bool]$resolvedOptions.cuaRepair) { '1' } else { '0' }
             CODEX_GUI_PARENT_MODEL=[string]$resolvedOptions.parentModel; CODEX_GUI_CHILD_MODEL=[string]$resolvedOptions.childModel
             CODEX_GUI_PARENT_EFFORT=[string]$resolvedOptions.parentEffort; CODEX_GUI_CHILD_EFFORT=[string]$resolvedOptions.childEffort
-            CODEX_GUI_ENV_FILE=$envFile; CODEX_GUI_PROXY_URL=if ($ProxyPortValue -gt 0) { 'http://127.0.0.1:' + $ProxyPortValue } else { '' }
+            CODEX_GUI_ENV_FILE=$envFile; CODEX_GUI_PROXY_URL=Get-ProxyUrl $ProxyPortValue $resolvedOptions.proxyHost
         }
         $result = Invoke-ChildProcess $adapter @('--codex-gui-action',$Action) $PayloadRoot $childEnvironment $script:InputEncoding -ClearProxyEnvironment:($ProxyPortValue -eq 0)
         if ($result.ExitCode -ne 0) { throw ('init.cmd failed with exit code ' + $result.ExitCode) }
         if ($result.Output -match '(?im)RESULT\s*=\s*FAIL|FAIL') { throw 'init.cmd reported a failed result.' }
-        if ($Action -eq 'proxy' -or $Action -eq 'one-click') { [void](Set-ProxyEnvironmentFile $ProxyPortValue $originalEnv) }
+        if ($Action -eq 'proxy' -or $Action -eq 'one-click') { [void](Set-ProxyEnvironmentFile $ProxyPortValue $originalEnv $resolvedOptions.proxyHost) }
         if ($Action -eq 'one-click') { Set-ScopedModelSettings $resolvedOptions }
         if ($Action -eq 'proxy') {
             $envFile = Join-Path (Get-CodexHomePath) '.env'
             if (-not (Test-Path -LiteralPath $envFile -PathType Leaf)) { throw '.env was not written by proxy operation.' }
             $envText = [IO.File]::ReadAllText($envFile)
-            $proxy = 'http://127.0.0.1:' + $ProxyPortValue
+            $proxy = Get-ProxyUrl $ProxyPortValue $resolvedOptions.proxyHost
             if ($ProxyPortValue -eq 0) {
                 if ($envText -match '(?im)^\s*(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY)\s*=') { throw 'Proxy operation did not remove proxy environment entries.' }
-            } elseif ($envText -notmatch ('(?m)^HTTP_PROXY=' + [regex]::Escape($proxy) + '$') -or
-                $envText -notmatch ('(?m)^HTTPS_PROXY=' + [regex]::Escape($proxy) + '$')) { throw 'Proxy operation did not write the requested proxy endpoint.' }
+            } elseif ($envText -notmatch ('(?m)^HTTP_PROXY=' + [regex]::Escape($proxy) + '\r?$') -or
+                $envText -notmatch ('(?m)^HTTPS_PROXY=' + [regex]::Escape($proxy) + '\r?$')) { throw 'Proxy operation did not write the requested proxy endpoint.' }
         }
         return 0
     } finally {
@@ -803,16 +823,71 @@ function Get-ReadOnlyProtectionInstalled {
     if(-not(Test-Path -LiteralPath $statePath -PathType Leaf)){return $false}
     try{$state=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json;return (Convert-ToBoolean (Get-ObjectPropertyValue $state 'Installed'))}catch{return $false}
 }
+function Get-PersistedRuntimeOverride {
+    param([string]$Name)
+    foreach ($scope in @('User','Machine')) {
+        $value = [Environment]::GetEnvironmentVariable($Name,$scope)
+        if (-not [string]::IsNullOrWhiteSpace($value)) { return [string]$value }
+    }
+    return ''
+}
+function Resolve-RuntimeModeInfo {
+    param([AllowNull()][string]$CliPath,[AllowNull()][string]$HostPath,[AllowNull()][object]$State,[string]$StandaloneRoot,[AllowNull()][string]$DesktopInstallLocation)
+    $info = [ordered]@{ Mode='Unknown'; Detail='尚未确认启动模式'; CliPath=$CliPath }
+    if (-not [string]::IsNullOrWhiteSpace($HostPath)) {
+        $info.Detail = '存在 Code Mode Host 路径覆盖，请先检查启动诊断。'
+        return $info
+    }
+    if ([string]::IsNullOrWhiteSpace($CliPath)) {
+        $info.Mode = 'DesktopNative'
+        $info.Detail = '使用 Codex 桌面应用自带的 CLI。'
+        if ([string]::IsNullOrWhiteSpace($DesktopInstallLocation)) { $info.Detail += ' 当前未检测到桌面应用。' }
+        return $info
+    }
+    if (-not (Test-Path -LiteralPath $CliPath -PathType Leaf)) {
+        $info.Detail = '配置的 CLI 路径不存在，请在维护恢复中检查或修复。'
+        return $info
+    }
+    try {
+        $path = [IO.Path]::GetFullPath($CliPath)
+        if ($DesktopInstallLocation -and $path.StartsWith([IO.Path]::GetFullPath($DesktopInstallLocation).TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) {
+            $info.Mode = 'DesktopNative'; $info.Detail = '当前 CLI 路径指向桌面应用自带组件。'
+            return $info
+        }
+        $mode = [string](Get-ObjectPropertyValue $State 'ActiveMode')
+        $active = [string](Get-ObjectPropertyValue $State 'ActiveCliPath')
+        $stateMatches = $active -and ([IO.Path]::GetFullPath($active) -eq $path) -and $mode -match '^(OfficialCurrent(?:Fallback)?|Rollback(?:Fallback)?)$'
+        $rootPrefix = [IO.Path]::GetFullPath($StandaloneRoot).TrimEnd('\') + '\'
+        $managedPath = $path.StartsWith($rootPrefix,[StringComparison]::OrdinalIgnoreCase) -and $path.Substring($rootPrefix.Length) -match '^(?:current|releases\\[^\\]+)\\bin\\codex\.exe$'
+        if ($managedPath) {
+            $info.Mode = 'OfficialStandalone'
+            $info.Detail = if ($mode -match '^Rollback' -and $stateMatches) { '使用官方独立 CLI 的回滚版本。' } else { '使用启动保护管理的官方独立 CLI。' }
+        } else { $info.Detail = '检测到其他 CLI 路径覆盖，无法确认是否为官方独立 CLI。' }
+    } catch { $info.Detail = 'CLI 路径或启动记录异常，请检查启动诊断。' }
+    return $info
+}
+function Get-ReadOnlyRuntimeModeInfo {
+    param([string]$ProtectionRoot,[AllowNull()][string]$DesktopInstallLocation)
+    $state = $null
+    $path = Join-Path $ProtectionRoot 'State\guard-state.json'
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        try { $state = [IO.File]::ReadAllText($path,[Text.Encoding]::UTF8) | ConvertFrom-Json } catch {}
+    }
+    $standaloneRoot = Join-Path (Get-CodexHomePath) 'packages\standalone'
+    return Resolve-RuntimeModeInfo (Get-PersistedRuntimeOverride 'CODEX_CLI_PATH') (Get-PersistedRuntimeOverride 'CODEX_CODE_MODE_HOST_PATH') $state $standaloneRoot $DesktopInstallLocation
+}
 function Get-ReadOnlyStatus {
     param([string]$PayloadRoot)
     $desktop=Get-ReadOnlyDesktopInfo; $config=Get-ReadOnlyConfigInfo; $backupRoot=Get-BackupRootPath; $latestBackup=Get-LatestBackupPath
     $running=$false; try{$running=[bool](Get-Process -ErrorAction SilentlyContinue | Where-Object{$_.ProcessName -match '^(Codex|ChatGPT)$'})}catch{}
     $protectionRoot=Get-GuardInstallRootPath; $protectionInstalled=Get-ReadOnlyProtectionInstalled
+    $runtime = Get-ReadOnlyRuntimeModeInfo $protectionRoot $desktop.InstallLocation
     return [ordered]@{
         backendVersion=$script:BackendVersion; desktopVersion=$desktop.Version; desktopHealth=$desktop.Health; desktopHealthy=$desktop.Healthy; desktopFound=$desktop.Found
         desktopInstallLocation=$desktop.InstallLocation; configModel=$config.Model; configEffort=$config.Effort
         config=[ordered]@{model=$config.Model;effort=$config.Effort;path=$config.Path;exists=$config.Exists}
         protectionInstalled=$protectionInstalled; protectionRoot=$protectionRoot; root=$PayloadRoot; processRunning=$running
+        runtimeMode=$runtime.Mode; runtimeModeDetail=$runtime.Detail; currentCliPath=$runtime.CliPath
         backupPath=if($latestBackup){$latestBackup}else{$backupRoot}; backupRoot=$backupRoot; latestBackupPath=$latestBackup
         statePath=Join-Path $protectionRoot 'State\guard-state.json'
     }
@@ -823,7 +898,7 @@ function Invoke-BackendMain {
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -ne 'status') { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort }
+        if ($input.Operation -ne 'status') { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
             'initialize' { [void](Invoke-InitOperation 'one-click' $input.PayloadRoot $input.Drive $input.ProxyPort $input.Options); if($input.InstallProtection){[void](Invoke-GuardOperation 'guard-install' $input.PayloadRoot)}; return 0 }

@@ -12,15 +12,17 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Text.RegularExpressions;
+using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.0.5";
+    public const string Version = "2.0.6";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
+    public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
     const string DefaultChildModel = "gpt-5.6-luna";
     const string DefaultParentEffort = "medium";
@@ -54,9 +56,10 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"subagents", true}, {"cuaRepair", true},
+            {"folderManagement", true}, {"subagents", false}, {"cuaRepair", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
-            {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort}
+            {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
+            {"proxyHost", DefaultProxyHost}
         };
     }
     static bool ReadOptionBoolean(Dictionary<string,object> source,string key,bool fallback) {
@@ -74,16 +77,31 @@ public static class Core {
         if((key=="parentEffort" || key=="childEffort") && !EffortPattern.IsMatch(text)) throw new ArgumentException("Option "+key+" contains an invalid effort");
         return text;
     }
+    public static string NormalizeProxyHost(string value) {
+        if(String.IsNullOrWhiteSpace(value)) return DefaultProxyHost;
+        IPAddress address;
+        var text=value.Trim();
+        if(!IPAddress.TryParse(text,out address)) throw new ArgumentException("Option proxyHost must be a valid IPv4 or IPv6 address");
+        return address.ToString();
+    }
+    static string ReadProxyHost(Dictionary<string,object> source) {
+        object value;
+        if(source==null || !source.TryGetValue("proxyHost",out value) || value==null) return DefaultProxyHost;
+        var text=value as string;
+        if(text==null) throw new ArgumentException("Option proxyHost must be a string");
+        return NormalizeProxyHost(text);
+    }
     public static Dictionary<string,object> NormalizeOptions(Dictionary<string,object> source) {
         var normalized=DefaultOptions();
         if(source==null) return normalized;
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
-        normalized["subagents"]=ReadOptionBoolean(source,"subagents",true);
+        normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         normalized["parentModel"]=ReadOptionString(source,"parentModel",DefaultParentModel);
         normalized["childModel"]=ReadOptionString(source,"childModel",DefaultChildModel);
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);
         normalized["childEffort"]=ReadOptionString(source,"childEffort",DefaultChildEffort);
+        normalized["proxyHost"]=ReadProxyHost(source);
         return normalized;
     }
     static Dictionary<string,object> DecodeOptions(string value) {
@@ -144,17 +162,30 @@ public static class Core {
     }
     public static Dictionary<string,object> ReadJson(string json) { return Json.Deserialize<Dictionary<string,object>>(json); }
     public static string Value(Dictionary<string,object> obj,string key,string fallback) { return obj!=null && obj.ContainsKey(key) && obj[key]!=null ? Convert.ToString(obj[key]) : fallback; }
+    static string ProxyAddress(string proxyHost,int proxyPort) {
+        var normalized=NormalizeProxyHost(proxyHost);
+        IPAddress address;
+        if(!IPAddress.TryParse(normalized,out address)) throw new ArgumentException("Proxy host must be a valid IPv4 or IPv6 address");
+        var host=address.AddressFamily==AddressFamily.InterNetworkV6?"["+normalized+"]":normalized;
+        return "http://"+host+":"+proxyPort;
+    }
     public static string Fetch(string url,int proxyPort) {
+        return Fetch(url,proxyPort,DefaultProxyHost);
+    }
+    public static string Fetch(string url,int proxyPort,string proxyHost) {
         ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
         var request=(HttpWebRequest)WebRequest.Create(url); request.UserAgent="CodexInitKitDesktop/"+Version;
         request.Timeout=12000; request.ReadWriteTimeout=12000;
-        request.Proxy=proxyPort>0?new WebProxy("http://127.0.0.1:"+proxyPort):null;
+        request.Proxy=proxyPort>0?new WebProxy(ProxyAddress(proxyHost,proxyPort)):null;
         using(var response=request.GetResponse()) using(var reader=new StreamReader(response.GetResponseStream(),Encoding.UTF8)) return reader.ReadToEnd();
     }
     public static Dictionary<string,object> CheckUpdate(int port) {
-        var commit=ReadJson(Fetch("https://api.github.com/repos/"+Repository+"/commits/main",port));
+        return CheckUpdate(port,DefaultProxyHost);
+    }
+    public static Dictionary<string,object> CheckUpdate(int port,string proxyHost) {
+        var commit=ReadJson(Fetch("https://api.github.com/repos/"+Repository+"/commits/main",port,proxyHost));
         var sha=Value(commit,"sha",""); if(!System.Text.RegularExpressions.Regex.IsMatch(sha,"^[0-9a-f]{40}$")) throw new InvalidDataException("Invalid commit");
-        return ValidateUpdate(Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",port));
+        return ValidateUpdate(Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",port,proxyHost));
     }
     public static Dictionary<string,object> ValidateUpdate(string json) {
         var manifest=ReadJson(json);
@@ -165,11 +196,14 @@ public static class Core {
         if(!System.Text.RegularExpressions.Regex.IsMatch(Value(manifest,"sha256",""),"^[0-9a-f]{64}$")) throw new InvalidDataException("更新校验值不合法");
         return manifest;
     }
-    public static async Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port) {
+    public static Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port) {
+        return DownloadUpdate(manifest,port,DefaultProxyHost);
+    }
+    public static async Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port,string proxyHost) {
         var stage=Path.Combine(Path.GetDirectoryName(Exe),".CodexInitKit-update-"+Guid.NewGuid().ToString("N")+".exe");
         using(var client=new WebClient()) {
             client.Headers[HttpRequestHeader.UserAgent]="CodexInitKitDesktop/"+Version;
-            client.Proxy=port>0?new WebProxy("http://127.0.0.1:"+port):null;
+            client.Proxy=port>0?new WebProxy(ProxyAddress(proxyHost,port)):null;
             try {
                 await client.DownloadFileTaskAsync(new Uri(Value(manifest,"url","")),stage);
                 if(Hash(stage)!=Value(manifest,"sha256","")) throw new InvalidDataException("下载校验失败，当前版本保持不变");
