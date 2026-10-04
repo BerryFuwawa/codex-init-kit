@@ -52,7 +52,7 @@ rem Parse this entire block before replacing the running CMD file.
 '@
 $wrapper=$wrapper.Replace('__LOADER__',$encodedLoader).Replace("`r`n","`n").Replace("`n","`r`n")
 $components=@(
-    @{Id='init'; Version='4.8.1'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
+    @{Id='init'; Version='4.8.2'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
     @{Id='guard'; Version='5.2.1'; File='第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd'; Encoding='utf-8'}
 )
 $manifest=[ordered]@{schema_version=1; repository=$Repository; channel='stable'; components=[ordered]@{}}

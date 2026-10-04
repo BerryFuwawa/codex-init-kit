@@ -4,10 +4,10 @@
     "channel":  "stable",
     "components":  {
                        "init":  {
-                                    "version":  "4.8.1",
+                                    "version":  "4.8.2",
                                     "path":  "scripts/第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd",
                                     "encoding":  "gbk",
-                                    "sha256":  "2d64177e404c98119e7f894087a356b7a8cab666db61988b05ff1570519cce93"
+                                    "sha256":  "ba6d5ee7fb83ce2b230ba8ef0903c29620d93b3c731dc85292ef1bd18a798190"
                                 },
                        "guard":  {
                                      "version":  "5.2.1",

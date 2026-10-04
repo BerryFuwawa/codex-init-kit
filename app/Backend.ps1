@@ -233,6 +233,40 @@ function Emit-ChildText {
     if ($null -eq $Text) { return }
     foreach ($line in ($Text -split "\r?\n")) { if ($line.Length -gt 0) { Write-BackendLine $line } }
 }
+function Set-InitConsoleProtocol {
+    param([Parameter(Mandatory=$true)][string]$SourceText,[Parameter(Mandatory=$true)][string]$ScriptDirectory)
+    [void][IO.Directory]::CreateDirectory($ScriptDirectory)
+    # Keep the GBK batch source and every nested PowerShell writer on the same
+    # byte protocol. Embedded scripts still read/write their data files as UTF-8.
+    foreach ($tag in @('PMB64','CUAB64')) {
+        $pattern = '(?m)^::' + $tag + ':[A-Za-z0-9+/=]+\r?\n(?:^::' + $tag + ':[A-Za-z0-9+/=]+\r?\n)*'
+        $match = [regex]::Match($SourceText,$pattern)
+        if (-not $match.Success) { continue }
+        $parts = [regex]::Matches($match.Value, '(?m)^::' + $tag + ':([^\r\n]+)')
+        $encoded = ($parts | ForEach-Object { $_.Groups[1].Value }) -join ''
+        $code = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+        $code = [regex]::Replace($code,'(?m)^([ \t]*)\[Console\]::OutputEncoding\s*=[^\r\n]*', '$1[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(936)')
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($code))
+        $chunks = for ($i = 0; $i -lt $encoded.Length; $i += 180) { '::' + $tag + ':' + $encoded.Substring($i,[Math]::Min(180,$encoded.Length-$i)) }
+        $SourceText = $SourceText.Remove($match.Index,$match.Length).Insert($match.Index,($chunks -join "`r`n") + "`r`n")
+    }
+    $prefix = "`$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(936); `$OutputEncoding=[Console]::OutputEncoding;`n"
+    $evaluator = [Text.RegularExpressions.MatchEvaluator]{
+        param($match)
+        $flags = $match.Groups[1].Value
+        if ($flags -notmatch '(?i)-InputFormat\s+Text') { $flags += '-InputFormat Text ' }
+        if ($flags -notmatch '(?i)-OutputFormat\s+Text') { $flags += '-OutputFormat Text ' }
+        $code = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($match.Groups[2].Value))
+        # EncodedCommand serializes the information stream to CLIXML on
+        # redirected stderr even with OutputFormat Text. A BOM-marked script
+        # file uses ordinary text streams and avoids cmd.exe's 8191-byte limit.
+        $path = Join-Path $ScriptDirectory ('console-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+        [IO.File]::WriteAllText($path,$prefix + $code,[Text.UTF8Encoding]::new($true))
+        return $flags + '-File "' + $path + '"'
+    }
+    $SourceText = [regex]::Replace($SourceText,'(?i)(powershell\.exe\s+[^\r\n]*?)-EncodedCommand\s+([A-Za-z0-9+/=]+)',$evaluator)
+    return $SourceText.Replace('chcp 65001 >nul','chcp 936 >nul')
+}
 function Invoke-ChildProcess {
     param(
         [Parameter(Mandatory=$true)][string]$FilePath,[string[]]$Arguments=@(),
@@ -443,6 +477,10 @@ set "CONFIG_RESULT=FAIL"
     $workRoot = Join-Path $PayloadRoot '.backend'
     [void][IO.Directory]::CreateDirectory($workRoot)
     $adapterPath = Join-Path $workRoot ('init-adapter-' + [Guid]::NewGuid().ToString('N') + '.cmd')
+    $sourceText = Set-InitConsoleProtocol $sourceText ([IO.Path]::ChangeExtension($adapterPath,'.scripts'))
+    # cmd.exe stores byte offsets when CALL enters a label. Mixed LF/CRLF
+    # introduced by PowerShell here-strings can corrupt the return position.
+    $sourceText = [regex]::Replace($sourceText, '\r\n|\r|\n', "`r`n")
     [IO.File]::WriteAllText($adapterPath, $sourceText, $script:InputEncoding)
     return $adapterPath
 }
@@ -453,6 +491,16 @@ function Read-Utf8FileSafe {
     catch { $text = [IO.File]::ReadAllText($Path) }
     if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { return $text.Substring(1) }
     return $text
+}
+function Remove-InitAdapter {
+    param([AllowNull()][string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return }
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $parent = [IO.Path]::GetDirectoryName($fullPath)
+    if ([IO.Path]::GetFileName($parent) -ne '.backend' -or [IO.Path]::GetFileName($fullPath) -notmatch '^init-adapter-[a-f0-9]{32}\.cmd$') { throw 'Unexpected initialization adapter cleanup path.' }
+    $scriptsPath = [IO.Path]::ChangeExtension($fullPath,'.scripts')
+    if (Test-Path -LiteralPath $scriptsPath -PathType Container) { Remove-Item -LiteralPath $scriptsPath -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $fullPath -PathType Leaf) { Remove-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue }
 }
 function Write-Utf8NoBomFile {
     param([Parameter(Mandatory=$true)][string]$Path,[Parameter(Mandatory=$true)][string]$Text)
@@ -587,7 +635,7 @@ function Invoke-InitOperation {
         }
         return 0
     } finally {
-        if ($adapter -and (Test-Path -LiteralPath $adapter)) { Remove-Item -LiteralPath $adapter -Force -ErrorAction SilentlyContinue }
+        Remove-InitAdapter $adapter
     }
 }
 function Resolve-InitRollbackPath {
@@ -611,7 +659,7 @@ function Invoke-InitRollback {
         if ($result.Output -match '(?im)FAIL|rollback.*failed') { throw 'init rollback reported a failure.' }
         return 0
     } finally {
-        if ($adapter -and (Test-Path -LiteralPath $adapter)) { Remove-Item -LiteralPath $adapter -Force -ErrorAction SilentlyContinue }
+        Remove-InitAdapter $adapter
     }
 }
 function Invoke-CuaOperation {

@@ -83,7 +83,115 @@ try {
     Assert ($adapterText.Contains('GUI confirmation already supplied')) 'GUI confirmation override was not added.'
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
-    Remove-Item -LiteralPath $adapter -Force
+    Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
+
+    # Exercise the actual embedded verifier against the marker names written
+    # by the installer, rather than a mock verifier that always returns PASS.
+    $verifySection = [regex]::Match($adapterText,'(?ms)^::AGENTS_VERIFY_PAYLOAD_BEGIN\r?\n(.*?)^::AGENTS_VERIFY_PAYLOAD_END')
+    $verifyBase64 = ([regex]::Matches($verifySection.Groups[1].Value,'(?m)^::AVB64:([^\r\n]+)') | ForEach-Object { $_.Groups[1].Value }) -join ''
+    $verifyCode = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($verifyBase64))
+    $verifyPath = Join-Path $scratch 'verify-agents.ps1'
+    [IO.File]::WriteAllText($verifyPath,$verifyCode,[Text.UTF8Encoding]::new($true))
+    $markerFixture = "BEGIN CODEX LUNA PROMPT V1.3`nmodel = gpt-5.6-luna`nEND CODEX LUNA PROMPT V1.3`nBEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0`nEND CODEX FOLDER MANAGEMENT PROMPT V1.0`n"
+    $markerPath = Join-Path $codeHome 'AGENTS.md'
+    [IO.File]::WriteAllText($markerPath,$markerFixture,[Text.UTF8Encoding]::new($false))
+    $verifyEnvironment = @('CODEX_INIT_AGENTS_FILE','CODEX_GUI_SUBAGENTS','CODEX_GUI_FOLDER_MANAGEMENT')
+    $savedVerifyEnvironment = @{}
+    foreach ($name in $verifyEnvironment) { $savedVerifyEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
+    try {
+        $env:CODEX_INIT_AGENTS_FILE = $markerPath
+        $env:CODEX_GUI_SUBAGENTS = '1'; $env:CODEX_GUI_FOLDER_MANAGEMENT = '1'
+        $actualVerification = @(& $PSHOME\powershell.exe -NoProfile -File $verifyPath)
+        Assert ($LASTEXITCODE -eq 0 -and ($actualVerification -join '') -eq 'PASS|1') 'Installed managed markers were rejected by the actual AGENTS verifier.'
+        [IO.File]::WriteAllText($markerPath,$markerFixture + "BEGIN CODEX LUNA PROMPT V1.3`nEND CODEX LUNA PROMPT V1.3`n",[Text.UTF8Encoding]::new($false))
+        $actualVerification = @(& $PSHOME\powershell.exe -NoProfile -File $verifyPath)
+        Assert ($LASTEXITCODE -ne 0 -and ($actualVerification -join '') -eq 'FAIL|2') 'Duplicate Luna blocks were accepted by the actual AGENTS verifier.'
+        [IO.File]::WriteAllText($markerPath,'unrelated user instructions',[Text.UTF8Encoding]::new($false))
+        $env:CODEX_GUI_SUBAGENTS = '0'; $env:CODEX_GUI_FOLDER_MANAGEMENT = '0'
+        $actualVerification = @(& $PSHOME\powershell.exe -NoProfile -File $verifyPath)
+        Assert ($LASTEXITCODE -eq 0 -and ($actualVerification -join '') -eq 'PASS|SKIPPED') 'Disabled optional blocks were still required by the actual AGENTS verifier.'
+    } finally {
+        foreach ($name in $verifyEnvironment) { [Environment]::SetEnvironmentVariable($name,$savedVerifyEnvironment[$name],'Process') }
+    }
+    # Preserve the real five-stage batch flow, its CALL/return boundaries and
+    # final verifier. Replace only side-effecting routines with scratch stubs.
+    $flow = [regex]::Match($adapterText,'(?ms)^:ONE_CLICK_INIT\r?\n.*?(?=^:SELECT_FOLDER_DRIVE\r?$)').Value
+    $verifier = [regex]::Match($adapterText,'(?ms)^:VERIFY_AGENTS_CONTENT\r?\n.*?(?=^:VERIFY_FOLDER_BINDING\r?$)').Value
+    $safeStages = @'
+:FULL_INIT
+echo CALLED BASE
+set "RESULT=PASS"
+exit /b 0
+:INSTALL_FOLDER_MANAGEMENT
+echo CALLED FOLDER
+set "FOLDER_RESULT=PASS"
+exit /b 0
+:VERIFY_FOLDER_BINDING
+echo CALLED BINDING
+if "%CODEX_GUI_TEST_FAILURE%"=="binding" exit /b 1
+exit /b 0
+:RUN_CUA_REPAIR
+echo CALLED CUA
+if "%CODEX_GUI_TEST_FAILURE%"=="cua" exit /b 1
+set "CUA_RESULT=PASS"
+exit /b 0
+:INSTALL_LUNA_PROMPT
+echo CALLED LUNA
+set "LUNA_PROMPT_RESULT=PASS"
+set "LUNA_PROMPT_COUNT=1"
+exit /b 0
+:VERIFY_CONFIG
+exit /b 0
+:WRITE_REPORT
+echo FINAL_REPORT !RESULT! !LUNA_PROMPT_RESULT! !LUNA_PROMPT_COUNT!
+exit /b 0
+:WRITE_ROLLBACK
+exit /b 0
+:ONE_CLICK_INIT_FAIL
+exit /b 1
+:SELECT_FOLDER_DRIVE
+set "CODEX_FOLDER_DRIVE=%CODEX_GUI_DRIVE%"
+exit /b 0
+'@
+    $flowPath = Join-Path $scratch 'real-flow.cmd'
+    $flowHeader = @('@echo off','setlocal EnableExtensions EnableDelayedExpansion','chcp 936 >nul','set "SCRIPT_PATH=%~f0"','set "AGENTS_FILE=%CODEX_INIT_AGENTS_FILE%"','set "RTK_FILE=fixture"','set "REPORT_RESULT=PASS"','goto :ONE_CLICK_INIT') -join "`r`n"
+    $flowSource = $flowHeader + "`r`n" + $flow + $safeStages + "`r`n" + $verifier + $verifySection.Value + "`r`n"
+    [IO.File]::WriteAllText($flowPath,([regex]::Replace($flowSource,'\r\n|\r|\n',"`r`n")),[Text.Encoding]::GetEncoding(936))
+    for ($flags = 0; $flags -lt 8; $flags++) {
+        $folder = ($flags -band 1) -ne 0; $luna = ($flags -band 2) -ne 0; $cua = ($flags -band 4) -ne 0
+        $selectedMarkers = if ($luna) { "BEGIN CODEX LUNA PROMPT V1.3`nEND CODEX LUNA PROMPT V1.3`n" } else { '' }
+        if ($folder) { $selectedMarkers += "BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0`nEND CODEX FOLDER MANAGEMENT PROMPT V1.0`n" }
+        [IO.File]::WriteAllText($markerPath,$selectedMarkers,[Text.UTF8Encoding]::new($false))
+        $flowEnvironment = @{ CODEX_INIT_AGENTS_FILE=$markerPath; CODEX_GUI_DRIVE='D'; CODEX_GUI_FOLDER_MANAGEMENT=[int]$folder; CODEX_GUI_SUBAGENTS=[int]$luna; CODEX_GUI_CUA_REPAIR=[int]$cua }
+        $flowResult = Invoke-ChildProcess $flowPath @() $scratch $flowEnvironment $script:InputEncoding
+        Assert ($flowResult.ExitCode -eq 0 -and $flowResult.Output.Contains('RESULT = PASS')) ('Actual batch flow failed with feature flags ' + $flags)
+        Assert ([string]::IsNullOrEmpty($flowResult.Error)) ('Actual batch flow emitted command errors with feature flags ' + $flags + ': ' + $flowResult.Error)
+        Assert ($flowResult.Output.Contains('CALLED BASE')) 'Actual batch flow skipped full initialization.'
+        Assert ($flowResult.Output.Contains('CALLED FOLDER') -eq $folder -and $flowResult.Output.Contains('CALLED BINDING') -eq $folder -and $flowResult.Output.Contains('CALLED CUA') -eq $cua -and $flowResult.Output.Contains('CALLED LUNA') -eq $luna) 'Actual batch flow executed the wrong feature stages.'
+    }
+    foreach ($failure in @('binding','cua')) {
+        $flowEnvironment['CODEX_GUI_TEST_FAILURE'] = $failure
+        $flowResult = Invoke-ChildProcess $flowPath @() $scratch $flowEnvironment $script:InputEncoding
+        Assert ($flowResult.ExitCode -ne 0 -and -not $flowResult.Output.Contains('CALLED LUNA')) ('Actual batch flow ignored failure in ' + $failure)
+    }
+    # Redirected Windows PowerShell emits CLIXML unless its output format is
+    # explicit. Exercise both embedded writers and a genuine stderr/exit code.
+    $consoleFixture = '@echo off' + "`r`n" + 'chcp 936 >nul' + "`r`n" + 'set "CODEX_TEST_SELF=%~f0"' + "`r`n"
+    foreach ($tag in @('PMB64','CUAB64')) {
+        $writer = "[Console]::OutputEncoding = [Text.UTF8Encoding]::new(`$false)`nGet-AppxPackage -Name OpenAI.Codex | Out-Null; Write-Host '中文检查通过：文件夹与运行时'; Write-Progress -Activity '准备模块' -Status '测试' -PercentComplete 10; [Console]::Error.WriteLine('真实错误保留'); exit 7"
+        $writerBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($writer))
+        $loader = "`$lines=[IO.File]::ReadAllLines(`$env:CODEX_TEST_SELF,[Text.Encoding]::GetEncoding(936)); `$b=(`$lines | Where-Object {`$_ -like '::$tag*'} | ForEach-Object {`$_.Substring('$tag'.Length+3)}) -join ''; & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(`$b))))"
+        $fixturePath = Join-Path $scratch ('console-' + $tag + '.cmd')
+        $fixtureText = $consoleFixture + 'powershell.exe -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($loader)) + "`r`n" + 'exit /b %errorlevel%' + "`r`n" + '::' + $tag + ':' + $writerBase64 + "`r`n"
+        $fixtureText = Set-InitConsoleProtocol $fixtureText (Join-Path $scratch ('console-scripts-' + $tag))
+        [IO.File]::WriteAllText($fixturePath,$fixtureText,[Text.Encoding]::GetEncoding(936))
+        $consoleResult = Invoke-ChildProcess $fixturePath @() $scratch @{} $script:InputEncoding
+        Assert ($consoleResult.ExitCode -eq 7) 'Console protocol lost the real PowerShell failure code.'
+        Assert ($consoleResult.Output.Contains('中文检查通过：文件夹与运行时') -and $consoleResult.Error.Contains('真实错误保留')) 'Console protocol corrupted Chinese stdout or stderr.'
+        Assert (($consoleResult.Output + $consoleResult.Error) -notmatch 'CLIXML|<Objs|准备模块') 'Console protocol leaked serialized information or progress records.'
+    }
+    Remove-InitAdapter $adapter
+    Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($adapter,'.scripts')))) 'Private PowerShell wrappers were not removed with the adapter.'
     Remove-Item -LiteralPath (Join-Path $payload '.backend') -Recurse -Force -ErrorAction SilentlyContinue
 
     $featureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
