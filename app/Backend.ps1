@@ -502,6 +502,16 @@ set "CONFIG_RESULT=FAIL"
     if ($sourceText -match '(?m)^:WRITE_ENV\r?$') {
         $sourceText = $sourceText.Replace('echo 已写入：%ENV_FILE%', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" echo 已清理代理：%ENV_FILE%' + [Environment]::NewLine + 'if not "%CODEX_GUI_PROXY_DISABLED%"=="1" echo 已写入：%ENV_FILE%')
     }
+    $optionalStageMessages = @(
+        @('CODEX_GUI_FOLDER_MANAGEMENT','echo 阶段 1/5：确认文件夹管理盘符。','echo 阶段 1/5：跳过工作盘确认（文件夹管理未勾选）。'),
+        @('CODEX_GUI_FOLDER_MANAGEMENT','echo 阶段 3/5：安装文件夹管理并创建标准目录。','echo 阶段 3/5：跳过文件夹管理（未勾选）。'),
+        @('CODEX_GUI_CUA_REPAIR','echo 阶段 4/5：检查并按需修复 Codex CUA 运行时。','echo 阶段 4/5：跳过 CUA 检查与修复（未勾选）。'),
+        @('CODEX_GUI_SUBAGENTS','echo 阶段 5/5：安装 GPT5.6 LUNA MAX 多线程提示词。','echo 阶段 5/5：跳过子代理规则安装（未勾选）。')
+    )
+    foreach ($stage in $optionalStageMessages) {
+        $sourceText = $sourceText.Replace($stage[1],('if /i "%'+$stage[0]+'%"=="1" '+$stage[1])+[Environment]::NewLine+('if /i "%'+$stage[0]+'%"=="0" '+$stage[2]))
+    }
+    $sourceText = $sourceText.Replace('echo 一键初始化完成：完整初始化、文件夹管理、CUA 检查修复和 Luna 多线程均已通过。','echo 一键初始化完成：基础配置和全局规则已重建，所选功能均已通过。')
     $workRoot = Join-Path $PayloadRoot '.backend'
     [void][IO.Directory]::CreateDirectory($workRoot)
     $adapterPath = Join-Path $workRoot ('init-adapter-' + [Guid]::NewGuid().ToString('N') + '.cmd')
@@ -580,7 +590,6 @@ function Restore-TransientProxyEnvironment {
 function Set-ScopedModelSettings {
     param([AllowNull()][object]$Options)
     $resolved = Convert-BackendOptions $Options
-    if (-not [bool]$resolved.subagents) { Remove-ManagedLunaRules }
     $codeHome = Get-CodexHomePath
     $configPath = Join-Path $codeHome 'config.toml'
     if (Test-Path -LiteralPath $configPath -PathType Leaf) {

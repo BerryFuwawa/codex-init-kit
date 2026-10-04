@@ -188,6 +188,8 @@ exit /b 0
         Assert ([string]::IsNullOrEmpty($flowResult.Error)) ('Actual batch flow emitted command errors with feature flags ' + $flags + ': ' + $flowResult.Error)
         Assert ($flowResult.Output.Contains('CALLED BASE')) 'Actual batch flow skipped full initialization.'
         Assert ($flowResult.Output.Contains('CALLED FOLDER') -eq $folder -and $flowResult.Output.Contains('CALLED BINDING') -eq $folder -and $flowResult.Output.Contains('CALLED CUA') -eq $cua -and $flowResult.Output.Contains('CALLED LUNA') -eq $luna) 'Actual batch flow executed the wrong feature stages.'
+        Assert ($flowResult.Output.Contains('跳过子代理规则安装（未勾选）') -eq (-not $luna)) 'Batch log did not reflect the selected subagent state.'
+        Assert (-not $flowResult.Output.Contains('Luna 多线程均已通过')) 'Batch success log claimed skipped Luna installation passed.'
     }
     foreach ($failure in @('binding','cua')) {
         $flowEnvironment['CODEX_GUI_TEST_FAILURE'] = $failure
@@ -612,6 +614,29 @@ END CODEX LUNA PROMPT V1.3
     $failureResult = Invoke-ChildProcess $backupFixturePath @() $failureRoot $failureEnvironment $script:InputEncoding
     Assert ($failureResult.ExitCode -ne 0) 'FULL_INIT continued after BACKUP_AGENTS_AND_RTK failed.'
     Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($failureAgentsPath)) -eq $failureBeforeB64) 'Backup failure allowed AGENTS.md to be rebuilt.'
+
+    # Exercise the actual PowerShell tail of initialization with subagents off.
+    # Only the external mutating CMD process is replaced; adapter generation,
+    # proxy rewrite and scoped-model finalization remain real.
+    $tailAgents = "@fixture-RTK.md`n<!-- BEGIN CODEX INIT WORK RULES -->`nGOAL`nfixture`n<!-- END CODEX INIT WORK RULES -->`nBEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0`nfolder fixture`nEND CODEX FOLDER MANAGEMENT PROMPT V1.0`n"
+    [IO.File]::WriteAllText($agentsPath,$tailAgents,[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($config,"model = `"old-parent`"`nmodel_reasoning_effort = `"low`"`n[features]`nmulti_agent = false`n",[Text.UTF8Encoding]::new($false))
+    $tailAgentsHash = HashFile $agentsPath
+    $realChildProcess = (Get-Item Function:Invoke-ChildProcess).ScriptBlock
+    try {
+        function Invoke-ChildProcess {
+            param($FilePath,$Arguments,$WorkingDirectory,$Environment,$Encoding,[switch]$ClearProxyEnvironment)
+            Assert ($Environment.CODEX_GUI_SUBAGENTS -eq '0') 'Unchecked subagents were not passed to the CMD worker.'
+            Assert ($Environment.CODEX_GUI_FOLDER_MANAGEMENT -eq '1') 'Default folder management was not passed to the CMD worker.'
+            return [pscustomobject]@{ ExitCode=0; Output='RESULT = PASS'; Error='' }
+        }
+        $tailOptions = @{subagents=$false;folderManagement=$true;cuaRepair=$true;parentModel='vendor/tail:v1';parentEffort='medium'}
+        $tailResult = Invoke-InitOperation 'one-click' $payload 'D' 10808 $tailOptions
+        Assert ($tailResult -eq 0) 'Unchecked-subagent initialization failed after the successful CMD stages.'
+        Assert ((HashFile $agentsPath) -eq $tailAgentsHash) 'Finalization changed the freshly rebuilt AGENTS file when subagents were off.'
+        $tailConfig = [IO.File]::ReadAllText($config)
+        Assert ($tailConfig -match '(?m)^model = "vendor/tail:v1"\r?$' -and $tailConfig -match '(?m)^multi_agent = false\r?$') 'Finalization did not retain the selected parent and disabled multi-agent state.'
+    } finally { Set-Item Function:Invoke-ChildProcess $realChildProcess }
 
     # Critical input failures remain non-zero and do not fall through.
     $rc = Invoke-BackendMain -RequestedOperation 'unknown-operation' -RequestedPayloadRoot $payload
