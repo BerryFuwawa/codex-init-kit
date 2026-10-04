@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.0.7",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.7/CodexInitKit.exe",
-    "sha256":  "3f479c88dcb6f61a73c8423073b12d4fdb33ba9ce24914f2f67ba232eb0ba8de",
+    "version":  "2.0.8",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.8/CodexInitKit.exe",
+    "sha256":  "041acf543a711a7d851374a3141a9ff327ccbe661ec51828c39c66d5307da435",
     "notes":  "Single EXE: initialization wizard, CUA repair, startup protection, GitHub updates and headless verification CLI."
 }
