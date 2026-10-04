@@ -214,11 +214,29 @@ exit /b 0
     Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($adapter,'.scripts')))) 'Private PowerShell wrappers were not removed with the adapter.'
     Remove-Item -LiteralPath (Join-Path $payload '.backend') -Recurse -Force -ErrorAction SilentlyContinue
 
+    $enabledFeatureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
+        folderManagement = $true; subagents = $true; cuaRepair = $true
+        parentModel = 'vendor/parent:v2'; childModel = 'org/child_1'; parentEffort = 'medium'; childEffort = 'max'
+    })
+    $enabledFeatureText = [IO.File]::ReadAllText($enabledFeatureAdapter,[Text.Encoding]::GetEncoding(936))
+    $rulesPayloadPattern = '(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$'
+    $enabledRulesMatch = [regex]::Match($enabledFeatureText,$rulesPayloadPattern)
+    Assert ($enabledRulesMatch.Success) 'Enabled-subagent adapter lost the base work-rules payload.'
+    $enabledRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($enabledRulesMatch.Groups[1].Value))
+    Assert ($enabledRules -match '(?m)^SUBAGENTS\r?$' -and $enabledRules.Contains('并行就并行')) 'Enabled-subagent adapter removed the SUBAGENTS rules section.'
+
     $featureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
         folderManagement = $false; subagents = $false; cuaRepair = $false
         parentModel = 'vendor/parent:v2'; childModel = 'org/child_1'; parentEffort = 'medium'; childEffort = 'max'
     })
     $featureText = [IO.File]::ReadAllText($featureAdapter,[Text.Encoding]::GetEncoding(936))
+    $disabledRulesMatch = [regex]::Match($featureText,$rulesPayloadPattern)
+    Assert ($disabledRulesMatch.Success) 'Disabled-subagent adapter lost the base work-rules payload.'
+    $disabledRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($disabledRulesMatch.Groups[1].Value))
+    Assert ($disabledRules -notmatch '(?m)^SUBAGENTS\r?$' -and -not $disabledRules.Contains('并行就并行')) 'Disabled-subagent adapter still contained the SUBAGENTS rules section.'
+    foreach ($requiredRulesHeader in @('<!-- BEGIN CODEX INIT WORK RULES -->','GOAL','AUTONOMY','PRIORITY','STYLE','DONE','APPROVAL','VERIFY')) {
+        Assert ($disabledRules.Contains($requiredRulesHeader)) ('Disabled-subagent adapter dropped base work-rules header: ' + $requiredRulesHeader)
+    }
     Assert ($featureText.Contains('if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" (') -and $featureText.Contains('call :SELECT_FOLDER_DRIVE')) 'Folder-management stage was not made optional.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR')) 'CUA stage was not made optional.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_SUBAGENTS%"=="1" call :INSTALL_LUNA_PROMPT')) 'Luna stage was not made optional.'
@@ -226,7 +244,10 @@ exit /b 0
     Assert ($featureText.Contains('echo multi_agent = false')) 'Disabled subagents did not explicitly disable the multi-agent feature.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING')) 'Selected folder management lost binding verification.'
     Assert ($featureText.Contains('CODEX_GUI_PROXY_DISABLED')) 'Proxy-disabled initialization did not clear the default endpoint.'
-    Remove-Item -LiteralPath $featureAdapter -Force
+    Remove-InitAdapter $enabledFeatureAdapter
+    Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($enabledFeatureAdapter,'.scripts')))) 'Enabled feature adapter wrappers were not removed.'
+    Remove-InitAdapter $featureAdapter
+    Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($featureAdapter,'.scripts')))) 'Disabled feature adapter wrappers were not removed.'
     Remove-Item -LiteralPath (Join-Path $payload '.backend') -Recurse -Force -ErrorAction SilentlyContinue
 
     # Execute the patched GUI entry against a tiny mock batch implementation.
@@ -246,7 +267,10 @@ exit /b 0
     )
     $mockSource = Join-Path $mockRoot 'init.cmd'
     [IO.File]::WriteAllText($mockSource,($mockLines -join [Environment]::NewLine) + [Environment]::NewLine,[Text.Encoding]::GetEncoding(936))
-    $mockAdapter = New-InitAdapter $mockSource $mockRoot 'D' 10808
+    $mockAdapter = New-InitAdapter $mockSource $mockRoot 'D' 10808 ([ordered]@{
+        folderManagement = $false; subagents = $true; cuaRepair = $false
+        parentModel = 'gpt-6.1-sol'; childModel = 'gpt-5.6-luna'; parentEffort = 'medium'; childEffort = 'max'
+    })
     $mockOutput = @(& $env:ComSpec /d /c $mockAdapter --codex-gui-action proxy)
     Assert ($LASTEXITCODE -eq 0) 'Patched GUI entry did not exit cleanly.'
     Assert (($mockOutput -join [Environment]::NewLine) -match 'ACTION proxy') 'Patched GUI entry did not call RUN_ACTION.'
@@ -409,96 +433,185 @@ END CODEX LUNA PROMPT V1.3
     Assert ($agentsAfter.Contains('outside model = old-outside; gpt-5.6-luna remains outside the managed block')) 'An unrelated AGENTS line was modified.'
     Assert ($agentsAfter -notmatch '(?ms)BEGIN CODEX LUNA PROMPT.*gpt-5\.6-luna|Do not create Sol, Terra, GPT-6, Astra') 'Managed child model prose still forbids the selected custom model.'
 
-    # Disabling subagents removes every complete managed Luna block, including
-    # duplicate and legacy LEMGE markers, while preserving the user's rules,
-    # UTF-8 BOM, CRLF bytes, and an exact sibling backup of the original.
-    $cleanupLines = @(
-        'user rule before cleanup',
-        'BEGIN CODEX LUNA PROMPT V1.3',
-        'model = gpt-5.6-luna',
-        'END CODEX LUNA PROMPT V1.3',
-        'BEGIN CODEX LUNA PROMPT V2.0',
-        'duplicate managed block',
-        'END CODEX LUNA PROMPT V2.0',
-        'BEGIN LEMGE LUNA PROMPT V0.9',
-        'legacy managed block',
-        'END LEMGE LUNA PROMPT V0.9',
-        'BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0',
-        'folder and user rule must remain byte-for-byte unchanged',
-        'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
-        'user rule after cleanup'
-    )
-    $cleanupBeforeText = ($cleanupLines -join "`r`n") + "`r`n"
-    [IO.File]::WriteAllText($agentsPath,$cleanupBeforeText,[Text.UTF8Encoding]::new($true))
-    $cleanupBeforeBytes = [IO.File]::ReadAllBytes($agentsPath)
-    $cleanupBeforeBase64 = [Convert]::ToBase64String($cleanupBeforeBytes)
-    $cleanupEnvBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($envFile))
-    $cleanupOptions = [ordered]@{
-        parentModel = 'vendor/root:v4'; childModel = 'org/child_3'
-        parentEffort = 'high'; childEffort = 'max'
-        subagents = $false; folderManagement = $false; cuaRepair = $false
-    }
-    Set-ScopedModelSettings $cleanupOptions
-    $cleanupAfterBytes = [IO.File]::ReadAllBytes($agentsPath)
-    $cleanupExpectedLines = @(
-        'user rule before cleanup',
-        'BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0',
-        'folder and user rule must remain byte-for-byte unchanged',
-        'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
-        'user rule after cleanup'
-    )
-    $cleanupExpectedText = ($cleanupExpectedLines -join "`r`n") + "`r`n"
-    $cleanupExpectedPath = Join-Path $scratch 'expected-cleaned-agents.md'
-    [IO.File]::WriteAllText($cleanupExpectedPath,$cleanupExpectedText,[Text.UTF8Encoding]::new($true))
-    $cleanupExpectedBytes = [IO.File]::ReadAllBytes($cleanupExpectedPath)
-    Assert ([Convert]::ToBase64String($cleanupAfterBytes) -eq [Convert]::ToBase64String($cleanupExpectedBytes)) 'Disabled subagents did not remove all complete Luna blocks while preserving BOM, CRLF, and user/folder rules.'
-    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($envFile)) -eq $cleanupEnvBase64) 'Disabled subagent cleanup unexpectedly changed the proxy environment file.'
-    $cleanupBackups = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
-    Assert ($cleanupBackups.Count -eq 1) 'Luna cleanup did not create exactly one sibling backup.'
-    Assert ($cleanupBackups[0].Name -match '^AGENTS\.md\.before-luna-cleanup-[0-9a-f]{32}\.bak$') 'Luna cleanup backup name did not use the required GUID suffix.'
-    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($cleanupBackups[0].FullName)) -eq $cleanupBeforeBase64) 'Luna cleanup backup did not preserve the original bytes exactly.'
-
-    # A second disabled-settings pass is a no-op for AGENTS.md and must not
-    # create another backup after all managed rules have been removed.
-    $cleanupAfterHash = HashFile $agentsPath
-    Set-ScopedModelSettings $cleanupOptions
-    $cleanupBackupsAgain = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
-    Assert ($cleanupBackupsAgain.Count -eq 1) 'Repeated disabled subagent settings created an extra Luna cleanup backup.'
-    Assert ((HashFile $agentsPath) -eq $cleanupAfterHash) 'Repeated disabled subagent settings changed the already-clean AGENTS.md.'
-
-    # Malformed markers fail before any complete block is edited, backed up, or
-    # accompanied by the config write performed by Set-ScopedModelSettings.
-    $malformedCleanupFixtures = @(
-        @(
-            'user rule before malformed block',
+    # Full initialization rebuilds global AGENTS.md from the current embedded
+    # baseline and RTK reference. Extract the original payload before the
+    # adapter rewrites embedded PowerShell wrappers, then execute it against
+    # isolated fixtures. Old managed blocks, user text, drive bindings, and
+    # malformed markers must not affect the fresh output.
+    $originalInitPath = Join-Path $payload 'init.cmd'
+    $originalInitText = $script:InputEncoding.GetString([IO.File]::ReadAllBytes($originalInitPath))
+    if ($originalInitText.Length -gt 0 -and $originalInitText[0] -eq [char]0xFEFF) { $originalInitText = $originalInitText.Substring(1) }
+    $rebuildSection = [regex]::Match($originalInitText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
+    $rebuildCommandMatch = [regex]::Match($rebuildSection,'(?m)^powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ([A-Za-z0-9+/=]+)')
+    Assert ($rebuildCommandMatch.Success) 'Original init source did not contain the REBUILD_AGENTS_FILE payload.'
+    $rebuildCode = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($rebuildCommandMatch.Groups[1].Value))
+    $rulesMatch = [regex]::Match($originalInitText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
+    Assert ($rulesMatch.Success) 'Original init source did not contain the embedded base rules payload.'
+    $rulesB64 = $rulesMatch.Groups[1].Value
+    $baselineRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesB64))
+    $baselineRules = $baselineRules.Replace('持续到请求的结果真正完真正完成。','持续到请求的结果真正完成。')
+    $baselineRules = $baselineRules.Replace("`r`n","`n").Replace("`r","`n")
+    $rtkFixturePath = Join-Path $scratch 'rtk-fixture.md'
+    [IO.File]::WriteAllText($rtkFixturePath,'RTK fixture reference',[Text.UTF8Encoding]::new($false))
+    $expectedRebuildText = '@' + $rtkFixturePath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
+    $rebuildPath = Join-Path $scratch 'rebuild-agents.ps1'
+    [IO.File]::WriteAllText($rebuildPath,$rebuildCode,[Text.UTF8Encoding]::new($true))
+    $projectAgentsPath = Join-Path $scratch 'project\AGENTS.md'
+    [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($projectAgentsPath))
+    [IO.File]::WriteAllText($projectAgentsPath,'project-local instructions',[Text.UTF8Encoding]::new($true))
+    $projectAgentsHash = HashFile $projectAgentsPath
+    $legacyAgentsFixtures = @(
+        ((@(
+            'user-owned instruction must not leak into the rebuilt file',
+            'Configured Codex workspace root: D:\Codex',
             'BEGIN CODEX LUNA PROMPT V1.3',
-            'complete block that must survive the failed cleanup',
+            'old Luna instructions',
             'END CODEX LUNA PROMPT V1.3',
+            'BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0',
+            'folderManagement = false',
+            'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
             'BEGIN LEMGE LUNA PROMPT V9.9',
-            'incomplete legacy block',
-            'user rule after malformed block'
-        ),
-        @(
-            'user rule before mismatched block',
-            'BEGIN CODEX LUNA PROMPT V1.3',
-            'mismatched block',
-            'END LEMGE LUNA PROMPT V1.3',
-            'user rule after mismatched block'
-        )
+            'incomplete old marker'
+        ) -join "`r`n") + "`r`n"),
+        ((@(
+            'malformed legacy content should not block a fresh reset',
+            'BEGIN CODEX LUNA PROMPT V2.0',
+            'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
+            'user text after malformed markers'
+        ) -join "`r`n") + "`r`n")
     )
-    foreach ($malformedLines in $malformedCleanupFixtures) {
-        $malformedText = ($malformedLines -join "`r`n") + "`r`n"
-        [IO.File]::WriteAllText($agentsPath,$malformedText,[Text.UTF8Encoding]::new($true))
-        $malformedBeforeBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath))
-        $configBeforeHash = HashFile $config
-        $malformedRaised = $false
-        try { Set-ScopedModelSettings $cleanupOptions } catch { $malformedRaised = $true }
-        Assert $malformedRaised 'Malformed Luna markers were accepted by disabled subagent cleanup.'
-        Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath)) -eq $malformedBeforeBase64) 'Malformed Luna cleanup edited AGENTS.md before rejecting the markers.'
-        Assert ((HashFile $config) -eq $configBeforeHash) 'Malformed Luna cleanup changed config.toml before rejecting the markers.'
-        $malformedBackups = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
-        Assert ($malformedBackups.Count -eq 1) 'Malformed Luna cleanup created a backup despite rejecting the markers.'
+    $rebuildEnvironmentNames = @('CODEX_INIT_AGENTS_FILE','CODEX_INIT_RTK_FILE','CODEX_INIT_RULES_B64')
+    foreach ($legacyAgentsText in $legacyAgentsFixtures) {
+        [IO.File]::WriteAllText($agentsPath,$legacyAgentsText,[Text.UTF8Encoding]::new($true))
+        $savedRebuildEnvironment = @{}
+        foreach ($name in $rebuildEnvironmentNames) { $savedRebuildEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
+        try {
+            $env:CODEX_INIT_AGENTS_FILE = $agentsPath
+            $env:CODEX_INIT_RTK_FILE = $rtkFixturePath
+            $env:CODEX_INIT_RULES_B64 = $rulesB64
+            $rebuildOutput = @(& $PSHOME\powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rebuildPath 2>&1)
+            $rebuildExitCode = $LASTEXITCODE
+        } finally {
+            foreach ($name in $rebuildEnvironmentNames) { [Environment]::SetEnvironmentVariable($name,$savedRebuildEnvironment[$name],'Process') }
+        }
+        Assert ($rebuildExitCode -eq 0) ('Fresh AGENTS rebuild failed: ' + ($rebuildOutput -join ' '))
+        $rebuiltAgentsText = [IO.File]::ReadAllText($agentsPath,[Text.Encoding]::UTF8)
+        Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath)) -eq [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($expectedRebuildText))) 'Fresh AGENTS rebuild did not produce the embedded baseline and RTK reference exactly.'
+        Assert ($rebuiltAgentsText.Contains('@' + $rtkFixturePath) -and $rebuiltAgentsText.Contains('<!-- BEGIN CODEX INIT WORK RULES -->') -and $rebuiltAgentsText.Contains('GOAL')) 'Fresh AGENTS rebuild omitted the RTK reference or base work rules.'
+        Assert ($rebuiltAgentsText -notmatch 'user-owned instruction|old Luna instructions|BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT|BEGIN LEMGE|D:\\Codex|folderManagement = false') 'Fresh AGENTS rebuild retained old global rules or drive binding text.'
+        Assert ((HashFile $projectAgentsPath) -eq $projectAgentsHash) 'Project AGENTS.md changed during the global AGENTS rebuild.'
     }
+
+    # WRITE_AGENTS_RULES itself must perform only the base reset and base
+    # validation. Optional Luna and folder blocks are installed by later
+    # stages, even when their GUI selections are enabled.
+    $writeAgentsSection = [regex]::Match($originalInitText,'(?ms)^:WRITE_AGENTS_RULES\r?\n.*?(?=^:REBUILD_AGENTS_FILE\r?$)').Value
+    Assert ($writeAgentsSection.Length -gt 0) 'Original init source did not contain WRITE_AGENTS_RULES.'
+    $writeFixtureRoot = Join-Path $scratch 'write-agents-fixture'
+    [void][IO.Directory]::CreateDirectory($writeFixtureRoot)
+    $writeAgentsPath = Join-Path $writeFixtureRoot 'AGENTS.md'
+    $writeRtkPath = Join-Path $writeFixtureRoot 'RTK.md'
+    $writeHomePath = Join-Path $writeFixtureRoot 'home'
+    [void][IO.Directory]::CreateDirectory($writeHomePath)
+    [IO.File]::WriteAllText($writeAgentsPath,"old global content`r`nBEGIN CODEX LUNA PROMPT V1.3`r`nold Luna block`r`nEND CODEX LUNA PROMPT V1.3`r`n",[Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText($writeRtkPath,'RTK fixture',[Text.UTF8Encoding]::new($false))
+    $writeFixturePath = Join-Path $writeFixtureRoot 'write-agents-flow.cmd'
+    $writeHeader = @(
+        '@echo off',
+        'setlocal EnableExtensions EnableDelayedExpansion',
+        'set "CODEX_HOME_DIR=%CODEX_TEST_HOME%"',
+        'set "AGENTS_FILE=%CODEX_TEST_AGENTS%"',
+        'set "RTK_FILE=%CODEX_TEST_RTK%"',
+        'set "CODEX_GUI_FOLDER_MANAGEMENT=%CODEX_TEST_FOLDER%"',
+        'set "CODEX_GUI_SUBAGENTS=%CODEX_TEST_SUBAGENTS%"',
+        'call :WRITE_AGENTS_RULES',
+        'exit /b %errorlevel%'
+    ) -join "`r`n"
+    $writeFixtureText = $writeHeader + "`r`n" + [regex]::Replace($writeAgentsSection,'\r\n|\r|\n',"`r`n") + [regex]::Replace($rebuildSection,'\r\n|\r|\n',"`r`n") + "`r`n"
+    [IO.File]::WriteAllText($writeFixturePath,$writeFixtureText,[Text.Encoding]::GetEncoding(936))
+    $writeEnvironment = @{
+        CODEX_TEST_HOME = $writeHomePath; CODEX_TEST_AGENTS = $writeAgentsPath
+        CODEX_TEST_RTK = $writeRtkPath; CODEX_TEST_FOLDER = '1'; CODEX_TEST_SUBAGENTS = '1'
+    }
+    $writeResult = Invoke-ChildProcess $writeFixturePath @() $writeFixtureRoot $writeEnvironment $script:InputEncoding
+    Assert ($writeResult.ExitCode -eq 0) ('WRITE_AGENTS_RULES base-only fixture failed: ' + $writeResult.Error)
+    $writeResultText = [IO.File]::ReadAllText($writeAgentsPath,[Text.Encoding]::UTF8)
+    Assert ($writeResultText -eq ('@' + $writeRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n")) 'WRITE_AGENTS_RULES did not write the fresh base output.'
+    Assert ($writeResultText -notmatch 'BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT PROMPT|old global content') 'WRITE_AGENTS_RULES installed or retained optional/legacy blocks during the base stage.'
+
+    # The real backup label preserves exact bytes, including a UTF-8 BOM, and
+    # the FULL_INIT gate stops before rebuilding when that backup fails.
+    $backupSection = [regex]::Match($originalInitText,'(?ms)^:BACKUP_AGENTS_AND_RTK\r?\n.*?(?=^:CAPTURE_USER_PATH\r?$)').Value
+    Assert ($backupSection.Length -gt 0) 'Original init source did not contain BACKUP_AGENTS_AND_RTK.'
+    $backupFixtureRoot = Join-Path $scratch 'backup-fixture'
+    [void][IO.Directory]::CreateDirectory($backupFixtureRoot)
+    $backupAgentsPath = Join-Path $backupFixtureRoot 'AGENTS.md'
+    $backupRtkPath = Join-Path $backupFixtureRoot 'RTK.md'
+    $backupExePath = Join-Path $backupFixtureRoot 'rtk.exe'
+    $backupDir = Join-Path $backupFixtureRoot 'Backups'
+    [void][IO.Directory]::CreateDirectory($backupDir)
+    [void][IO.Directory]::CreateDirectory((Join-Path $backupDir 'rtk'))
+    $backupAgentsText = "原始 AGENTS 内容`r`nBEGIN CODEX LUNA PROMPT V1.3`r`nlegacy block`r`nEND CODEX LUNA PROMPT V1.3`r`n"
+    $backupRtkText = "原始 RTK 内容`r`n"
+    [IO.File]::WriteAllText($backupAgentsPath,$backupAgentsText,[Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText($backupRtkPath,$backupRtkText,[Text.UTF8Encoding]::new($true))
+    [IO.File]::WriteAllText($backupExePath,'fixture executable',[Text.UTF8Encoding]::new($false))
+    $backupAgentsBytesB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath))
+    $backupRtkBytesB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupRtkPath))
+    $backupFixturePath = Join-Path $backupFixtureRoot 'backup-flow.cmd'
+    $backupHeader = @(
+        '@echo off',
+        'setlocal EnableExtensions EnableDelayedExpansion',
+        'set "AGENTS_FILE=%CODEX_TEST_AGENTS%"',
+        'set "RTK_FILE=%CODEX_TEST_RTK%"',
+        'set "RTK_EXE=%CODEX_TEST_RTK_EXE%"',
+        'set "BACKUP_DIR=%CODEX_TEST_BACKUP%"',
+        'set "CODEX_INIT_AGENTS_FILE=%CODEX_TEST_AGENTS%"',
+        'set "CODEX_INIT_RTK_FILE=%CODEX_TEST_RTK%"',
+        'set "CODEX_INIT_RULES_B64=%CODEX_TEST_RULES_B64%"',
+        'call :FULL_INIT',
+        'exit /b %errorlevel%',
+        ':FULL_INIT',
+        'call :BACKUP_AGENTS_AND_RTK',
+        'if errorlevel 1 exit /b 1',
+        'call :REBUILD_AGENTS_FILE',
+        'if errorlevel 1 exit /b 1',
+        'exit /b 0'
+    ) -join "`r`n"
+    $backupFixtureText = $backupHeader + "`r`n" + [regex]::Replace($backupSection,'\r\n|\r|\n',"`r`n") + "`r`n" + [regex]::Replace($rebuildSection,'\r\n|\r|\n',"`r`n") + "`r`n"
+    [IO.File]::WriteAllText($backupFixturePath,$backupFixtureText,[Text.Encoding]::GetEncoding(936))
+    $backupEnvironment = @{
+        CODEX_TEST_AGENTS = $backupAgentsPath; CODEX_TEST_RTK = $backupRtkPath
+        CODEX_TEST_RTK_EXE = $backupExePath; CODEX_TEST_BACKUP = $backupDir
+        CODEX_TEST_RULES_B64 = $rulesB64
+    }
+    $backupResult = Invoke-ChildProcess $backupFixturePath @() $backupFixtureRoot $backupEnvironment $script:InputEncoding
+    Assert ($backupResult.ExitCode -eq 0) ('Actual backup/rebuild fixture failed: ' + $backupResult.Error)
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupDir 'AGENTS.md'))) -eq $backupAgentsBytesB64) 'BACKUP_AGENTS_AND_RTK did not preserve AGENTS.md bytes exactly.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupDir 'RTK.md'))) -eq $backupRtkBytesB64) 'BACKUP_AGENTS_AND_RTK did not preserve RTK.md bytes exactly.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupDir 'rtk\rtk.exe'))) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupExePath))) 'BACKUP_AGENTS_AND_RTK did not preserve rtk.exe bytes exactly.'
+    $expectedBackupRebuildText = '@' + $backupRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
+    Assert ([IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8) -eq $expectedBackupRebuildText) 'FULL_INIT did not rebuild AGENTS.md after a successful backup.'
+
+    $failureRoot = Join-Path $scratch 'backup-failure-fixture'
+    [void][IO.Directory]::CreateDirectory($failureRoot)
+    $failureAgentsPath = Join-Path $failureRoot 'AGENTS.md'
+    $failureRtkPath = Join-Path $failureRoot 'RTK.md'
+    $failureExePath = Join-Path $failureRoot 'rtk.exe'
+    $failureBackupBlocker = Join-Path $failureRoot 'backup-is-a-file'
+    [IO.File]::WriteAllBytes($failureAgentsPath,[Convert]::FromBase64String($backupAgentsBytesB64))
+    [IO.File]::WriteAllBytes($failureRtkPath,[Convert]::FromBase64String($backupRtkBytesB64))
+    [IO.File]::WriteAllText($failureExePath,'fixture executable',[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($failureBackupBlocker,'not a directory',[Text.UTF8Encoding]::new($false))
+    $failureEnvironment = @{
+        CODEX_TEST_AGENTS = $failureAgentsPath; CODEX_TEST_RTK = $failureRtkPath
+        CODEX_TEST_RTK_EXE = $failureExePath; CODEX_TEST_BACKUP = $failureBackupBlocker
+        CODEX_TEST_RULES_B64 = $rulesB64
+    }
+    $failureBeforeB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($failureAgentsPath))
+    $failureResult = Invoke-ChildProcess $backupFixturePath @() $failureRoot $failureEnvironment $script:InputEncoding
+    Assert ($failureResult.ExitCode -ne 0) 'FULL_INIT continued after BACKUP_AGENTS_AND_RTK failed.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($failureAgentsPath)) -eq $failureBeforeB64) 'Backup failure allowed AGENTS.md to be rebuilt.'
 
     # Critical input failures remain non-zero and do not fall through.
     $rc = Invoke-BackendMain -RequestedOperation 'unknown-operation' -RequestedPayloadRoot $payload

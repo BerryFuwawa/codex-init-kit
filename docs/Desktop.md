@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.0.7
+# Codex Init Kit Desktop 2.0.8
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -26,9 +26,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-v2.0.7 已发布：[BerryFuwawa/codex-init-kit v2.0.7](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.7)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.7/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.0.8 已发布：[BerryFuwawa/codex-init-kit v2.0.8](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.8)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.8/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.7/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.8/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -38,25 +38,27 @@ v2.0.7 已发布：[BerryFuwawa/codex-init-kit v2.0.7](https://github.com/BerryF
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／自定义模型。取消勾选会跳过对应安装步骤；子代理多线程未勾选时还会将 `multi_agent` 设为 `false`，并清理完整的工具托管旧 Luna 指令。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／自定义模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
 
-子代理多线程未勾选时，初始化会先把 `$CODEX_HOME\AGENTS.md` 的完整原文件备份为 `$CODEX_HOME\AGENTS.md.before-luna-cleanup-<GUID>.bak`，再只移除本工具托管且起止标记完整的 Luna 指令块。用户自己的内容、文件夹规则和其他规则会保留；标记嵌套、缺失、未配对或不完整时会停止清理，不会宽泛删除或改写 `AGENTS.md`。
+确认页会明确提示这是全局重置。原 `AGENTS.md` 的完整副本位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复；项目目录中的 `AGENTS.md` 不属于重置范围。
 
 | 页面 | 用途 | 主要动作 |
 | --- | --- | --- |
 | 概览 | 查看最近状态、默认模型和当前环境 | 刷新只读状态、进入初始化 |
-| 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置、创建并绑定工作目录、检查／修复 CUA、写入 Luna 规则；可选安装启动保护 |
+| 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置与全局规则、按选择创建并绑定工作目录、检查／修复 CUA、按选择写入 Luna 规则；可选安装启动保护 |
 | 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、恢复桌面原生模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
 
-初始化向导第二步会展示实际工作盘、代理端口、模型和启动保护选择，并在执行前弹出确认。修改操作在独立 worker 中运行，页面关闭会被阻止到当前操作结束；管理员授权取消时不会开始执行。
+初始化向导第二步会展示实际工作盘、代理端口、模型和启动保护选择，并在执行前弹出确认；确认内容会说明全局 `CODEX_HOME\AGENTS.md` 将完整备份并重建，旧的全局自定义内容只保留在备份中。修改操作在独立 worker 中运行，页面关闭会被阻止到当前操作结束；管理员授权取消时不会开始执行。
 
 ## 默认值与文件位置
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.0.7` |
+| 版本 | `2.0.8` |
+| 内嵌初始化组件 | `4.8.3` |
+| 内嵌启动保护组件 | `5.2.1` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
 | 父模型 | `gpt-6.1-sol`，`medium` |
@@ -118,7 +120,7 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 需要管理员权限的脚本提取到 ProgramData 下使用随机名称和受保护 ACL 的工作目录；仅 Administrators 与 SYSTEM 可读写，执行后清理。普通只读 worker 在 LocalAppData 下执行。日志单独保留。
 
-- 初始化会真实备份并重置当前用户 Codex 配置，可能关闭或停止 Codex 进程，写入 `.env`、规则、工作目录和用户 PATH。开始前保存工作并关闭 Codex。
+- 初始化会真实备份并重置当前用户 Codex 配置，可能关闭或停止 Codex 进程，写入 `.env`、全局 `CODEX_HOME\AGENTS.md`、工作目录和用户 PATH。全局规则会从RTK 引用和基础规则重建，只追加本次勾选的文件夹管理块或 Luna 块；旧全局自定义内容只在本次会话 `Backups\AGENTS.md` 中保留，项目目录内的 `AGENTS.md` 不变。开始前保存工作并关闭 Codex。
 - 初始化回滚只恢复最近一次初始化备份；它不恢复 CUA 运行时备份，也不删除初始化期间已创建的标准工作目录。
 - CUA 修复保留自己的运行时备份。启动保护的安装、更新、切换、回滚和卸载使用保护器自己的状态与备份，不等同于初始化回滚。
 - 更新器只替换当前桌面 EXE，成功后删除旧版；更新清单或下载校验失败时不改动当前版本。脚本独立更新器仍按各自规则保留脚本备份。
