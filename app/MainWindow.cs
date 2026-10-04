@@ -155,11 +155,11 @@ public class MainWindow : Window {
     }
     void Maintenance() {
         subtitle.Text="独立检查、修复和恢复。修改操作执行前会说明影响范围。";
-        ActionCard("CUA 组件","检查官方桌面应用中的浏览器自动化文件，并在需要时修复。修复会保留独立备份。","检查 CUA","cua-check",false);
-        var cua=Card("修复 CUA","仅在校验异常时修复。修复前备份原文件，不重置模型或工作区。"); cua.Children.Add(Button("检查并修复",async()=>await Run("cua-repair","CUA 修复",true),true));
         var g=Card("启动保护","管理独立 CLI、桌面原生模式与登录自动维护。更新或切换运行时前请关闭 Codex 桌面应用。");
         Row(g,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),Button("更新官方 CLI",async()=>await Run("guard-update","更新官方 CLI",true),false),Button("诊断",async()=>await Run("doctor","环境诊断",false),false));
         Row(g,Button("恢复桌面原生",async()=>await Run("guard-native","恢复桌面原生模式",true),false),Button("切换官方独立 CLI",async()=>await Run("guard-current","切换官方独立 CLI",true),false));
+        var cua=Card("CUA 组件","检查官方桌面应用中的浏览器自动化文件，仅在校验异常时修复。修复前备份原文件，不重置模型或工作区。");
+        Row(cua,Button("检查 CUA",async()=>await Run("cua-check","CUA 组件",true),true),Button("检查并修复",async()=>await Run("cua-repair","CUA 修复",true),true));
         var r=Card("恢复与回滚","初始化回滚只恢复初始化备份，不恢复 CUA 文件，也不删除已创建的工作目录。保护器回滚使用独立的运行时备份。");
         Row(r,Button("回滚最新初始化",async()=>await Run("init-rollback","回滚最新初始化",true),false),Button("回滚保护器",async()=>await Run("guard-rollback","回滚保护器",true),false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
         var proxy=Card("代理设置","开关和端口在初始化页面设置。关闭后移除 Codex 的代理配置。");proxy.Children.Add(T("当前："+ProxySummary(),13,MutedBrush));proxy.Children.Add(Button("更新代理",async()=>await Run("proxy","更新代理",true),false));

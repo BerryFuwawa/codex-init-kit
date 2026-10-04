@@ -33,7 +33,7 @@ class DocumentationRenderer {
                 {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"}});
             var pages=new[]{"概览","维护恢复"};
             var files=new[]{"overview","maintenance"};
-            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:800,dpi);}
+            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:900,dpi);}
             navigate.Invoke(window,new object[]{"初始化"});Save(window,directory,"settings",1400,dpi);
             var completion=(Window)type.GetMethod("CreateInitializationCompletedDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);
             var popup=(FrameworkElement)completion.Content;popup.Measure(new Size(520,Double.PositiveInfinity));
