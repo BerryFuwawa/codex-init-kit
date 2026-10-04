@@ -16,7 +16,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.1.0";
+    public const string Version = "2.1.1";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
