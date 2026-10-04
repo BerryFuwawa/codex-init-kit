@@ -434,6 +434,10 @@ END CODEX LUNA PROMPT V1.3
     Assert ($agentsAfter -match '(?m)^model = org/child_2\r?$' -and $agentsAfter -match '(?m)^model_reasoning_effort = max\r?$') 'Managed child model settings were not updated.'
     Assert ($agentsAfter.Contains('outside model = old-outside; gpt-5.6-luna remains outside the managed block')) 'An unrelated AGENTS line was modified.'
     Assert ($agentsAfter -notmatch '(?ms)BEGIN CODEX LUNA PROMPT.*gpt-5\.6-luna|Do not create Sol, Terra, GPT-6, Astra') 'Managed child model prose still forbids the selected custom model.'
+    [IO.File]::WriteAllText($agentsPath,([regex]::Replace([IO.File]::ReadAllText($agentsPath),'\r\n|\r|\n',"`r`n")),[Text.UTF8Encoding]::new($false))
+    Set-ScopedModelSettings @{parentModel='vendor/root:v3';childModel='org/child_2';parentEffort='xhigh';childEffort='low';subagents=$true}
+    Assert ([IO.File]::ReadAllText($config) -match '(?m)^model_reasoning_effort = "xhigh"\r?$') 'Custom parent reasoning effort was not written.'
+    Assert ([IO.File]::ReadAllText($agentsPath) -match '(?m)^model_reasoning_effort = low\r?$') 'Custom child reasoning effort was not written.'
 
     # Full initialization rebuilds global AGENTS.md from the current embedded
     # baseline and RTK reference. Extract the original payload before the

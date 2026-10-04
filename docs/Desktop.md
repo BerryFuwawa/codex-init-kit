@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.0.10
+# Codex Init Kit Desktop 2.0.11
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -26,9 +26,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-v2.0.10 已发布：[BerryFuwawa/codex-init-kit v2.0.10](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.10)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.10/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.0.11 已发布：[BerryFuwawa/codex-init-kit v2.0.11](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.11)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.11/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.10/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.11/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -38,7 +38,7 @@ v2.0.10 已发布：[BerryFuwawa/codex-init-kit v2.0.10](https://github.com/Berr
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／自定义模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／手动选择模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
 
 确认页会明确提示这是全局重置。原 `AGENTS.md` 的完整副本位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复；项目目录中的 `AGENTS.md` 不属于重置范围。
 
@@ -56,7 +56,7 @@ v2.0.10 已发布：[BerryFuwawa/codex-init-kit v2.0.10](https://github.com/Berr
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.0.10` |
+| 版本 | `2.0.11` |
 | 内嵌初始化组件 | `4.8.3` |
 | 内嵌启动保护组件 | `5.2.1` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |

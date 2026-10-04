@@ -612,7 +612,7 @@ function Set-ScopedModelSettings {
         $agentsPath = Join-Path $codeHome 'AGENTS.md'
         $agents = Read-Utf8FileSafe $agentsPath
         if ($null -ne $agents) {
-            $pattern = '(?ms)^[ \t]*BEGIN CODEX LUNA PROMPT V[^\r\n]*\r?\n.*?^[ \t]*END CODEX LUNA PROMPT V[^\r\n]*$'
+            $pattern = '(?ms)^[ \t]*BEGIN CODEX LUNA PROMPT V[^\r\n]*\r?\n.*?^[ \t]*END CODEX LUNA PROMPT V[^\r\n]*\r?$'
             $evaluator = [System.Text.RegularExpressions.MatchEvaluator]{
                 param($match)
                 $block = $match.Value
