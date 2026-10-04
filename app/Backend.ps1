@@ -369,8 +369,8 @@ if /i "%~1"=="--codex-gui-rollback" (
     $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=medium"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
-    # Existing managed rules are preserved when a feature is unchecked. Their
-    # presence must not force the base config validator to require that feature.
+    # Old Luna rules are removed after successful initialization. Their presence
+    # during the base stage must not force an unchecked feature to be enabled.
     $sourceText = [regex]::Replace($sourceText,'(?m)^if exist "%AGENTS_FILE%" \(\r?\n(?=    findstr /x /l /c:"BEGIN CODEX LUNA PROMPT V1.3")','if /i "%CODEX_GUI_SUBAGENTS%"=="1" if exist "%AGENTS_FILE%" (' + [Environment]::NewLine)
     $driveBlock = @'
 :SELECT_FOLDER_DRIVE
@@ -569,9 +569,45 @@ function Restore-TransientProxyEnvironment {
     param([Parameter(Mandatory=$true)][System.Collections.IDictionary]$Snapshot)
     foreach ($name in $Snapshot.Keys) { if ($name -eq '__DefaultWebProxy') { [Net.WebRequest]::DefaultWebProxy = $Snapshot[$name] } else { [Environment]::SetEnvironmentVariable([string]$name,$Snapshot[$name],'Process') } }
 }
+function Remove-ManagedLunaRules {
+    $path = Join-Path (Get-CodexHomePath) 'AGENTS.md'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191
+    $offset = if ($hasBom) { 3 } else { 0 }
+    $encoding = New-Object Text.UTF8Encoding($false,$true)
+    $text = $encoding.GetString($bytes,$offset,$bytes.Length-$offset)
+    $markers = [regex]::Matches($text,'(?m)^[ \t]*(BEGIN|END) (CODEX|LEMGE) LUNA PROMPT V([^\r\n]+?)[ \t]*\r?$')
+    $start = $null
+    $ranges = New-Object System.Collections.Generic.List[object]
+    foreach ($marker in $markers) {
+        if ($marker.Groups[1].Value -eq 'BEGIN') {
+            if ($null -ne $start) { throw 'AGENTS.md contains nested Luna markers; cleanup stopped without changing the file.' }
+            $start = $marker
+        } else {
+            if ($null -eq $start -or $marker.Groups[2].Value -ne $start.Groups[2].Value -or $marker.Groups[3].Value -ne $start.Groups[3].Value) {
+                throw 'AGENTS.md contains unmatched Luna markers; cleanup stopped without changing the file.'
+            }
+            $end = $marker.Index + $marker.Length
+            if ($end -lt $text.Length -and $text[$end] -eq "`n") { $end++ }
+            $ranges.Add(@{ Start=$start.Index; Length=$end-$start.Index })
+            $start = $null
+        }
+    }
+    if ($null -ne $start) { throw 'AGENTS.md contains an incomplete Luna block; cleanup stopped without changing the file.' }
+    if ($ranges.Count -eq 0) { return }
+    for ($i=$ranges.Count-1; $i -ge 0; $i--) { $text=$text.Remove($ranges[$i].Start,$ranges[$i].Length) }
+    $backup = $path + '.before-luna-cleanup-' + [Guid]::NewGuid().ToString('N') + '.bak'
+    $stream = [IO.File]::Open($backup,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try { $stream.Write($bytes,0,$bytes.Length) } finally { $stream.Dispose() }
+    $outputEncoding = New-Object Text.UTF8Encoding($hasBom,$true)
+    [IO.File]::WriteAllText($path,$text,$outputEncoding)
+    Write-Host ('已清理旧的 Luna 子代理指令块；原文件备份：' + $backup)
+}
 function Set-ScopedModelSettings {
     param([AllowNull()][object]$Options)
     $resolved = Convert-BackendOptions $Options
+    if (-not [bool]$resolved.subagents) { Remove-ManagedLunaRules }
     $codeHome = Get-CodexHomePath
     $configPath = Join-Path $codeHome 'config.toml'
     if (Test-Path -LiteralPath $configPath -PathType Leaf) {

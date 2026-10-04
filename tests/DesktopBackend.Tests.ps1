@@ -409,6 +409,97 @@ END CODEX LUNA PROMPT V1.3
     Assert ($agentsAfter.Contains('outside model = old-outside; gpt-5.6-luna remains outside the managed block')) 'An unrelated AGENTS line was modified.'
     Assert ($agentsAfter -notmatch '(?ms)BEGIN CODEX LUNA PROMPT.*gpt-5\.6-luna|Do not create Sol, Terra, GPT-6, Astra') 'Managed child model prose still forbids the selected custom model.'
 
+    # Disabling subagents removes every complete managed Luna block, including
+    # duplicate and legacy LEMGE markers, while preserving the user's rules,
+    # UTF-8 BOM, CRLF bytes, and an exact sibling backup of the original.
+    $cleanupLines = @(
+        'user rule before cleanup',
+        'BEGIN CODEX LUNA PROMPT V1.3',
+        'model = gpt-5.6-luna',
+        'END CODEX LUNA PROMPT V1.3',
+        'BEGIN CODEX LUNA PROMPT V2.0',
+        'duplicate managed block',
+        'END CODEX LUNA PROMPT V2.0',
+        'BEGIN LEMGE LUNA PROMPT V0.9',
+        'legacy managed block',
+        'END LEMGE LUNA PROMPT V0.9',
+        'BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0',
+        'folder and user rule must remain byte-for-byte unchanged',
+        'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
+        'user rule after cleanup'
+    )
+    $cleanupBeforeText = ($cleanupLines -join "`r`n") + "`r`n"
+    [IO.File]::WriteAllText($agentsPath,$cleanupBeforeText,[Text.UTF8Encoding]::new($true))
+    $cleanupBeforeBytes = [IO.File]::ReadAllBytes($agentsPath)
+    $cleanupBeforeBase64 = [Convert]::ToBase64String($cleanupBeforeBytes)
+    $cleanupEnvBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($envFile))
+    $cleanupOptions = [ordered]@{
+        parentModel = 'vendor/root:v4'; childModel = 'org/child_3'
+        parentEffort = 'high'; childEffort = 'max'
+        subagents = $false; folderManagement = $false; cuaRepair = $false
+    }
+    Set-ScopedModelSettings $cleanupOptions
+    $cleanupAfterBytes = [IO.File]::ReadAllBytes($agentsPath)
+    $cleanupExpectedLines = @(
+        'user rule before cleanup',
+        'BEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0',
+        'folder and user rule must remain byte-for-byte unchanged',
+        'END CODEX FOLDER MANAGEMENT PROMPT V1.0',
+        'user rule after cleanup'
+    )
+    $cleanupExpectedText = ($cleanupExpectedLines -join "`r`n") + "`r`n"
+    $cleanupExpectedPath = Join-Path $scratch 'expected-cleaned-agents.md'
+    [IO.File]::WriteAllText($cleanupExpectedPath,$cleanupExpectedText,[Text.UTF8Encoding]::new($true))
+    $cleanupExpectedBytes = [IO.File]::ReadAllBytes($cleanupExpectedPath)
+    Assert ([Convert]::ToBase64String($cleanupAfterBytes) -eq [Convert]::ToBase64String($cleanupExpectedBytes)) 'Disabled subagents did not remove all complete Luna blocks while preserving BOM, CRLF, and user/folder rules.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($envFile)) -eq $cleanupEnvBase64) 'Disabled subagent cleanup unexpectedly changed the proxy environment file.'
+    $cleanupBackups = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
+    Assert ($cleanupBackups.Count -eq 1) 'Luna cleanup did not create exactly one sibling backup.'
+    Assert ($cleanupBackups[0].Name -match '^AGENTS\.md\.before-luna-cleanup-[0-9a-f]{32}\.bak$') 'Luna cleanup backup name did not use the required GUID suffix.'
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($cleanupBackups[0].FullName)) -eq $cleanupBeforeBase64) 'Luna cleanup backup did not preserve the original bytes exactly.'
+
+    # A second disabled-settings pass is a no-op for AGENTS.md and must not
+    # create another backup after all managed rules have been removed.
+    $cleanupAfterHash = HashFile $agentsPath
+    Set-ScopedModelSettings $cleanupOptions
+    $cleanupBackupsAgain = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
+    Assert ($cleanupBackupsAgain.Count -eq 1) 'Repeated disabled subagent settings created an extra Luna cleanup backup.'
+    Assert ((HashFile $agentsPath) -eq $cleanupAfterHash) 'Repeated disabled subagent settings changed the already-clean AGENTS.md.'
+
+    # Malformed markers fail before any complete block is edited, backed up, or
+    # accompanied by the config write performed by Set-ScopedModelSettings.
+    $malformedCleanupFixtures = @(
+        @(
+            'user rule before malformed block',
+            'BEGIN CODEX LUNA PROMPT V1.3',
+            'complete block that must survive the failed cleanup',
+            'END CODEX LUNA PROMPT V1.3',
+            'BEGIN LEMGE LUNA PROMPT V9.9',
+            'incomplete legacy block',
+            'user rule after malformed block'
+        ),
+        @(
+            'user rule before mismatched block',
+            'BEGIN CODEX LUNA PROMPT V1.3',
+            'mismatched block',
+            'END LEMGE LUNA PROMPT V1.3',
+            'user rule after mismatched block'
+        )
+    )
+    foreach ($malformedLines in $malformedCleanupFixtures) {
+        $malformedText = ($malformedLines -join "`r`n") + "`r`n"
+        [IO.File]::WriteAllText($agentsPath,$malformedText,[Text.UTF8Encoding]::new($true))
+        $malformedBeforeBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath))
+        $configBeforeHash = HashFile $config
+        $malformedRaised = $false
+        try { Set-ScopedModelSettings $cleanupOptions } catch { $malformedRaised = $true }
+        Assert $malformedRaised 'Malformed Luna markers were accepted by disabled subagent cleanup.'
+        Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath)) -eq $malformedBeforeBase64) 'Malformed Luna cleanup edited AGENTS.md before rejecting the markers.'
+        Assert ((HashFile $config) -eq $configBeforeHash) 'Malformed Luna cleanup changed config.toml before rejecting the markers.'
+        $malformedBackups = @(Get-ChildItem -LiteralPath $codeHome -File -Filter 'AGENTS.md.before-luna-cleanup-*.bak')
+        Assert ($malformedBackups.Count -eq 1) 'Malformed Luna cleanup created a backup despite rejecting the markers.'
+    }
+
     # Critical input failures remain non-zero and do not fall through.
     $rc = Invoke-BackendMain -RequestedOperation 'unknown-operation' -RequestedPayloadRoot $payload
     Assert ($rc -eq 1) 'Unknown operation was swallowed.'

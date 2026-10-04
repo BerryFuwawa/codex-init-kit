@@ -140,7 +140,7 @@ public class MainWindow : Window {
             var portRow=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};portRow.Children.Add(new TextBlock{Text="HTTP 代理端口",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});portRow.Children.Add(port);proxyRows.Children.Add(portRow);
             var hostRow=new StackPanel{Orientation=Orientation.Horizontal};hostRow.Children.Add(new TextBlock{Text="代理 IP（默认 127.0.0.1）",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});hostRow.Children.Add(proxyHost);proxyRows.Children.Add(hostRow);p.Children.Add(proxyRows);
             p.Children.Add(T("填写 V2RayN、Clash、软路由等提供的 HTTP／混合代理端口。端口默认按 V2RayN 的 10808 填写，请以你的实际设置为准。IP 留空使用 127.0.0.1；软路由在局域网其他设备时，请填写可访问的路由器 IP 地址。本工具不会启动代理服务。关闭后会忽略端口和 IP。",12,MutedBrush));
-            var features=Card("02   选择要启用的功能","文件夹管理、CLI 启动保护与 CUA 检查默认开启；子代理多线程默认关闭。取消勾选会跳过对应初始化步骤。基础配置仍会备份并重建。");foreach(var check in new[]{folderManagement,subagents,guard,cuaRepair})features.Children.Add(check);
+            var features=Card("02   选择要启用的功能","文件夹管理、CLI 启动保护与 CUA 检查默认开启；子代理多线程默认关闭。子代理未勾选时，会备份并清理旧的 Luna 指令；其他未勾选功能跳过安装。基础配置仍会备份并重建。");foreach(var check in new[]{folderManagement,subagents,guard,cuaRepair})features.Children.Add(check);
             var models=Card("03   模型设置","推荐父模型 gpt-6.1-sol / medium，子代理 gpt-5.6-luna / max。自定义请填实际模型 ID，可用性取决于账号。思考强度沿用推荐值。");models.Children.Add(modelMode);models.Children.Add(T("\n父模型 ID",13,TextBrush));models.Children.Add(parentModel);models.Children.Add(T("\n子代理模型 ID",13,TextBrush));models.Children.Add(childModel);
             models.Children.Add(Button("下一步：查看变更  →",()=>{try{Port();Drive();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}},true));
         } else if(wizard==1) {
@@ -149,7 +149,7 @@ public class MainWindow : Window {
             Row(p,Button("返回修改",()=>{wizard=0;Navigate("初始化");},false),Button("确认并开始初始化",async()=>{if(Confirm("开始初始化",InitSummary()+"\n\n将停止正在运行的 Codex 进程。请先保存其他窗口的工作。")){wizard=2;Navigate("初始化");await Run("initialize","初始化",false);}},true));
         } else { var p=Card("03   执行与结果",busy?"正在执行，请保留窗口。":"完整结果与备份位置见下方日志。"); p.Children.Add(log); Row(p,Button("查看全部日志",()=>Navigate("日志"),false),Button("重新设置",()=>{if(!busy){wizard=0;Navigate("初始化");}},false)); }
     }
-    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / medium\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / max":"跳过规则安装")+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n基础配置将备份并重建，更新用户 PATH。初始化和 CUA 分别备份。";}
+    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / medium\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / max":"关闭并清理旧的 Luna 指令（先备份）")+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n基础配置将备份并重建，更新用户 PATH。初始化和 CUA 分别备份。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }

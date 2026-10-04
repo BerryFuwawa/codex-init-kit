@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.0.6
+# Codex Init Kit Desktop 2.0.7
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -26,9 +26,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-v2.0.6 已发布：[BerryFuwawa/codex-init-kit v2.0.6](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.6)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.6/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.0.7 已发布：[BerryFuwawa/codex-init-kit v2.0.7](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.0.7)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.7/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.6/SHA256SUMS.txt) 中核对。
+正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.0.7/SHA256SUMS.txt) 中核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -38,7 +38,9 @@ v2.0.6 已发布：[BerryFuwawa/codex-init-kit v2.0.6](https://github.com/BerryF
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／自定义模型。取消勾选会跳过对应步骤；基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／自定义模型。取消勾选会跳过对应安装步骤；子代理多线程未勾选时还会将 `multi_agent` 设为 `false`，并清理完整的工具托管旧 Luna 指令。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+
+子代理多线程未勾选时，初始化会先把 `$CODEX_HOME\AGENTS.md` 的完整原文件备份为 `$CODEX_HOME\AGENTS.md.before-luna-cleanup-<GUID>.bak`，再只移除本工具托管且起止标记完整的 Luna 指令块。用户自己的内容、文件夹规则和其他规则会保留；标记嵌套、缺失、未配对或不完整时会停止清理，不会宽泛删除或改写 `AGENTS.md`。
 
 | 页面 | 用途 | 主要动作 |
 | --- | --- | --- |
@@ -54,7 +56,7 @@ v2.0.6 已发布：[BerryFuwawa/codex-init-kit v2.0.6](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.0.6` |
+| 版本 | `2.0.7` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
 | 父模型 | `gpt-6.1-sol`，`medium` |
