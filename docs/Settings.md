@@ -42,3 +42,9 @@
 ## 全局规则重建
 
 初始化确认页会明确提示：本次操作会完整备份并重建当前全局 `CODEX_HOME\AGENTS.md`。新文件总是包含 RTK 引用和基础工作规则，只按选择追加文件夹管理块或 Luna 子代理块；原全局自定义内容不会自动带回。备份位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复。项目目录内的 `AGENTS.md` 不属于这次全局重置范围。
+
+## RTK 匿名统计与第 2/5 阶段卡住
+
+v2.1.4 会在 RTK 集成前自动运行 `rtk telemetry disable` 关闭匿名统计，并关闭后台命令的标准输入，避免隐藏的 `Enable anonymous telemetry? [y/N]` 提示造成等待。关闭统计失败时会停止初始化，提示查看本次备份会话的 `rtk-telemetry.log`。
+
+如果旧版任务已经卡住，先停止对应初始化任务，避免重复点击；在 PowerShell 终端运行 `rtk telemetry disable` 后，使用 v2.1.4 重新初始化。新版不会自动终止已存在的旧版任务。

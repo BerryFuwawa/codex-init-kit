@@ -8,6 +8,12 @@
 
 **[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md)
 
+当前版本 **[v2.1.4](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.4)**（2026-10-13），[完整更新说明](docs/Release-2.1.4.md)：
+
+- 默认父模型改为 `gpt-6.1-sol / high`。
+- 未勾选「子代理多线程」时，子模型与子思考强度置灰且不可选。
+- 修复 RTK 匿名统计提示被隐藏后，初始化卡在第 2/5 阶段的问题。
+
 ## 它能解决什么问题？
 
 | 你遇到的情况 | 工具能帮你做什么 | 从哪里操作 |

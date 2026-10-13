@@ -4,5 +4,5 @@
     "version":  "2.1.4",
     "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.4/CodexInitKit.exe",
     "sha256":  "6e5d0507da5a7692681c2f476f759cefb0e8695e0eff6574cba2fb5e7605a7a2",
-    "notes":  "Single EXE: initialization wizard, CUA repair, startup protection, GitHub updates and headless verification CLI."
+    "notes":  "默认父模型改为 GPT-6.1-SOL HIGH；未启用多线程时禁用子模型选择；修复 RTK 匿名统计提示导致初始化卡住。"
 }

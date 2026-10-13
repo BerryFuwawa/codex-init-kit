@@ -30,9 +30,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-v2.1.4 为本地待发布版本，更新内容见 [2.1.4 更新说明](Release-2.1.4.md)。当前已发布的 v2.1.3：[BerryFuwawa/codex-init-kit v2.1.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.3)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.1.4](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.4)，发布于 2026-10-13，更新内容见 [2.1.4 更新说明](Release-2.1.4.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.4/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/SHA256SUMS.txt) 中核对。
+正式文件为 562,688 字节，SHA-256 为 `6e5d0507da5a7692681c2f476f759cefb0e8695e0eff6574cba2fb5e7605a7a2`，可与发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.4/SHA256SUMS.txt) 核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -60,7 +60,7 @@ v2.1.4 为本地待发布版本，更新内容见 [2.1.4 更新说明](Release-2
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.4`（本地待发布） |
+| 版本 | `2.1.4` |
 | 内嵌初始化组件 | `4.8.4` |
 | 内嵌启动保护组件 | `5.2.2` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
