@@ -4,16 +4,16 @@
     "channel":  "stable",
     "components":  {
                        "init":  {
-                                    "version":  "4.8.3",
+                                    "version":  "4.8.4",
                                     "path":  "scripts/第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd",
                                     "encoding":  "gbk",
-                                    "sha256":  "4f7887deeb476d0deaa240bbf4b678dea0ab9dc1ffef2877621593271a16c306"
+                                    "sha256":  "d1583f7128fa36ad5de7719a33123b1bb50247626303e1da96acd3d14f283e8f"
                                 },
                        "guard":  {
-                                     "version":  "5.2.1",
+                                     "version":  "5.2.2",
                                      "path":  "scripts/第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd",
                                      "encoding":  "utf-8",
-                                     "sha256":  "c8bc51cb48de76b3cbabd34ac902f4a544d44683b92531aaf59bc72eaa6873ee"
+                                     "sha256":  "2a9901d14c2ae6969d07ae5b9f41b7c8869ec5bc677e1f9e0b88edb87b833a4f"
                                  }
                    }
 }
