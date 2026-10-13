@@ -64,6 +64,7 @@ try {
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
+    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'high') 'Default parent must be GPT-6.1-SOL HIGH.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
     Assert ((Convert-BackendOptions @{proxyHost='192.168.1.1'}).proxyHost -eq '192.168.1.1') 'Router proxy IP was not preserved.'
@@ -89,6 +90,57 @@ try {
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
     Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
+    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')) 'GUI adapter lost the high default or custom effort override.'
+
+    # Run the real RTK integration subroutine with a fake RTK. A fresh install
+    # asks for telemetry consent unless disable was executed before every init.
+    $rtkSection = [regex]::Match($adapterText,'(?ms)^:INSTALL_AND_INTEGRATE_RTK\r?\n.*?(?=^:FIND_VALID_RTK\r?$)').Value
+    Assert ($rtkSection.Length -gt 0) 'RTK integration subroutine is missing.'
+    $rtkRoot = Join-Path $scratch 'rtk fixture'
+    [void][IO.Directory]::CreateDirectory($rtkRoot)
+    $fakeRtk = Join-Path $rtkRoot 'rtk.cmd'
+    $fakeRtkCode = @'
+@echo off
+echo %*>>"%RTK_TEST_CALLS%"
+if "%~1 %~2"=="telemetry disable" (
+    if "%RTK_TEST_FAIL_DISABLE%"=="1" exit /b 9
+    echo disabled>"%RTK_TEST_CONSENT%"
+    exit /b 0
+)
+if "%~1"=="--version" (echo rtk fixture& exit /b 0)
+if not "%~1"=="init" exit /b 8
+if not exist "%RTK_TEST_CONSENT%" (
+    echo Enable anonymous telemetry? [y/N]
+    set /p "RTK_TEST_RESPONSE="
+    exit /b 7
+)
+if not "%RTK_TELEMETRY_DISABLED%"=="1" exit /b 6
+if "%~2"=="--global" echo fixture>"%RTK_FILE%"
+if "%~2"=="--show" echo %RTK_FILE%
+exit /b 0
+'@
+    [IO.File]::WriteAllText($fakeRtk,($fakeRtkCode -replace '\r?\n',"`r`n"),$script:InputEncoding)
+    $rtkFlow = Join-Path $rtkRoot 'integrate.cmd'
+    $rtkHeader = @('@echo off','setlocal EnableExtensions EnableDelayedExpansion','set "SESSION_DIR=%RTK_TEST_ROOT%"','set "CODEX_HOME_DIR=%RTK_TEST_ROOT%"','set "RTK_FILE=%RTK_TEST_ROOT%\RTK.md"','set "RTK_EXE=%RTK_TEST_ROOT%\absent.exe"','call :INSTALL_AND_INTEGRATE_RTK','exit /b !errorlevel!') -join "`r`n"
+    $rtkStub = @(':FIND_VALID_RTK','set "RTK_ACTIVE_PATH=%RTK_TEST_EXE%"','exit /b 0',':DOWNLOAD_AND_INSTALL_RTK','exit /b 99',':ENSURE_USER_PATH','exit /b 0') -join "`r`n"
+    [IO.File]::WriteAllText($rtkFlow,$rtkHeader+"`r`n"+$rtkSection+$rtkStub+"`r`n",$script:InputEncoding)
+    $rtkEnvironment = @{RTK_TEST_ROOT=$rtkRoot;RTK_TEST_EXE=$fakeRtk;RTK_TEST_CALLS=(Join-Path $rtkRoot 'calls.txt');RTK_TEST_CONSENT=(Join-Path $rtkRoot 'consent.txt');RTK_TEST_FAIL_DISABLE='0'}
+    $rtkResult = Invoke-ChildProcess $rtkFlow @() $scratch $rtkEnvironment $script:InputEncoding
+    Assert ($rtkResult.ExitCode -eq 0 -and $rtkResult.Output.Contains('匿名统计已关闭')) 'Fresh RTK integration failed or did not explain telemetry opt-out.'
+    $rtkCalls = [IO.File]::ReadAllLines($rtkEnvironment.RTK_TEST_CALLS)
+    Assert (($rtkCalls[0..3] -join '|') -eq 'telemetry disable|init --dry-run --global --codex|init --global --codex|init --show --codex') 'RTK init ran before telemetry was disabled.'
+    Assert (-not ([IO.File]::ReadAllText((Join-Path $rtkRoot 'rtk-init.log'))).Contains('Enable anonymous telemetry?')) 'RTK init still prompted for consent.'
+    [IO.File]::Delete($rtkEnvironment.RTK_TEST_CALLS)
+    $rtkEnvironment.RTK_TEST_FAIL_DISABLE='1'
+    $rtkResult = Invoke-ChildProcess $rtkFlow @() $scratch $rtkEnvironment $script:InputEncoding
+    Assert ($rtkResult.ExitCode -ne 0 -and $rtkResult.Output.Contains('rtk-telemetry.log')) 'Telemetry disable failure did not stop with an actionable error.'
+    Assert (([IO.File]::ReadAllText($rtkEnvironment.RTK_TEST_CALLS)).Trim() -eq 'telemetry disable') 'RTK init continued after telemetry disable failed.'
+
+    # A hidden prompt without a trailing newline must see EOF immediately.
+    $inputFixture = Join-Path $scratch 'hidden-prompt.cmd'
+    [IO.File]::WriteAllText($inputFixture,"@echo off`r`nset /p `"ANSWER=Enable anonymous telemetry? [y/N]`"`r`nif errorlevel 1 exit /b 7`r`nexit /b 0`r`n",$script:InputEncoding)
+    $inputResult = Invoke-ChildProcess $inputFixture @() $scratch @{} $script:InputEncoding
+    Assert ($inputResult.ExitCode -eq 7 -and $inputResult.Output.Contains('Enable anonymous telemetry?')) 'Hidden prompt did not receive EOF or its failure was lost.'
     $configVerifier = [regex]::Match($adapterText,'(?ms)^:VERIFY_CONFIG\r?\n.*?(?=^:VERIFY_FULL\r?$)').Value
     $configFixturePath = Join-Path $codeHome 'config-validation.toml'
     $configAgentsPath = Join-Path $codeHome 'config-validation-agents.md'

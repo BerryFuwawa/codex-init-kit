@@ -52,8 +52,8 @@ rem Parse this entire block before replacing the running CMD file.
 '@
 $wrapper=$wrapper.Replace('__LOADER__',$encodedLoader).Replace("`r`n","`n").Replace("`n","`r`n")
 $components=@(
-    @{Id='init'; Version='4.8.3'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
-    @{Id='guard'; Version='5.2.1'; File='第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd'; Encoding='utf-8'}
+    @{Id='init'; Version='4.8.4'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
+    @{Id='guard'; Version='5.2.2'; File='第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd'; Encoding='utf-8'}
 )
 $manifest=[ordered]@{schema_version=1; repository=$Repository; channel='stable'; components=[ordered]@{}}
 foreach($component in $components){
@@ -120,8 +120,9 @@ if "%CODEX_GUARD_AUTO%"=="1" (
         $guard=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($s.Substring($i+$begin.Length,$j-$i-$begin.Length) -replace '\s','')))
         $guard=$guard.Replace('V5.1.2','V5.2.0').Replace('$LunaModelId','$DefaultParentModelId').Replace('$LunaReasoningEffort','$DefaultParentReasoningEffort')
         $guard=[regex]::Replace($guard,'(?m)^\$ToolVersion = "V[0-9.]+"',('$ToolVersion = "V'+$component.Version+'"'))
-        $guard=$guard.Replace('$DefaultParentModelId = "gpt-5.6-luna"','$DefaultParentModelId = "gpt-6.1-sol"').Replace('$DefaultParentReasoningEffort = "max"','$DefaultParentReasoningEffort = "medium"')
-        $guard=$guard.Replace('模型配置状态：GPT5.6 LUNA MAX','模型配置状态：父模型 GPT6.1 SOL / medium；子代理 GPT5.6 LUNA MAX').Replace('未匹配 GPT5.6 LUNA MAX','未匹配 GPT6.1 SOL / medium')
+        $guard=$guard.Replace('$DefaultParentModelId = "gpt-5.6-luna"','$DefaultParentModelId = "gpt-6.1-sol"').Replace('$DefaultParentReasoningEffort = "max"','$DefaultParentReasoningEffort = "high"')
+        $guard=$guard.Replace('$DefaultParentReasoningEffort = "medium"','$DefaultParentReasoningEffort = "high"').Replace('GPT6.1 SOL / medium','GPT6.1 SOL / high')
+        $guard=$guard.Replace('模型配置状态：GPT5.6 LUNA MAX','模型配置状态：父模型 GPT6.1 SOL / high；子代理 GPT5.6 LUNA MAX').Replace('未匹配 GPT5.6 LUNA MAX','未匹配 GPT6.1 SOL / high')
         $guard=[regex]::Replace($guard,'(?ms)^function Check-GuardKitUpdate \{.*?^}\r?\n','')
         $guard=$guard.Replace("if (`$Auto) {`r`n    Check-GuardKitUpdate`r`n    Auto-Maintain", "if (`$Auto) {`r`n    Auto-Maintain")
         if($guard -notmatch '(?m)^if \(\$Auto\) \{'){
@@ -153,8 +154,9 @@ function Check-GuardKitUpdate {
         $background=$background.Replace('__REPOSITORY__',$Repository).Replace("`r`n","`n").Replace("`n","`r`n")
         $guard=$guard.Replace("if (`$Auto) {`r`n    Auto-Maintain",$background+"if (`$Auto) {`r`n    Check-GuardKitUpdate`r`n    Auto-Maintain")
         $s=$s.Substring(0,$i)+$wrapper+"`r`n"+$begin+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($guard))+"`r`n"+$end+"`r`n"+$payloadBlock
-        $s=$s.Replace('rem Codex Guard V5.1.2 / GPT5.6 LUNA MAX','rem Codex Guard V5.2.0 / GPT6.1 SOL medium / GPT5.6 LUNA MAX children')
+        $s=$s.Replace('rem Codex Guard V5.1.2 / GPT5.6 LUNA MAX','rem Codex Guard V5.2.0 / GPT6.1 SOL high / GPT5.6 LUNA MAX children')
     }
+    $s=$s.Replace('GPT6.1 SOL medium','GPT6.1 SOL high')
     $s=$s.Replace("`r`n","`n").Replace("`n","`r`n")
     [IO.File]::WriteAllBytes($path,$encoding.GetBytes($s))
     $sha=[Security.Cryptography.SHA256]::Create()

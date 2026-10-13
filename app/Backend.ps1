@@ -30,7 +30,7 @@ $script:DefaultOptions = [ordered]@{
     cuaRepair = $true
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-5.6-luna'
-    parentEffort = 'medium'
+    parentEffort = 'high'
     childEffort = 'max'
 }
 
@@ -298,6 +298,7 @@ function Invoke-ChildProcess {
     if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) { $psi.WorkingDirectory = $WorkingDirectory }
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    $psi.RedirectStandardInput = $true
     try { $psi.StandardOutputEncoding = $OutputEncoding } catch {}
     try { $psi.StandardErrorEncoding = $OutputEncoding } catch {}
     if ($ClearProxyEnvironment) {
@@ -314,6 +315,8 @@ function Invoke-ChildProcess {
     $process.StartInfo = $psi
     try {
         if (-not $process.Start()) { throw ('Unable to start process: ' + $FilePath) }
+        # GUI operations never accept hidden terminal prompts; pass EOF immediately.
+        $process.StandardInput.Close()
         # Drain stderr asynchronously so a noisy child cannot deadlock while
         # stdout is streamed line by line to the GUI.
         $stderrTask = $process.StandardError.ReadToEndAsync()
@@ -374,7 +377,7 @@ if /i "%~1"=="--codex-gui-rollback" (
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
     $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
     $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=medium"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
     # Global AGENTS is rebuilt from scratch during the base stage. Old markers
@@ -731,9 +734,9 @@ function Initialize-GuardRuntime {
     if ($errors.Count -gt 0) { throw 'guard.cmd embedded PowerShell payload has syntax errors.' }
     $documents = Get-DocumentsPath
     $script:ErrorActionPreference='Stop'; $script:ProgressPreference='SilentlyContinue'
-    $script:ToolVersion='V5.2.1'; $script:SourceCmd=$GuardPath; $script:SourceDir=Split-Path -Parent $GuardPath
+    $script:ToolVersion='V5.2.2'; $script:SourceCmd=$GuardPath; $script:SourceDir=Split-Path -Parent $GuardPath
     $script:InstallerUrl='https://chatgpt.com/codex/install.ps1'; $script:UpdateIntervalHours=24
-    $script:DefaultParentModelId='gpt-6.1-sol'; $script:DefaultParentReasoningEffort='medium'; $script:LunaMaxThreads=6
+    $script:DefaultParentModelId='gpt-6.1-sol'; $script:DefaultParentReasoningEffort='high'; $script:LunaMaxThreads=6
     $script:Documents=$documents; $script:InstallRoot=Join-Path $documents 'Codex启动保护管理器'
     $script:StateDir=Join-Path $script:InstallRoot 'State'; $script:StateFile=Join-Path $script:StateDir 'guard-state.json'
     $script:StartupDir=[Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)

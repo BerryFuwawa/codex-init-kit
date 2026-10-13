@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.1.3
+# Codex Init Kit Desktop 2.1.4
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -30,7 +30,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-v2.1.3 已发布：[BerryFuwawa/codex-init-kit v2.1.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.3)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+v2.1.4 为本地待发布版本，更新内容见 [2.1.4 更新说明](Release-2.1.4.md)。当前已发布的 v2.1.3：[BerryFuwawa/codex-init-kit v2.1.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.3)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
 正式文件的 SHA-256 与大小可在发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.3/SHA256SUMS.txt) 中核对。
 
@@ -60,12 +60,12 @@ v2.1.3 已发布：[BerryFuwawa/codex-init-kit v2.1.3](https://github.com/BerryF
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.3` |
-| 内嵌初始化组件 | `4.8.3` |
-| 内嵌启动保护组件 | `5.2.1` |
+| 版本 | `2.1.4`（本地待发布） |
+| 内嵌初始化组件 | `4.8.4` |
+| 内嵌启动保护组件 | `5.2.2` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
-| 父模型 | `gpt-6.1-sol`，`medium` |
+| 父模型 | `gpt-6.1-sol`，`high` |
 | 子代理 | 默认关闭；启用时为 `gpt-5.6-luna`，`max`；最多 6 个，委派深度 1 |
 | 桌面数据根目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop` |
 | 日志目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs` |

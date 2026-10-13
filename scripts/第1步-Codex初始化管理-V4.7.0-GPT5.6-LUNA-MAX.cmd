@@ -46,14 +46,14 @@ set "CLI_DIR=%CODEX_ROOT%\cli"
 set "SCRIPT_PATH=%~f0"
 set "CODEX_KIT_REPOSITORY=BerryFuwawa/codex-init-kit"
 set "CODEX_KIT_COMPONENT=init"
-set "CODEX_KIT_VERSION=4.8.3"
+set "CODEX_KIT_VERSION=4.8.4"
 set "LUNA_PROMPT_RESULT=NOT_CHECKED"
 set "CUA_RESULT=NOT_RUN"
 set "CUA_REPAIR_RC="
 set "CUA_REPORT_ROOT="
 set "LUNA_PROMPT_COUNT=NOT_CHECKED"
 set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"
-set "DEFAULT_PARENT_REASONING_EFFORT=medium"
+set "DEFAULT_PARENT_REASONING_EFFORT=high"
 set "LUNA_MAX_THREADS=6"
 
 if defined CODEX_INIT_ELEVATION_PROFILE (
@@ -948,13 +948,21 @@ if exist "%RTK_EXE%" (
 )
 
 set "CODEX_HOME=%CODEX_HOME_DIR%"
-call "!RTK_ACTIVE_PATH!" init --dry-run --global --codex > "%SESSION_DIR%\rtk-init-dry-run.log" 2>&1
+rem Record a non-interactive opt-out before init can ask for telemetry consent.
+set "RTK_TELEMETRY_DISABLED=1"
+echo RTK 匿名统计已关闭，正在执行无交互集成。
+call "!RTK_ACTIVE_PATH!" telemetry disable <nul > "%SESSION_DIR%\rtk-telemetry.log" 2>&1
+if errorlevel 1 (
+    echo RTK 匿名统计关闭失败，请查看 rtk-telemetry.log，已停止初始化。
+    exit /b 1
+)
+call "!RTK_ACTIVE_PATH!" init --dry-run --global --codex <nul > "%SESSION_DIR%\rtk-init-dry-run.log" 2>&1
 if errorlevel 1 (
     echo RTK Codex 集成预检失败，请查看 rtk-init-dry-run.log
     exit /b 1
 )
 
-call "!RTK_ACTIVE_PATH!" init --global --codex > "%SESSION_DIR%\rtk-init.log" 2>&1
+call "!RTK_ACTIVE_PATH!" init --global --codex <nul > "%SESSION_DIR%\rtk-init.log" 2>&1
 if errorlevel 1 (
     echo RTK Codex 集成失败，请查看 rtk-init.log
     exit /b 1
@@ -963,7 +971,7 @@ if not exist "%RTK_FILE%" (
     echo RTK.md 未生成，集成失败
     exit /b 1
 )
-call "!RTK_ACTIVE_PATH!" init --show --codex > "%SESSION_DIR%\rtk-init-show.log" 2>&1
+call "!RTK_ACTIVE_PATH!" init --show --codex <nul > "%SESSION_DIR%\rtk-init-show.log" 2>&1
 if errorlevel 1 (
     echo RTK Codex 集成状态检查失败，请查看 rtk-init-show.log
     exit /b 1

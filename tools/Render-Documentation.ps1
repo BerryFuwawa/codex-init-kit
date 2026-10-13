@@ -29,7 +29,7 @@ class DocumentationRenderer {
             type.GetField("status",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,new Dictionary<string,object>{
                 {"desktopVersion","示例"},{"desktopHealth","healthy"},{"runtimeMode","DesktopNative"},
                 {"runtimeModeDetail","使用 Codex 桌面应用自带的 CLI。"},{"currentCliPath",null},
-                {"configModel","gpt-6.1-sol"},{"configEffort","medium"},{"protectionInstalled",true},
+                {"configModel","gpt-6.1-sol"},{"configEffort","high"},{"protectionInstalled",true},
                 {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"}});
             var pages=new[]{"概览","维护恢复"};
             var files=new[]{"overview","maintenance"};
