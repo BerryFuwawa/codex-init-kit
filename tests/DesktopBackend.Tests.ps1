@@ -38,6 +38,79 @@ $codeHome = Join-Path $scratch 'home'
 
 $oldCodeHome = $env:CODEX_HOME
 try {
+    Initialize-ConfigCompatibility
+    $compatHome = Join-Path $scratch 'compat-home'
+    $compatProject = Join-Path $scratch 'chosen-project'
+    [void][IO.Directory]::CreateDirectory($compatHome)
+    [void][IO.Directory]::CreateDirectory((Join-Path $compatProject '.codex'))
+    $compatConfig = Join-Path $compatHome 'config.toml'
+    $compatFixture = @'
+# features.code_mode_tool_description_first = true
+description = """
+[features.guardianv2]
+thread_context = true
+"""
+features."code_mode_tool_description_first" = false # old
+model = "gpt-6.1-sol"
+[features.guardianv2]
+enabled = true
+thread_context = false
+thread_context_extra = true
+[profiles.'old profile'.features.guardianv2]
+"thread_context" = true
+[unrelated]
+thread_context = true
+note = "code_mode_tool_description_first = true"
+[projects.'D:\my [project]']
+trust_level = "trusted"
+[plugins."sample@plugin"]
+enabled = true
+'@
+    $compatFixture = $compatFixture -replace '\r?\n',"`r`n"
+    [IO.File]::WriteAllText($compatConfig,$compatFixture,[Text.UTF8Encoding]::new($true))
+    $compatOriginal = [IO.File]::ReadAllBytes($compatConfig)
+    $profileFile = Join-Path $compatHome 'work.config.toml'
+    [IO.File]::WriteAllText($profileFile,"[features]`ncode_mode_tool_description_first = true`n",[Text.UTF8Encoding]::new($false))
+    $projectConfig = Join-Path $compatProject '.codex\config.toml'
+    [IO.File]::WriteAllText($projectConfig,"features.guardianv2.thread_context = true`n",[Text.UTF8Encoding]::new($false))
+    $beforeCheckHash = HashFile $compatConfig
+    $compat = [CodexKit.ConfigCompatibility]::Scan($compatHome,$compatProject)
+    Assert ($compat.Count -eq 5 -and $compat.Files.Count -eq 3 -and -not $compat.HasErrors) 'Config source discovery, quoted keys, profiles or multiline handling failed.'
+    Assert (([CodexKit.ConfigCompatibility]::Scan($compatHome,'')).Count -eq 4) 'Unselected project was scanned implicitly.'
+    Assert ((HashFile $compatConfig) -eq $beforeCheckHash) 'Read-only config check mutated a file.'
+    [CodexKit.ConfigCompatibility]::Clean($compat,(Join-Path $scratch 'compat-backups'))
+    Assert ($compat.Removed -eq 5 -and (Test-Path -LiteralPath (Join-Path $compat.BackupPath 'Restore.ps1'))) 'Targeted cleanup did not back up and remove obsolete keys.'
+    $compatText = [IO.File]::ReadAllText($compatConfig)
+    Assert ($compatText.Contains('enabled = true') -and $compatText.Contains('thread_context_extra = true') -and $compatText.Contains('[unrelated]') -and $compatText.Contains('note = "code_mode_tool_description_first = true"')) 'Cleanup removed unrelated settings.'
+    Assert ($compatText.Contains("[features.guardianv2]`r`nthread_context = true`r`n")) 'Cleanup modified a multiline string.'
+    Assert ([IO.File]::ReadAllBytes($compatConfig)[0] -eq 239 -and $compatText -notmatch '(?<!\r)\n') 'Cleanup lost BOM or newline style.'
+    $afterCompat = [CodexKit.ConfigCompatibility]::Scan($compatHome,$compatProject)
+    Assert ($afterCompat.Count -eq 0) 'Cleanup left removable obsolete settings.'
+    $unchangedHash = HashFile $compatConfig
+    [CodexKit.ConfigCompatibility]::Clean($afterCompat,(Join-Path $scratch 'unused-backups'))
+    Assert ((HashFile $compatConfig) -eq $unchangedHash -and -not (Test-Path -LiteralPath (Join-Path $scratch 'unused-backups'))) 'No-op cleanup changed files or created backups.'
+    & (Join-Path $compat.BackupPath 'Restore.ps1')
+    Assert ([Convert]::ToBase64String($compatOriginal) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($compatConfig))) 'Config restore did not preserve original bytes.'
+    $complexFile = Join-Path $compatHome 'complex.config.toml'
+    [IO.File]::WriteAllText($complexFile,"[features]`nguardianv2 = { thread_context = true, enabled = true }`n",[Text.UTF8Encoding]::new($false))
+    $complex = [CodexKit.ConfigCompatibility]::Inspect($complexFile)
+    Assert ($complex.Findings.Count -eq 1 -and -not $complex.Findings[0].CanClean) 'Inline table was not reserved for manual handling.'
+    [IO.File]::WriteAllText($complexFile,"[features]`ncode_mode_tool_description_first = true`ntext = `"`"`"unfinished",[Text.UTF8Encoding]::new($false))
+    $complex = [CodexKit.ConfigCompatibility]::Inspect($complexFile)
+    Assert ($complex.Error -and -not $complex.Findings[0].CanClean) 'Malformed TOML was treated as safe.'
+    $stale = [CodexKit.ConfigCompatibility]::Scan($compatHome,'')
+    [IO.File]::AppendAllText($compatConfig,"`r`n# concurrent edit",[Text.UTF8Encoding]::new($false))
+    $staleHash = HashFile $compatConfig
+    $staleFailed=$false;try{[CodexKit.ConfigCompatibility]::Clean($stale,(Join-Path $scratch 'stale-backups'))}catch{$staleFailed=$true}
+    Assert ($staleFailed -and (HashFile $compatConfig) -eq $staleHash) 'Cleanup overwrote a concurrent edit.'
+    $lockedReport = [CodexKit.ConfigCompatibility]::Scan($compatHome,'')
+    $lockedStream = [IO.File]::Open($compatConfig,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None)
+    try { $lockFailed=$false;try{[CodexKit.ConfigCompatibility]::Clean($lockedReport,(Join-Path $scratch 'locked-backups'))}catch{$lockFailed=$true}; Assert $lockFailed 'Unreadable original did not stop cleanup.' } finally {$lockedStream.Dispose()}
+    Assert ((HashFile $compatConfig) -eq $staleHash) 'Failed cleanup changed the original.'
+    $readOnlyReport = [CodexKit.ConfigCompatibility]::Scan($compatHome,'')
+    [IO.File]::SetAttributes($compatConfig,[IO.FileAttributes]::ReadOnly)
+    try { $writeFailed=$false;try{[CodexKit.ConfigCompatibility]::Clean($readOnlyReport,(Join-Path $scratch 'readonly-backups'))}catch{$writeFailed=$true}; Assert $writeFailed 'Write failure was swallowed.' } finally {[IO.File]::SetAttributes($compatConfig,[IO.FileAttributes]::Normal)}
+    Assert ((HashFile $compatConfig) -eq $staleHash -and (Test-Path -LiteralPath (Join-Path $readOnlyReport.BackupPath 'Restore.ps1'))) 'Write failure lost the original or backup.'
     $sourceRoot = if ([string]::IsNullOrWhiteSpace($testPayloadRoot)) {
         Join-Path $project 'scripts'
     } else {
@@ -85,6 +158,8 @@ try {
     $originalHash = HashFile (Join-Path $payload 'init.cmd')
     $adapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 10808
     $adapterText = [IO.File]::ReadAllText($adapter,[Text.Encoding]::GetEncoding(936))
+    $generatedConfigBlock = [regex]::Match($adapterText,'(?ms)^:WRITE_CONFIG\r?\n.*?(?=^:WRITE_ENV\r?$)').Value
+    Assert ($generatedConfigBlock -and $generatedConfigBlock -notmatch 'code_mode_tool_description_first|thread_context') 'Future initialization reintroduced obsolete configuration.'
     Assert ($adapterText.Contains('--codex-gui-action')) 'GUI init entry was not added.'
     Assert ($adapterText.Contains('GUI confirmation already supplied')) 'GUI confirmation override was not added.'
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'

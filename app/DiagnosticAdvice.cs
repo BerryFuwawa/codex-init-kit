@@ -14,6 +14,14 @@ public static class DiagnosticAdvice {
         if(Is(context,"desktopFound",false)){findings.Add("未找到当前用户安装的 Codex 桌面应用。");suggestions.Add("确认已安装 Codex 桌面应用，并使用安装它的 Windows 账号运行本工具。");}
         else if(Is(context,"desktopHealthy",false)){findings.Add("Codex 桌面应用自带的 CLI 组件不完整。");suggestions.Add("先点击“安装 / 修复保护”准备备用组件；若仍需独立 CLI，可点击“切换官方独立 CLI”。");}
         var cleanOutput=Regex.Replace(output??"","\x1B\\[[0-?]*[ -/]*[@-~]","");
+        if(cleanOutput.Contains("code_mode_tool_description_first")&&Regex.IsMatch(cleanOutput,"ignored|unrecognized",RegexOptions.IgnoreCase)){
+            findings.Add("code_mode_tool_description_first 已被当前 CLI 忽略。");
+            suggestions.Add(cleanOutput.Contains("session-flags")?"这条警告来自桌面会话参数；清理 config.toml 无法消除。检查 Codex 桌面版与 CLI 的版本兼容性，使用官方匹配版本后重新启动验证；不要修改官方应用文件。":"运行下方配置兼容检查，定位旧设置后再定向清理，无需完整初始化。");
+        }
+        if(cleanOutput.Contains("thread_context")&&cleanOutput.Contains("guardianv2")&&Regex.IsMatch(cleanOutput,"deprecated|ignored",RegexOptions.IgnoreCase)){
+            findings.Add("guardianv2.thread_context 已废弃，线程上下文由 Codex 自动启用。");
+            suggestions.Add("运行配置兼容检查，备份后仅移除 thread_context，包含 profile 覆盖；保留 Guardian 其他设置。文件里找不到时继续检查会话或其他配置层。");
+        }
         var rows=Regex.Matches(cleanOutput,"(?im)^\\s*(?:\\[(?:!!|XX|fail|error|warn|warning)\\]|(?:fail|error|warn|warning)\\s*[:：]|[✗×❌⚠])\\s*(.+)$").Cast<Match>().Select(x=>x.Groups[1].Value.Trim()).Where(x=>!Regex.IsMatch(x,"^codex doctor failed with native exit code",RegexOptions.IgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var warnings=rows.Where(x=>!Regex.IsMatch(x,"^updates\\s+update configuration is locally consistent|^rollouts\\s+\\d+ active files",RegexOptions.IgnoreCase)).Take(20).ToArray();
         if(warnings.Length>0){var evidence=string.Join("\n",warnings);var recognized=false;
@@ -37,6 +45,7 @@ public static class DiagnosticAdvice {
         return "检查结果\n"+string.Join("\n",findings.Select(x=>"• "+x))+"\n\n建议怎么做\n"+string.Join("\n",suggestions.Distinct().Select((x,i)=>(i+1)+". "+x));
     }
     public static void Verify(){
+        var compatibility=Build(null,0,"session-flags: features.code_mode_tool_description_first is ignored.\n[features.guardianv2].thread_context is deprecated and ignored.");if(!compatibility.Contains("清理 config.toml 无法消除")||!compatibility.Contains("保留 Guardian"))throw new InvalidOperationException("Config warning sources were conflated");
         var missing=Build(new Dictionary<string,object>{{"standaloneHealthy",false}},1,"");if(!missing.Contains("安装 / 修复保护"))throw new InvalidOperationException("Missing CLI advice was lost");
         var network=Build(null,0,"[WARN] proxy connection refused");if(!network.Contains("更新代理"))throw new InvalidOperationException("Network advice was lost");
         var clean=Build(null,0,"No errors. Proxy is healthy. Model access is available.");if(clean.Contains("更新代理")||clean.Contains("换用账号"))throw new InvalidOperationException("Healthy diagnostics were classified as errors");

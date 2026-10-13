@@ -20,6 +20,7 @@ $argsList+="/resource:$init,Payload.init.cmd"
 $argsList+="/resource:$guard,Payload.guard.cmd"
 $argsList+="/resource:$(Join-Path $scriptRoot 'Codex_CUA_Repair.cmd'),Payload.cua.cmd"
 $argsList+="/resource:$(Join-Path $root 'app\Backend.ps1'),Payload.Backend.ps1"
+$argsList+="/resource:$(Join-Path $root 'app\ConfigCompatibility.cs'),Payload.ConfigCompatibility.cs"
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopBackend.Tests.ps1'),Payload.Backend.Tests.ps1"
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' | ForEach-Object FullName)
 & $compiler @argsList

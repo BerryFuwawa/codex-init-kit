@@ -1,4 +1,4 @@
-# 初始化选项（2.1.4）
+# 初始化选项（2.1.5）
 
 可在初始化页面选择代理、功能和模型，确认页会展示本次实际选择。
 
@@ -47,4 +47,10 @@
 
 v2.1.4 会在 RTK 集成前自动运行 `rtk telemetry disable` 关闭匿名统计，并关闭后台命令的标准输入，避免隐藏的 `Enable anonymous telemetry? [y/N]` 提示造成等待。关闭统计失败时会停止初始化，提示查看本次备份会话的 `rtk-telemetry.log`。
 
-如果旧版任务已经卡住，先停止对应初始化任务，避免重复点击；在 PowerShell 终端运行 `rtk telemetry disable` 后，使用 v2.1.4 重新初始化。新版不会自动终止已存在的旧版任务。
+如果旧版任务已经卡住，先停止对应初始化任务，避免重复点击；在 PowerShell 终端运行 `rtk telemetry disable` 后，使用 v2.1.4 或更新版本重新初始化。新版不会自动终止已存在的旧版任务。
+
+## 配置兼容警告
+
+v2.1.5 可从「维护恢复」运行「检查配置」，再按需「清理已废弃配置」。清理仅针对 `features.code_mode_tool_description_first` 和 `features.guardianv2.thread_context` 的可靠布尔赋值，先备份原文件并生成 `Restore.ps1`；保留 Guardian 其他设置，不重置模型、代理或全局规则。
+
+`session-flags` 提示来自会话参数时，文件中可能根本没有对应设置，删除文件内容不能消除该提示。配置检查会说明这个边界，不会把“文件中无需清理”当作“全部修复”。无需为了这两个警告执行完整初始化。详细步骤、扫描范围和恢复方法见 [配置兼容检查](ConfigCompatibility.md)。

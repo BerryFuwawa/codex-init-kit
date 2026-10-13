@@ -16,11 +16,11 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.1.4";
+    public const string Version = "2.1.5";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor"};
+    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -44,7 +44,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("Missing resource: "+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -52,7 +52,7 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="status" && operation!="cua-check" && operation!="doctor"; }
+    public static bool NeedsAdmin(string operation) { return operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
@@ -102,6 +102,11 @@ public static class Core {
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);
         normalized["childEffort"]=ReadOptionString(source,"childEffort",DefaultChildEffort);
         normalized["proxyHost"]=ReadProxyHost(source);
+        object projectPath;
+        if(source.TryGetValue("projectPath",out projectPath)) {
+            if(projectPath!=null && !(projectPath is string))throw new ArgumentException("Option projectPath must be a string");
+            normalized["projectPath"]=projectPath==null?"":((string)projectPath).Trim();
+        }
         return normalized;
     }
     static Dictionary<string,object> DecodeOptions(string value) {

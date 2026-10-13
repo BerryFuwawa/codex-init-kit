@@ -35,6 +35,7 @@ public class MainWindow : Window {
     ModelCatalog modelCatalog;
     Dictionary<string,object> status, update,diagnosisContext;
     string diagnosticAdvice="";
+    string compatibilityAdvice="", compatibilityProjectPath="";
     string page="概览", lastLog="", operationTitle="";
     bool busy, preview, checkingUpdate;
     int wizard;
@@ -185,6 +186,11 @@ public class MainWindow : Window {
         var switchButton=Button(switchLabel,async()=>await Run(switchOp,switchLabel,switchOp!="status"),false);if(switchOp!="status"){switchButton.Background=B("#9BAF9F");switchButton.Foreground=B("#14231C");}
         Row(g,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),switchButton,Button("更新官方 CLI",async()=>await Run("guard-update","更新官方 CLI",true),false),Button("诊断助手",async()=>await Run("doctor","诊断助手",false),false));
         if(diagnosticAdvice.Length>0){g.Children.Add(T("\n最近一次诊断建议",16,TextBrush));g.Children.Add(T(diagnosticAdvice,13,MutedBrush));g.Children.Add(Link("查看详细日志",()=>Navigate("日志")));}
+        var compatibility=Card("配置兼容检查","检查用户配置、profile 和下方明确指定的项目。清理只移除两项已失效设置，先备份并生成恢复脚本；不会重置配置、关闭 Codex 或切换 CLI。");
+        compatibility.Children.Add(T("项目目录（可选，仅检查该项目的 .codex/config.toml）",12,MutedBrush));
+        var projectInput=new TextBox{Text=compatibilityProjectPath,Style=(Style)Resources["KitInput"]};projectInput.TextChanged+=(s,e)=>compatibilityProjectPath=projectInput.Text;compatibility.Children.Add(projectInput);
+        Row(compatibility,Button("检查配置",async()=>await Run("config-check","配置兼容检查",false),true),Button("清理已废弃配置",async()=>await Run("config-cleanup","定向清理配置",true),false));
+        compatibility.Children.Add(T(compatibilityAdvice.Length>0?compatibilityAdvice:"session-flags 来自会话参数时，清理文件无法消除警告；请检查桌面版与 CLI 的版本兼容性。",12,MutedBrush));
         var cua=Card("CUA 组件","检查官方桌面应用中的浏览器自动化文件，仅在校验异常时修复。修复前备份原文件，不重置模型或工作区。");
         Row(cua,Button("检查 CUA",async()=>await Run("cua-check","CUA 组件",true),true),Button("检查并修复",async()=>await Run("cua-repair","CUA 修复",true),true));
         var r=Card("恢复与回滚","初始化回滚只恢复初始化备份，不恢复 CUA 文件，也不删除已创建的工作目录。保护器回滚使用独立的运行时备份。");
@@ -200,6 +206,7 @@ public class MainWindow : Window {
             status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("维护恢复");UpdateLayout();var panel=(StackPanel)((Border)content.Children[0]).Child;var buttons=panel.Children.OfType<WrapPanel>().First().Children.OfType<Button>().Select(x=>Convert.ToString(x.Content)).ToArray();var expected=mode=="DesktopNative"?"切换官方独立 CLI":mode=="OfficialStandalone"?"切换桌面原生 CLI":"重新检测 CLI";
             if(!buttons.SequenceEqual(new[]{"安装 / 修复保护",expected,"更新官方 CLI","诊断助手"}))throw new InvalidOperationException("Maintenance switch labels or order were wrong");var texts=((Grid)panel.Children[0]).Children.OfType<TextBlock>().Select(x=>x.Text).ToArray();if(!texts.Any(x=>x.Contains(mode=="DesktopNative"?"桌面原生 CLI":mode=="OfficialStandalone"?"官方独立 CLI":"需检查")))throw new InvalidOperationException("Maintenance status badge was missing");
             if(mode!="Unknown"&&((SolidColorBrush)panel.Children.OfType<WrapPanel>().First().Children.OfType<Button>().ElementAt(1).Background).Color!=Color.FromRgb(155,175,159))throw new InvalidOperationException("CLI switch highlight was lost");
+            var configPanel=content.Children.OfType<Border>().Select(x=>x.Child as StackPanel).FirstOrDefault(x=>x!=null&&x.Children.OfType<TextBlock>().Any(t=>t.Text=="配置兼容检查"));if(configPanel==null||!configPanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).SequenceEqual(new[]{"检查配置","清理已废弃配置"}))throw new InvalidOperationException("Config compatibility controls missing");
         }
         diagnosticAdvice=DiagnosticAdvice.Build(null,1,"[ERROR] proxy connection refused");Navigate("维护恢复");var guardPanel=(StackPanel)((Border)content.Children[0]).Child;if(!guardPanel.Children.OfType<TextBlock>().Any(x=>x.Text.Contains("建议怎么做")))throw new InvalidOperationException("Diagnostic advice was not retained in maintenance");var dialog=CreateDiagnosticDialog();if(dialog.Title!="诊断建议")throw new InvalidOperationException("Diagnostic dialog missing");dialog.Close();diagnosticAdvice="";status=null;wizard=0;Navigate("初始化");if(!(parentModel.Parent is Grid)||parentModel.Parent!=parentEffort.Parent||childModel.Parent!=childEffort.Parent||parentModel.Parent==childModel.Parent)throw new InvalidOperationException("Model and effort controls were not paired by row");
         parentModel.ApplyTemplate();var popup=(System.Windows.Controls.Primitives.Popup)parentModel.Template.FindName("PART_Popup",parentModel);var popupScroll=((Border)popup.Child).Child as SmoothScrollViewer;if(popupScroll==null)throw new InvalidOperationException("Model dropdown scrolling is not smooth");double itemsHeight=10;foreach(var id in ModelCatalog.Preset().Models.Keys){var item=new ComboBoxItem{Content=id,Style=(Style)Resources["KitComboItem"]};item.Measure(new Size(320,Double.PositiveInfinity));itemsHeight+=item.DesiredSize.Height;if(item.FontSize!=12.5)throw new InvalidOperationException("Dropdown font was not compact");}if(itemsHeight>popupScroll.MaxHeight)throw new InvalidOperationException("Preset dropdown requires unnecessary scrolling");
@@ -219,6 +226,7 @@ public class MainWindow : Window {
         switch(op) {
             case "cua-repair":return "检查并修复官方桌面应用的 CUA 组件，修复前单独备份。";
             case "proxy":return "更新当前用户 Codex 的代理配置："+ProxySummary()+"。";
+            case "config-cleanup":return "先备份用户配置、profile 及所选项目配置，再仅移除 features.code_mode_tool_description_first 和 features.guardianv2.thread_context 的可靠布尔赋值。复杂写法保留并提示。不会重置配置或关闭 Codex；session-flags 警告需单独处理。";
             case "init-rollback":return "恢复最新初始化备份，可能停止 Codex 进程。CUA 和已创建的工作目录不在此回滚范围内。";
             case "guard-uninstall":return "移除保护器管理的登录任务、启动入口与配置。";
             case "guard-native":return "恢复桌面应用自带 CLI，并清理保护器拥有的覆盖配置。请先关闭 Codex 桌面应用。";
@@ -232,15 +240,18 @@ public class MainWindow : Window {
         if(busy){banner.Text="请等待当前操作完成。";return;}
         var refreshStatus=false;
         try {
-            int proxy=op=="status"?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=op=="initialize"?Options():(op=="status"?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            var configOperation=op=="config-check"||op=="config-cleanup";
+            int proxy=op=="status"||configOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(op=="status"?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
             if(confirm && !Confirm(title,Impact(op)))return;
+            if(configOperation)compatibilityAdvice="";
             busy=true; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=true;
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
             var id=Guid.NewGuid().ToString("N"); lastLog=Path.Combine(Core.Logs,id+".log"); log.Text="";
             using(var process=Core.StartWorker(op,id,disk,proxy,op=="initialize"&&guard.IsChecked==true,options)) {
                 while(!process.HasExited) { await Task.Delay(300); ReadLog(); }
                 ReadLog(); progress.IsIndeterminate=false;
-                if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,log.Text);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(log.Text);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;Navigate("维护恢复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
+                if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=log.Text;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;Navigate("维护恢复");}
+                else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,log.Text);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(log.Text);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;Navigate("维护恢复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
                 else if(process.ExitCode!=0) { banner.Text=title+"未完成 · 退出码 "+process.ExitCode+" · 查看日志了解原因"; if(op!="status")MessageBox.Show(this,banner.Text,title,MessageBoxButton.OK,MessageBoxImage.Warning); }
                 else {progress.Value=100;banner.Text=title+"完成 · 日志已保存"; if(op=="status" && (page=="概览"||page=="维护恢复"))Navigate(page); if(!preview&&(op=="initialize"||op.StartsWith("guard-"))){if(op=="initialize")ShowInitializationSuccess();refreshStatus=true;}}
             }
@@ -253,7 +264,8 @@ public class MainWindow : Window {
         if(!File.Exists(lastLog))return;
         string text; using(var fs=new FileStream(lastLog,FileMode.Open,FileAccess.Read,FileShare.ReadWrite))using(var reader=new StreamReader(fs,Encoding.UTF8))text=reader.ReadToEnd();
         var display=new StringBuilder(); foreach(var line in text.Split('\n')) {
-            if(line.StartsWith("@@STATUS@@")) {try{status=Core.ReadJson(line.Substring(10).Trim());}catch(Exception ex){display.AppendLine("状态输出格式无效："+ex.Message);} }
+            if(line.StartsWith("@@CONFIG_COMPAT@@")){try{compatibilityAdvice=Core.Value(Core.ReadJson(line.Substring(17).Trim()),"summary","");}catch{display.AppendLine("配置检查结果无法读取，请查看详细日志。");}}
+            else if(line.StartsWith("@@STATUS@@")) {try{status=Core.ReadJson(line.Substring(10).Trim());}catch(Exception ex){display.AppendLine("状态输出格式无效："+ex.Message);} }
             else if(line.StartsWith("@@DIAGNOSIS@@")){try{diagnosisContext=Core.ReadJson(line.Substring(13).Trim());}catch{display.AppendLine("未能读取组件检查结果；建议将依据诊断输出生成。");}}
             else if(line.StartsWith("@@PROGRESS@@")) {try{var p=Core.ReadJson(line.Substring(12).Trim());banner.Text=ProgressTitle(Core.Value(p,"title",operationTitle));int step,total;if(int.TryParse(Core.Value(p,"step","0"),out step)&&int.TryParse(Core.Value(p,"total","0"),out total)&&total>1){progress.IsIndeterminate=false;progress.Value=100.0*Math.Max(0,step-1)/total;}display.AppendLine(banner.Text);}catch(Exception ex){display.AppendLine("阶段输出格式无效："+ex.Message);} }
             else display.AppendLine(line.TrimEnd('\r'));

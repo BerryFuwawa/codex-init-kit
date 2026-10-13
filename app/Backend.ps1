@@ -119,6 +119,9 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
+    $projectPath = & $get 'projectPath'
+    if ($null -ne $projectPath -and $projectPath -isnot [string]) { throw 'Option projectPath must be a string.' }
+    $normalized.projectPath = if ($null -eq $projectPath) { '' } else { $projectPath.Trim() }
     return $normalized
 }
 function Convert-ProxyHost {
@@ -931,15 +934,38 @@ function Get-ReadOnlyStatus {
         statePath=Join-Path $protectionRoot 'State\guard-state.json'
     }
 }
+function Initialize-ConfigCompatibility {
+    if (-not ('CodexKit.ConfigCompatibility' -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot 'ConfigCompatibility.cs') -ErrorAction Stop
+    }
+}
+function Invoke-ConfigCompatibility {
+    param([switch]$Clean,[string]$ProjectPath)
+    Initialize-ConfigCompatibility
+    $report = [CodexKit.ConfigCompatibility]::Scan((Get-CodexHomePath),$ProjectPath)
+    if ($Clean) {
+        [CodexKit.ConfigCompatibility]::Clean($report,(Get-BackupRootPath))
+        $after = [CodexKit.ConfigCompatibility]::Scan((Get-CodexHomePath),$ProjectPath)
+        $after.Removed = $report.Removed; $after.BackupPath = $report.BackupPath
+        $report = $after
+    }
+    $summary = $report.Summary()
+    foreach ($line in ($summary -split '\r?\n')) { Write-BackendLine $line }
+    Write-BackendLine ('@@CONFIG_COMPAT@@' + (@{summary=$summary;count=$report.Count;removed=$report.Removed;backupPath=$report.BackupPath;hasErrors=$report.HasErrors} | ConvertTo-Json -Compress))
+    if ($report.HasErrors -or @($report.Files | ForEach-Object { $_.Findings } | Where-Object { -not $_.CanClean }).Count -gt 0) { return 1 }
+    return 0
+}
 function Invoke-BackendMain {
     param([string]$RequestedOperation,[string]$RequestedPayloadRoot,[string]$RequestedDrive,[int]$RequestedProxyPort=10808,[switch]$RequestedInstallProtection,[string]$RequestedJobFile,[string]$RequestedOptionsBase64)
     Set-BackendOutputEncoding
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -ne 'status') { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
+        if ($input.Operation -notin @('status','config-check','config-cleanup')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
+            'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }
+            'config-cleanup' { return (Invoke-ConfigCompatibility -Clean -ProjectPath $input.Options.projectPath) }
             'initialize' { [void](Invoke-InitOperation 'one-click' $input.PayloadRoot $input.Drive $input.ProxyPort $input.Options); if($input.InstallProtection){[void](Invoke-GuardOperation 'guard-install' $input.PayloadRoot)}; return 0 }
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
             'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }

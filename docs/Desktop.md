@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.1.4
+# Codex Init Kit Desktop 2.1.5
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -30,9 +30,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.1.4](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.4)，发布于 2026-10-13，更新内容见 [2.1.4 更新说明](Release-2.1.4.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.4/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.1.5](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.5)，发布于 2026-10-13，更新内容见 [2.1.5 更新说明](Release-2.1.5.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.5/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件为 562,688 字节，SHA-256 为 `6e5d0507da5a7692681c2f476f759cefb0e8695e0eff6574cba2fb5e7605a7a2`，可与发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.4/SHA256SUMS.txt) 核对。
+正式文件为 599,040 字节，SHA-256 为 `761c8d2f2a4a35eb3a102ba5aacb4dfb68888db198fd82ae234f1e61c4d72273`，可与发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.5/SHA256SUMS.txt) 核对。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -51,6 +51,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 | 概览 | 查看最近状态、默认模型和当前环境 | 刷新只读状态、进入初始化 |
 | 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置与全局规则、按选择创建并绑定工作目录、检查／修复 CUA、按选择写入 Luna 规则；可选安装启动保护 |
 | 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、切换桌面原生 CLI模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
+| 配置兼容检查 | 位于「维护恢复」；只读检查或定向清理 | 显示用户配置、profile 和所选项目的旧设置；先备份再移除可靠布尔赋值，提供恢复脚本 |
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
 
@@ -60,7 +61,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.4` |
+| 版本 | `2.1.5` |
 | 内嵌初始化组件 | `4.8.4` |
 | 内嵌启动保护组件 | `5.2.2` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
@@ -74,6 +75,8 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 需要管理员权限的 worker 会检查当前 Windows 用户 SID；授权账户与启动 GUI 的账户不一致时，操作会停止。状态、CUA 检查和 Doctor 不需要管理员权限。所有实际配置变更仍以 Backend 和原有脚本的行为为准。
 
 ## 更新流程
+
+设置页提示 `code_mode_tool_description_first` 或 `guardianv2.thread_context` 被忽略时，可先运行「维护恢复」中的「检查配置」。清理范围、备份恢复和 `session-flags` 的处理边界见 [配置兼容检查](ConfigCompatibility.md)。无需因此执行完整初始化。
 
 1. 启动或更新页面调用 GitHub API，获得 `main` 的完整提交 SHA。
 2. 从该提交读取 `desktop-update.json`，校验仓库、清单版本、GitHub release URL 和 64 位 SHA-256。
