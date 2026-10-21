@@ -22,6 +22,8 @@ $argsList+="/resource:$(Join-Path $scriptRoot 'Codex_CUA_Repair.cmd'),Payload.cu
 $argsList+="/resource:$(Join-Path $root 'app\Backend.ps1'),Payload.Backend.ps1"
 $argsList+="/resource:$(Join-Path $root 'app\ConfigCompatibility.cs'),Payload.ConfigCompatibility.cs"
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopBackend.Tests.ps1'),Payload.Backend.Tests.ps1"
+$argsList+="/resource:$(Join-Path $root 'app\Backend220.ps1'),Payload.Backend220.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\Backend220.Tests.ps1'),Payload.Backend220.Tests.ps1"
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' | ForEach-Object FullName)
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }

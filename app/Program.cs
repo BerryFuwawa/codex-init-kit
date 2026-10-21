@@ -45,7 +45,7 @@ public static class Program {
         try {
             Core.Extract(dir);
             var logo=Brand.Logo();if(logo.PixelWidth!=512||logo.PixelHeight!=512)throw new InvalidDataException("Invalid logo resource");checks["logo_resource"]=true;
-            foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
+            foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend.Tests.ps1","Backend220.Tests.ps1"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
             var ps=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe");
             var script="$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile('"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"',[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|Out-String|Write-Output;exit 1};exit 0";
             var info=new ProcessStartInfo(ps,"-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(script))){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
@@ -54,6 +54,9 @@ public static class Program {
             var testScript="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"' -BackendPath '"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(testScript));
             using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["backend_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            var test220="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend220.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
+            info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(test220));
+            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["browser_and_update_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var catalog=ModelCatalog.Parse("{\"models\":[{\"slug\":\"fixture-model\",\"default_reasoning_level\":\"high\",\"supported_reasoning_levels\":[{\"effort\":\"high\"},{\"effort\":\"low\"}]}]}");
             if(!catalog.Check("fixture-model","high").Contains("核对通过")||catalog.Models["fixture-model"].Efforts[0]!="high")throw new InvalidDataException("Model catalog validation or ordering failed");
             foreach(var bad in new[]{"display name","bad;model","fixture-model\n"})if(ModelCatalog.ValidId(bad))throw new InvalidDataException("Unsafe model catalog ID accepted");

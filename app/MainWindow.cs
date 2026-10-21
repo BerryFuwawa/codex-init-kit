@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using System.Windows.Media.Imaging;
 using Ellipse = System.Windows.Shapes.Ellipse;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Animation;
 
 namespace CodexKit {
 public class MainWindow : Window {
@@ -28,6 +29,10 @@ public class MainWindow : Window {
     readonly TextBox proxyHost=new TextBox();
     readonly CheckBox guard=new CheckBox();
     readonly CheckBox proxyEnabled=new CheckBox(),folderManagement=new CheckBox(),subagents=new CheckBox(),cuaRepair=new CheckBox();
+    readonly CheckBox browserRepair=new CheckBox(),officialCliUpdate=new CheckBox(),desktopUpdate=new CheckBox();
+    Dictionary<string,object> browserReport;
+    string initializationSummary="";
+    Button recoveryGuide,officialSwitch;
     readonly ComboBox modelMode=new ComboBox();
     readonly ComboBox parentModel=new ComboBox(),childModel=new ComboBox();
     readonly ComboBox parentEffort=new ComboBox(),childEffort=new ComboBox();
@@ -40,7 +45,7 @@ public class MainWindow : Window {
     bool busy, preview, checkingUpdate;
     int wizard;
     public void VerifyPages() {
-        if(proxyEnabled.IsChecked!=true||folderManagement.IsChecked!=true||subagents.IsChecked==true||guard.IsChecked!=true||cuaRepair.IsChecked!=true||Port()!=10808)throw new InvalidOperationException("Default setup options changed");
+        if(proxyEnabled.IsChecked!=true||folderManagement.IsChecked!=true||subagents.IsChecked==true||guard.IsChecked!=true||cuaRepair.IsChecked!=true||browserRepair.IsChecked!=true||officialCliUpdate.IsChecked!=true||desktopUpdate.IsChecked!=true||Port()!=10808)throw new InvalidOperationException("Default setup options changed");
         if(proxyHost.Text.Length!=0||ProxyHost()!=Core.DefaultProxyHost)throw new InvalidOperationException("Default proxy host changed");
         proxyHost.Text="192.168.1.20";var settings=Options();if(Convert.ToString(settings["proxyHost"])!="192.168.1.20")throw new InvalidOperationException("Custom proxy host was not preserved");
         proxyHost.Text="not-an-ip";var rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsafe proxy host accepted");
@@ -57,15 +62,18 @@ public class MainWindow : Window {
         modelMode.SelectedIndex=0;if(parentModel.IsEnabled||parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Recommended mode allowed model editing");folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
         var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as StackPanel;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||completionPanel.Children.OfType<Button>().Count()!=1||!completionPanel.Children.OfType<TextBlock>().Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion dialog is not themed or single-action");
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"runtimeModeDetail","桌面应用自带 CLI"},{"currentCliPath",""},{"protectionInstalled",false}};Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("DesktopNative","由桌面应用自动选择");status["runtimeMode"]="OfficialStandalone";status["runtimeModeDetail"]="官方独立 CLI";status["currentCliPath"]="C:\\Users\\Test\\.codex\\bin\\codex.exe";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("OfficialStandalone","C:\\Users\\Test\\.codex\\bin\\codex.exe");status["runtimeMode"]="Unknown";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("Unknown","C:\\Users\\Test\\.codex\\bin\\codex.exe");status=null;
+        foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
+        status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="维护恢复"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
+        var newDefaults=Options();foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})if(!(bool)newDefaults[key])throw new InvalidOperationException("New default disabled: "+key);
         VerifyMaintenanceModes();
-        foreach(var name in new[]{"概览","初始化","维护恢复","更新","日志","初始化"}) { Navigate(name); Measure(new Size(1120,800)); Arrange(new Rect(0,0,1120,800)); UpdateLayout(); }
+        foreach(var name in new[]{"概览","初始化","浏览器连接","维护恢复","更新","日志","初始化"}) { Navigate(name); Measure(new Size(1120,800)); Arrange(new Rect(0,0,1120,800)); UpdateLayout(); }
         wizard=1;Navigate("初始化");UpdateLayout(); wizard=2;Navigate("初始化");UpdateLayout();Navigate("日志");UpdateLayout();
         update=new Dictionary<string,object>{{"version",Core.Version}};ApplyUpdateState();if(updateNotice.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Update notice shown for current version");
         var current=new Version(Core.Version);update["version"]=new Version(current.Major,current.Minor,current.Build+1).ToString();ApplyUpdateState();Navigate("概览");UpdateLayout();if(updateNotice.Visibility!=Visibility.Visible||!updateStatus.Text.StartsWith("检测到更新"))throw new InvalidOperationException("Update notice missing");update=null;ApplyUpdateState();
     }
     public void RenderPages(string directory) {
         Directory.CreateDirectory(directory);
-        foreach(var name in new[]{"概览","初始化","维护恢复","更新","日志"}) {
+        foreach(var name in new[]{"概览","初始化","浏览器连接","维护恢复","更新","日志"}) {
             Navigate(name);var view=(FrameworkElement)Content;view.Measure(new Size(1120,800));view.Arrange(new Rect(0,0,1120,800));view.UpdateLayout();
             var bitmap=new RenderTargetBitmap(1120,800,96,96,PixelFormats.Pbgra32);bitmap.Render(view);var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(directory,name+".png")))encoder.Save(file);
         }
@@ -81,7 +89,7 @@ public class MainWindow : Window {
         var rail=new Grid{Background=B("#151B27")}; rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(130)}); rail.RowDefinitions.Add(new RowDefinition()); rail.RowDefinitions.Add(new RowDefinition{Height=new GridLength(130)}); layout.Children.Add(rail);
         var brand=new StackPanel{Margin=new Thickness(25,18,15,10)}; brand.Children.Add(new Image{Source=Brand.Logo(),Width=48,Height=48,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8)}); brand.Children.Add(T("CODEX INIT KIT",16,TextBrush)); brand.Children.Add(T("Windows 初始化与维护",11,MutedBrush)); rail.Children.Add(brand);
         var nav=new StackPanel{Margin=new Thickness(14,12,14,0)}; Grid.SetRow(nav,1); rail.Children.Add(nav);
-        foreach(var name in new[]{"概览","初始化","维护恢复","更新","日志"}) { var button=Button(name,async()=>{Navigate(name);if(name=="维护恢复"&&!preview&&!busy)await RefreshStatusQuietly();},false); button.HorizontalContentAlignment=HorizontalAlignment.Left; button.Margin=new Thickness(0,0,0,8); button.Padding=new Thickness(17,14,12,14); nav.Children.Add(button); navigation.Add(button); }
+        foreach(var name in new[]{"概览","初始化","浏览器连接","维护恢复","更新","日志"}) { var button=Button(name,async()=>{Navigate(name);if(name=="维护恢复"&&!preview&&!busy)await RefreshStatusQuietly();},false); button.HorizontalContentAlignment=HorizontalAlignment.Left; button.Margin=new Thickness(0,0,0,8); button.Padding=new Thickness(17,14,12,14); nav.Children.Add(button); navigation.Add(button); }
         var foot=new StackPanel{Margin=new Thickness(20,10,12,15)};
         updateNotice=Button("",async()=>await InstallUpdate(),false);updateNotice.Background=Brushes.Transparent;updateNotice.Padding=new Thickness(0,6,0,8);updateNotice.Visibility=Visibility.Collapsed;
         var noticeContent=new StackPanel{Orientation=Orientation.Horizontal};noticeContent.Children.Add(new Ellipse{Width=8,Height=8,Fill=B("#FF526C"),Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Center,Effect=new DropShadowEffect{Color=Color.FromRgb(255,65,95),BlurRadius=10,ShadowDepth=0,Opacity=.95}});noticeContent.Children.Add(T("检测到更新，点击更新",12,TextBrush));updateNotice.Content=noticeContent;
@@ -98,7 +106,7 @@ public class MainWindow : Window {
         foreach(var input in new[]{port,proxyHost})input.Style=(Style)Resources["KitInput"];
         port.Text="10808";port.Width=320;port.HorizontalAlignment=HorizontalAlignment.Left;
         proxyHost.Text="";proxyHost.Width=320;proxyHost.HorizontalAlignment=HorizontalAlignment.Left;proxyHost.ToolTip="留空使用 127.0.0.1。软路由在局域网其他设备时，请填写可访问的路由器 IP 地址；本工具不会启动代理服务。";
-        var checks=new[]{proxyEnabled,folderManagement,subagents,guard,cuaRepair};var labels=new[]{"启用 HTTP 代理","文件夹管理功能","子代理多线程","CLI 启动保护与修复","CUA 检查与修复"};for(int i=0;i<checks.Length;i++){checks[i].Style=(Style)Resources["KitCheck"];checks[i].Content=labels[i];checks[i].IsChecked=i!=2;}
+        var checks=new[]{proxyEnabled,folderManagement,subagents,guard,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate};var labels=new[]{"启用 HTTP 代理","文件夹管理功能","子代理多线程","CLI 启动保护与修复","CUA 检查与修复","浏览器链接修复","更新官方CLI","更新桌面版（含原生CLI）"};for(int i=0;i<checks.Length;i++){checks[i].Style=(Style)Resources["KitCheck"];checks[i].Content=labels[i];checks[i].IsChecked=i!=2;}
         proxyEnabled.Checked+=(s,e)=>{port.IsEnabled=true;proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{port.IsEnabled=false;proxyHost.IsEnabled=false;};
         modelMode.Style=(Style)Resources["KitCombo"];modelMode.ItemsSource=new[]{"使用推荐模型","选择模型与思考强度"};modelMode.SelectedIndex=0;modelMode.SelectionChanged+=(s,e)=>UpdateModelInputs();
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
@@ -125,13 +133,16 @@ public class MainWindow : Window {
     Button Link(string label,Action action) { var b=Button(label,action,false); b.Background=Brushes.Transparent; b.Foreground=Accent; b.Padding=new Thickness(0,6,0,6); b.FontSize=12; return b; }
     StackPanel Card(string title,string description) { var p=new StackPanel{Margin=new Thickness(22,18,22,18)}; p.Children.Add(T(title,18,TextBrush)); if(description.Length>0)p.Children.Add(T(description,13,MutedBrush)); var box=new Border{Background=PanelBrush,CornerRadius=new CornerRadius(12),Margin=new Thickness(0,0,0,14),Child=p}; content.Children.Add(box); return p; }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { foreach(var control in new FrameworkElement[]{drive,port,proxyHost,guard,log,proxyEnabled,folderManagement,subagents,cuaRepair,modelMode,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
-        if(name=="概览")Overview(); else if(name=="初始化")Wizard(); else if(name=="维护恢复")Maintenance(); else if(name=="更新")Updates(); else LogsPage();
+    void Navigate(string name) { foreach(var control in new FrameworkElement[]{drive,port,proxyHost,guard,log,proxyEnabled,folderManagement,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,modelMode,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
+        if(name=="概览")Overview(); else if(name=="初始化")Wizard(); else if(name=="浏览器连接")BrowserConnection(); else if(name=="维护恢复")Maintenance(); else if(name=="更新")Updates(); else LogsPage();
     }
     void Overview() {
         subtitle.Text="把工作区、模型设置、CUA 修复与启动保护放在一起。";
         var hero=Card("让 Codex 准备好开始工作","按步骤配置工作区，完成文件夹管理后执行 CUA 检查与修复。每一步都有日志，关键更改先确认。");
-        Row(hero,Button("开始初始化  →",()=>{wizard=0;Navigate("初始化");},true),Button("刷新状态",async()=>await Run("status","读取当前状态",false),false));
+        var actions=new Grid();for(int i=0;i<3;i++)actions.ColumnDefinitions.Add(new ColumnDefinition{Width=i<2?GridLength.Auto:new GridLength(1,GridUnitType.Star)});
+        var start=Button("开始初始化  →",()=>{wizard=0;Navigate("初始化");},true);actions.Children.Add(start);
+        var refresh=Button("刷新状态",async()=>await Run("status","读取当前状态",false),false);Grid.SetColumn(refresh,1);actions.Children.Add(refresh);
+        recoveryGuide=Button("遇到了未知错误？尝试切换官方独立CLI",()=>GuideOfficialCli(),false);recoveryGuide.Background=B("#AA344B");recoveryGuide.Foreground=Brushes.White;recoveryGuide.HorizontalAlignment=HorizontalAlignment.Right;recoveryGuide.MaxWidth=300;recoveryGuide.Padding=new Thickness(12,10,12,10);recoveryGuide.Content=new TextBlock{Text="遇到了未知错误？尝试切换官方独立CLI",TextWrapping=TextWrapping.Wrap,FontSize=12};recoveryGuide.Visibility=Core.Value(status,"runtimeMode","")=="DesktopNative"?Visibility.Visible:Visibility.Collapsed;Grid.SetColumn(recoveryGuide,2);actions.Children.Add(recoveryGuide);hero.Children.Add(actions);
         var p=Card("当前环境",status==null?(preview?"界面预览 · 未执行检测":"正在读取，或点击上方刷新状态。"):preview?"界面预览 · 示例状态（非真实检测）":"最近一次检测结果");
         if(status!=null) {
             var labels=new Dictionary<string,string>{{"desktopVersion","桌面版本"},{"desktopHealth","组件状态"},{"runtimeMode","当前 CLI 模式"},{"runtimeModeDetail","运行时说明"},{"currentCliPath","当前 CLI 路径"},{"configModel","当前模型"},{"configEffort","当前推理强度"},{"protectionInstalled","启动保护已安装"},{"processRunning","Codex 正在运行"},{"backupPath","初始化备份"}};
@@ -151,7 +162,7 @@ public class MainWindow : Window {
     void RefreshModelChoices(){var values=modelCatalog.Models.Keys.ToArray();foreach(var combo in new[]{parentModel,childModel}){var current=Convert.ToString(combo.SelectedItem);if(current.Length==0)current=combo==parentModel?"gpt-6.1-sol":"gpt-5.6-luna";combo.ItemsSource=values;combo.SelectedItem=values.Contains(current)?current:values.FirstOrDefault();}}
     string Model(ComboBox input,string fallback){var value=modelMode.SelectedIndex==1?Convert.ToString(input.SelectedItem):fallback;if(!modelCatalog.Models.ContainsKey(value))throw new InvalidOperationException("请从下拉框选择预设模型。");return value;}
     string ProxyHost() { if(proxyEnabled.IsChecked!=true)return "";var text=(proxyHost.Text??"").Trim();if(text.Length==0)return Core.DefaultProxyHost;System.Net.IPAddress address;if(!System.Net.IPAddress.TryParse(text,out address))throw new InvalidOperationException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");return address.ToString(); }
-    Dictionary<string,object> Options(){var p=Model(parentModel,"gpt-6.1-sol");var pe=Effort(parentEffort,"high");var c=subagents.IsChecked==true?Model(childModel,"gpt-5.6-luna"):"gpt-5.6-luna";var ce=subagents.IsChecked==true?Effort(childEffort,"max"):"max";modelCatalog.Check(p,pe);if(subagents.IsChecked==true)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"folderManagement",folderManagement.IsChecked==true},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"parentModel",p},{"parentEffort",pe},{"childModel",c},{"childEffort",ce}};}
+    Dictionary<string,object> Options(){var p=Model(parentModel,"gpt-6.1-sol");var pe=Effort(parentEffort,"high");var c=subagents.IsChecked==true?Model(childModel,"gpt-5.6-luna"):"gpt-5.6-luna";var ce=subagents.IsChecked==true?Effort(childEffort,"max"):"max";modelCatalog.Check(p,pe);if(subagents.IsChecked==true)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"folderManagement",folderManagement.IsChecked==true},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"parentModel",p},{"parentEffort",pe},{"childModel",c},{"childEffort",ce}};}
     Dictionary<string,object> ProxyOptions(){return new Dictionary<string,object>{{"proxyHost",ProxyHost()}};}
     string ModelChecks(Dictionary<string,object> options){return modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。";}
     string ProxySummary(){var value=Port();if(value==0)return "关闭（不写入本地 HTTP 代理）";var host=ProxyHost();if(host.Contains(":")&&!host.StartsWith("["))host="["+host+"]";return "http://"+host+":"+value;}
@@ -165,16 +176,16 @@ public class MainWindow : Window {
             var portRow=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};portRow.Children.Add(new TextBlock{Text="HTTP 代理端口",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});portRow.Children.Add(port);proxyRows.Children.Add(portRow);
             var hostRow=new StackPanel{Orientation=Orientation.Horizontal};hostRow.Children.Add(new TextBlock{Text="代理 IP（默认 127.0.0.1）",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});hostRow.Children.Add(proxyHost);proxyRows.Children.Add(hostRow);p.Children.Add(proxyRows);
             p.Children.Add(T("填写 V2RayN、Clash、软路由等提供的 HTTP／混合代理端口。端口默认按 V2RayN 的 10808 填写，请以你的实际设置为准。IP 留空使用 127.0.0.1；软路由在局域网其他设备时，请填写可访问的路由器 IP 地址。本工具不会启动代理服务。关闭后会忽略端口和 IP。",12,MutedBrush));
-            var features=Card("02   选择要启用的功能","文件夹管理、CLI 启动保护与 CUA 检查默认开启；子代理多线程默认关闭。全局 AGENTS.md 会完整备份并重建，只写入本次选择的规则；未勾选功能不写入。基础配置仍会备份并重建。");foreach(var check in new[]{folderManagement,subagents,guard,cuaRepair})features.Children.Add(check);
+            var features=Card("02   选择要启用的功能","文件夹管理、CLI 启动保护、CUA、浏览器链接修复和两类更新默认开启；子代理多线程默认关闭。全局 AGENTS.md 会完整备份并重建，只写入本次选择的规则；未勾选功能不写入。基础配置仍会备份并重建。");foreach(var check in new[]{folderManagement,subagents,guard,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate})features.Children.Add(check);
             var models=Card("03   模型设置","推荐父模型 gpt-6.1-sol / high，子代理 gpt-5.6-luna / max。父模型与子代理模型均通过下拉框选择。思考强度随模型切换，只显示对应模型支持的档位。模型列表随软件版本更新，实际调用权限取决于账号。");models.Children.Add(modelMode);ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);models.Children.Add(Button("检查所选配置",()=>CheckModels(),false));
             models.Children.Add(Button("下一步：查看变更  →",()=>{try{Port();Drive();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}},true));
         } else if(wizard==1) {
             var p=Card("02   确认初始化","将更新当前 Windows 用户的 Codex 配置。执行时会请求管理员授权。");
             p.Children.Add(T(InitSummary(),14,TextBrush));
-            Row(p,Button("返回修改",()=>{wizard=0;Navigate("初始化");},false),Button("确认并开始初始化",async()=>{if(Confirm("开始初始化",InitSummary()+"\n\n将停止正在运行的 Codex 进程。请先保存其他窗口的工作。")){wizard=2;Navigate("初始化");await Run("initialize","初始化",false);}},true));
+            Row(p,Button("返回修改",()=>{wizard=0;Navigate("初始化");},false),Button("确认并开始初始化",async()=>{if(Confirm("开始初始化",InitSummary()+"\n\n请先保存工作并彻底退出 Codex；检测到正在运行时会停止初始化，不会强制结束当前任务。")){wizard=2;Navigate("初始化");await Run("initialize","初始化",false);}},true));
         } else { var p=Card("03   执行与结果",busy?"正在执行，请保留窗口。":"完整结果与备份位置见下方日志。"); p.Children.Add(log); Row(p,Button("查看全部日志",()=>Navigate("日志"),false),Button("重新设置",()=>{if(!busy){wizard=0;Navigate("初始化");}},false)); }
     }
-    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+options["parentEffort"]+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+options["childEffort"]:"关闭，不写入子代理规则")+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n"+ModelChecks(options)+"\n基础配置及全局 AGENTS.md 将完整备份并重建；原自定义指令只保存在备份中。项目内的 AGENTS.md 不变。更新用户 PATH。初始化和 CUA 分别备份。";}
+    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+options["parentEffort"]+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+options["childEffort"]:"关闭，不写入子代理规则")+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"最后执行，真实连接需重启后验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件，保留当前 CLI 模式":"跳过")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → 浏览器修复。新增步骤未完成时显示可重试项目。\n"+ModelChecks(options)+"\n基础配置及全局 AGENTS.md 将完整备份并重建；原自定义指令只保存在备份中。项目内的 AGENTS.md 不变。更新用户 PATH。初始化和 CUA 分别备份。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
@@ -184,7 +195,8 @@ public class MainWindow : Window {
         var mode=Core.Value(status,"runtimeMode","");var header=new Grid();header.ColumnDefinitions.Add(new ColumnDefinition());header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});var title=g.Children[0];g.Children.RemoveAt(0);header.Children.Add(title);var badge=T(mode=="DesktopNative"?"当前：桌面原生 CLI":mode=="OfficialStandalone"?"当前：官方独立 CLI":status==null?"当前：正在读取状态":"当前：CLI 模式需检查",12,mode=="DesktopNative"?B("#70DFC0"):mode=="OfficialStandalone"?Accent:B("#E9C779"));badge.VerticalAlignment=VerticalAlignment.Center;badge.Margin=new Thickness(15,0,0,8);Grid.SetColumn(badge,1);header.Children.Add(badge);g.Children.Insert(0,header);
         var switchOp=mode=="DesktopNative"?"guard-current":mode=="OfficialStandalone"?"guard-native":"status";var switchLabel=mode=="DesktopNative"?"切换官方独立 CLI":mode=="OfficialStandalone"?"切换桌面原生 CLI":"重新检测 CLI";
         var switchButton=Button(switchLabel,async()=>await Run(switchOp,switchLabel,switchOp!="status"),false);if(switchOp!="status"){switchButton.Background=B("#9BAF9F");switchButton.Foreground=B("#14231C");}
-        Row(g,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),switchButton,Button("更新官方 CLI",async()=>await Run("guard-update","更新官方 CLI",true),false),Button("诊断助手",async()=>await Run("doctor","诊断助手",false),false));
+        officialSwitch=switchButton;
+        Row(g,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),switchButton,Button("更新官方独立 CLI",async()=>await Run("official-cli-update","更新官方独立 CLI",true),false),Button("更新桌面版（含原生 CLI）",async()=>await Run("desktop-update","更新桌面版",true),false),Button("诊断助手",async()=>await Run("doctor","诊断助手",false),false));
         if(diagnosticAdvice.Length>0){g.Children.Add(T("\n最近一次诊断建议",16,TextBrush));g.Children.Add(T(diagnosticAdvice,13,MutedBrush));g.Children.Add(Link("查看详细日志",()=>Navigate("日志")));}
         var compatibility=Card("配置兼容检查","检查用户配置、profile 和下方明确指定的项目。清理只移除两项已失效设置，先备份并生成恢复脚本；不会重置配置、关闭 Codex 或切换 CLI。");
         compatibility.Children.Add(T("项目目录（可选，仅检查该项目的 .codex/config.toml）",12,MutedBrush));
@@ -197,6 +209,35 @@ public class MainWindow : Window {
         Row(r,Button("回滚最新初始化",async()=>await Run("init-rollback","回滚最新初始化",true),false),Button("回滚保护器",async()=>await Run("guard-rollback","回滚保护器",true),false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
         var proxy=Card("代理设置","开关和端口在初始化页面设置。关闭后移除 Codex 的代理配置。");proxy.Children.Add(T("当前："+ProxySummary(),13,MutedBrush));proxy.Children.Add(Button("更新代理",async()=>await Run("proxy","更新代理",true),false));
     }
+    void GuideOfficialCli(){
+        Navigate("维护恢复");
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(HighlightOfficialSwitch));
+    }
+    void HighlightOfficialSwitch(){
+            if(officialSwitch==null)return;officialSwitch.BringIntoView();officialSwitch.Focus();
+            if(SystemParameters.ClientAreaAnimation&&!preview){var animation=new DoubleAnimation(1,.45,TimeSpan.FromMilliseconds(450)){AutoReverse=true,RepeatBehavior=new RepeatBehavior(3)};officialSwitch.BeginAnimation(UIElement.OpacityProperty,animation);}
+            else {officialSwitch.Background=Accent;officialSwitch.Foreground=B("#101B31");officialSwitch.ToolTip="请点击此按钮检查并切换官方独立 CLI";}
+    }
+    void BrowserConnection(){
+        subtitle.Text="检查浏览器运行时与代理，准备修复，再重启验证真实连接。";
+        if(browserReport==null&&!preview){try{var file=Path.Combine(Core.Root,"BrowserConnection","last-check.json");if(File.Exists(file))browserReport=Core.ReadJson(File.ReadAllText(file,Encoding.UTF8));}catch{}}
+        var environment=Card("浏览器连接状态","补丁只作用于当前已校验的官方运行时。桌面版升级后请重新检查；旧版本的结果不能代表当前版本。");
+        environment.Children.Add(T("当前桌面版："+Core.Value(status,"desktopVersion","未检测"),13,TextBrush));
+        if(browserReport!=null&&status!=null&&Core.Value(browserReport,"desktopVersion","")!=Core.Value(status,"desktopVersion",""))environment.Children.Add(T("应用版本已变化：下方旧检查结果已失效，请重新检查浏览器连接。",13,B("#E9C779")));
+        foreach(var item in new[]{new[]{"desktopVersion","最近检查的桌面版"},new[]{"runtime","浏览器控制运行时"},new[]{"proxy","最近检查代理"},new[]{"patch","补丁状态"},new[]{"checkedAt","最近检查"}})environment.Children.Add(T(item[1]+"："+Core.Value(browserReport,item[0],"未检查"),13,MutedBrush));
+        var settings=Card("代理设置","与初始化页面同步。使用代理软件提供的 HTTP／混合端口；关闭代理后，修复操作会恢复本工具管理的入口为直连。");
+        var enabled=new CheckBox{Content="启用 HTTP 代理",IsChecked=proxyEnabled.IsChecked,Style=(Style)Resources["KitCheck"]};
+        var hostInput=new TextBox{Text=proxyHost.Text,Style=(Style)Resources["KitInput"]};var portInput=new TextBox{Text=port.Text,Style=(Style)Resources["KitInput"]};
+        hostInput.IsEnabled=portInput.IsEnabled=enabled.IsChecked==true;
+        enabled.Checked+=(a,b)=>{proxyEnabled.IsChecked=true;hostInput.IsEnabled=portInput.IsEnabled=true;};enabled.Unchecked+=(a,b)=>{proxyEnabled.IsChecked=false;hostInput.IsEnabled=portInput.IsEnabled=false;};
+        hostInput.TextChanged+=(a,b)=>proxyHost.Text=hostInput.Text;portInput.TextChanged+=(a,b)=>port.Text=portInput.Text;
+        settings.Children.Add(enabled);settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(hostInput);settings.Children.Add(T("HTTP 代理端口",12,MutedBrush));settings.Children.Add(portInput);
+        Row(settings,Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),true),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",()=>{Clipboard.SetText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。");banner.Text="已复制 · 重启 Codex 后在新对话中运行测试";},false));
+        var checks=Card("分项验证","HTTP 403 只表示服务可达，不表示 Chrome 已连接。环境探针验证 Node 与子进程继承，真实 CUA 连接仍需重启后测试。");
+        foreach(var item in new[]{new[]{"integrity","组件完整性"},new[]{"reachability","代理可达性"},new[]{"environment","环境继承探针"},new[]{"connection","真实连接验证"}})checks.Children.Add(T(item[1]+"："+Core.Value(browserReport,item[0],item[0]=="connection"?"待重启后验证":"未检查"),13,MutedBrush));
+        checks.Children.Add(T("修改前请保存工作并彻底退出 Codex，再从独立 EXE 执行修复。本工具不会关闭 Chrome 或用户标签页。修复后重新启动 Codex，复制上方指令完成验收。",12,Accent));
+        checks.Children.Add(Link("在 Microsoft Store 中更新桌面版 ↗",()=>Open("ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS")));
+    }
     void ModelSelectionRow(StackPanel panel,string label,ComboBox model,ComboBox effort){
         var heading=T(label,16,TextBrush);heading.FontWeight=FontWeights.Bold;heading.Margin=new Thickness(0,12,0,8);panel.Children.Add(heading);var row=new Grid();row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(2,GridUnitType.Star)});row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
         var id=T("模型 ID",13,MutedBrush);id.VerticalAlignment=VerticalAlignment.Center;id.Margin=new Thickness(0,0,12,10);row.Children.Add(id);Grid.SetColumn(model,1);row.Children.Add(model);var strength=T("思考强度",13,MutedBrush);strength.VerticalAlignment=VerticalAlignment.Center;strength.Margin=new Thickness(18,0,12,10);Grid.SetColumn(strength,2);row.Children.Add(strength);Grid.SetColumn(effort,3);row.Children.Add(effort);panel.Children.Add(row);
@@ -204,7 +245,7 @@ public class MainWindow : Window {
     void VerifyMaintenanceModes(){
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown"}){
             status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("维护恢复");UpdateLayout();var panel=(StackPanel)((Border)content.Children[0]).Child;var buttons=panel.Children.OfType<WrapPanel>().First().Children.OfType<Button>().Select(x=>Convert.ToString(x.Content)).ToArray();var expected=mode=="DesktopNative"?"切换官方独立 CLI":mode=="OfficialStandalone"?"切换桌面原生 CLI":"重新检测 CLI";
-            if(!buttons.SequenceEqual(new[]{"安装 / 修复保护",expected,"更新官方 CLI","诊断助手"}))throw new InvalidOperationException("Maintenance switch labels or order were wrong");var texts=((Grid)panel.Children[0]).Children.OfType<TextBlock>().Select(x=>x.Text).ToArray();if(!texts.Any(x=>x.Contains(mode=="DesktopNative"?"桌面原生 CLI":mode=="OfficialStandalone"?"官方独立 CLI":"需检查")))throw new InvalidOperationException("Maintenance status badge was missing");
+            if(!buttons.SequenceEqual(new[]{"安装 / 修复保护",expected,"更新官方独立 CLI","更新桌面版（含原生 CLI）","诊断助手"}))throw new InvalidOperationException("Maintenance switch labels or order were wrong");var texts=((Grid)panel.Children[0]).Children.OfType<TextBlock>().Select(x=>x.Text).ToArray();if(!texts.Any(x=>x.Contains(mode=="DesktopNative"?"桌面原生 CLI":mode=="OfficialStandalone"?"官方独立 CLI":"需检查")))throw new InvalidOperationException("Maintenance status badge was missing");
             if(mode!="Unknown"&&((SolidColorBrush)panel.Children.OfType<WrapPanel>().First().Children.OfType<Button>().ElementAt(1).Background).Color!=Color.FromRgb(155,175,159))throw new InvalidOperationException("CLI switch highlight was lost");
             var configPanel=content.Children.OfType<Border>().Select(x=>x.Child as StackPanel).FirstOrDefault(x=>x!=null&&x.Children.OfType<TextBlock>().Any(t=>t.Text=="配置兼容检查"));if(configPanel==null||!configPanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).SequenceEqual(new[]{"检查配置","清理已废弃配置"}))throw new InvalidOperationException("Config compatibility controls missing");
         }
@@ -231,7 +272,12 @@ public class MainWindow : Window {
             case "guard-uninstall":return "移除保护器管理的登录任务、启动入口与配置。";
             case "guard-native":return "恢复桌面应用自带 CLI，并清理保护器拥有的覆盖配置。请先关闭 Codex 桌面应用。";
             case "guard-rollback":return "将保护器管理的 CLI 恢复到备份版本。请先关闭 Codex 桌面应用。";
-            case "guard-current":return "切换到保护器管理的官方独立 CLI。请先关闭 Codex 桌面应用。";
+            case "guard-current":return "先检查官方独立 CLI，缺失或不完整时从官方渠道准备，再切换。请先退出 Codex。";
+            case "official-cli-update":return "更新官方独立 CLI 组件，保留当前 CLI 模式；不安装启动保护或登录任务。请先退出 Codex。";
+            case "desktop-update":return "通过 winget 更新官方 Microsoft Store 桌面版（含原生 CLI），最长等待 20 分钟；不自动重启。请先退出 Codex。";
+            case "browser-check":return "只读校验 CUA、代理端口及 Node 环境继承探针。真实 Chrome 连接需重启后测试。";
+            case "browser-repair":return "使用当前代理设置："+ProxySummary()+"。请先退出 Codex；校验官方入口后备份并应用补丁。未知结构或哈希异常时保留原文件。不会关闭 Chrome。";
+            case "browser-rollback":return "请先退出 Codex。核对当前版本及前后哈希后，恢复本工具备份的原始入口；版本变化时拒绝覆盖。不会关闭 Chrome。";
             case "guard-update":return "从官方渠道下载并更新保护器管理的 CLI。请先关闭 Codex 桌面应用。";
             default:return "安装或修复当前用户的启动保护与登录自动维护任务。";
         }
@@ -245,6 +291,7 @@ public class MainWindow : Window {
             if(confirm && !Confirm(title,Impact(op)))return;
             if(configOperation)compatibilityAdvice="";
             busy=true; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=true;
+            if(op=="initialize")initializationSummary="";
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
             var id=Guid.NewGuid().ToString("N"); lastLog=Path.Combine(Core.Logs,id+".log"); log.Text="";
             using(var process=Core.StartWorker(op,id,disk,proxy,op=="initialize"&&guard.IsChecked==true,options)) {
@@ -252,8 +299,10 @@ public class MainWindow : Window {
                 ReadLog(); progress.IsIndeterminate=false;
                 if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=log.Text;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;Navigate("维护恢复");}
                 else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,log.Text);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(log.Text);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;Navigate("维护恢复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
+                else if(op.StartsWith("browser-")){banner.Text=process.ExitCode==0?"浏览器检查或修复已准备 · 真实连接需重启后验证":"浏览器操作未完成 · 可查看原因后单独重试";progress.Value=100;Navigate("浏览器连接");}
+                else if(op=="initialize"&&process.ExitCode==2){banner.Text="初始化部分完成 · 请重试未完成项目";progress.Value=100;if(!preview)MessageBox.Show(this,initializationSummary,"初始化部分完成",MessageBoxButton.OK,MessageBoxImage.Warning);refreshStatus=true;}
                 else if(process.ExitCode!=0) { banner.Text=title+"未完成 · 退出码 "+process.ExitCode+" · 查看日志了解原因"; if(op!="status")MessageBox.Show(this,banner.Text,title,MessageBoxButton.OK,MessageBoxImage.Warning); }
-                else {progress.Value=100;banner.Text=title+"完成 · 日志已保存"; if(op=="status" && (page=="概览"||page=="维护恢复"))Navigate(page); if(!preview&&(op=="initialize"||op.StartsWith("guard-"))){if(op=="initialize")ShowInitializationSuccess();refreshStatus=true;}}
+                else {progress.Value=100;banner.Text=title+"完成 · 日志已保存"; if(op=="status" && (page=="概览"||page=="维护恢复"))Navigate(page); if(!preview&&(op=="initialize"||op.StartsWith("guard-")||op=="desktop-update"||op=="official-cli-update")){if(op=="initialize")ShowInitializationSuccess();refreshStatus=true;}}
             }
         } catch(System.ComponentModel.Win32Exception ex) { if(ex.NativeErrorCode==1223)banner.Text="已取消管理员授权，未开始执行。";else Error(ex); }
           catch(Exception ex) { Error(ex); }
@@ -264,7 +313,9 @@ public class MainWindow : Window {
         if(!File.Exists(lastLog))return;
         string text; using(var fs=new FileStream(lastLog,FileMode.Open,FileAccess.Read,FileShare.ReadWrite))using(var reader=new StreamReader(fs,Encoding.UTF8))text=reader.ReadToEnd();
         var display=new StringBuilder(); foreach(var line in text.Split('\n')) {
-            if(line.StartsWith("@@CONFIG_COMPAT@@")){try{compatibilityAdvice=Core.Value(Core.ReadJson(line.Substring(17).Trim()),"summary","");}catch{display.AppendLine("配置检查结果无法读取，请查看详细日志。");}}
+            if(line.StartsWith("@@BROWSER@@")){try{browserReport=Core.ReadJson(line.Substring(11).Trim());}catch{display.AppendLine("浏览器结果无法读取。");}}
+            else if(line.StartsWith("@@INIT_RESULT@@")){try{initializationSummary=Core.Value(Core.ReadJson(line.Substring(15).Trim()),"summary","");display.AppendLine(initializationSummary);}catch{display.AppendLine("初始化结果无法读取。");}}
+            else if(line.StartsWith("@@CONFIG_COMPAT@@")){try{compatibilityAdvice=Core.Value(Core.ReadJson(line.Substring(17).Trim()),"summary","");}catch{display.AppendLine("配置检查结果无法读取，请查看详细日志。");}}
             else if(line.StartsWith("@@STATUS@@")) {try{status=Core.ReadJson(line.Substring(10).Trim());}catch(Exception ex){display.AppendLine("状态输出格式无效："+ex.Message);} }
             else if(line.StartsWith("@@DIAGNOSIS@@")){try{diagnosisContext=Core.ReadJson(line.Substring(13).Trim());}catch{display.AppendLine("未能读取组件检查结果；建议将依据诊断输出生成。");}}
             else if(line.StartsWith("@@PROGRESS@@")) {try{var p=Core.ReadJson(line.Substring(12).Trim());banner.Text=ProgressTitle(Core.Value(p,"title",operationTitle));int step,total;if(int.TryParse(Core.Value(p,"step","0"),out step)&&int.TryParse(Core.Value(p,"total","0"),out total)&&total>1){progress.IsIndeterminate=false;progress.Value=100.0*Math.Max(0,step-1)/total;}display.AppendLine(banner.Text);}catch(Exception ex){display.AppendLine("阶段输出格式无效："+ex.Message);} }
@@ -288,7 +339,7 @@ public class MainWindow : Window {
     }
     Window CreateInitializationCompletedDialog() {
         var dialog=new Window{Title="已完成初始化",Width=520,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,WindowStyle=WindowStyle.None,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush};if(IsVisible)dialog.Owner=this;
-        var panel=new StackPanel{Margin=new Thickness(30)};panel.Children.Add(T("已完成初始化",24,TextBrush));panel.Children.Add(T("基础配置和所选功能已完成。",14,MutedBrush));
+        var panel=new StackPanel{Margin=new Thickness(30)};panel.Children.Add(T("已完成初始化",24,TextBrush));panel.Children.Add(T("基础配置和所选功能已完成。"+(browserRepair.IsChecked==true?"浏览器修复已准备，真实连接仍需重启 Codex 后验证。":""),14,MutedBrush));
         var confirm=Button("确认",()=>dialog.DialogResult=true,true);confirm.IsDefault=true;confirm.HorizontalAlignment=HorizontalAlignment.Right;confirm.Margin=new Thickness(0,16,0,0);panel.Children.Add(confirm);
         dialog.Content=new Border{Background=PanelBrush,BorderBrush=B("#39465D"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(14),Child=panel};return dialog;
     }

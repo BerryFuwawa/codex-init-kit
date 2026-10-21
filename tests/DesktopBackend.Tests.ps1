@@ -128,6 +128,8 @@ enabled = true
     }
     [IO.File]::Copy($initSource,(Join-Path $payload 'init.cmd'))
     [IO.File]::Copy($guardSource,(Join-Path $payload 'guard.cmd'))
+    $cuaSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $sourceRoot 'Codex_CUA_Repair.cmd'}else{Join-Path $sourceRoot 'cua.cmd'}
+    [IO.File]::Copy($cuaSource,(Join-Path $payload 'cua.cmd'))
 
     # Job-file parsing accepts the GUI protocol fields and normalizes aliases.
     $jobFile = Join-Path $scratch 'job.json'
@@ -158,6 +160,9 @@ enabled = true
     $originalHash = HashFile (Join-Path $payload 'init.cmd')
     $adapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 10808
     $adapterText = [IO.File]::ReadAllText($adapter,[Text.Encoding]::GetEncoding(936))
+    Assert ($adapterText -notmatch '(?i)taskkill\s+/f') 'GUI adapter retained forced process termination.'
+    $cuaAdapterBase64=([regex]::Matches($adapterText,'(?m)^::CUAB64:([^\r\n]+)')|ForEach-Object {$_.Groups[1].Value}) -join ''
+    Assert ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cuaAdapterBase64)).Contains('Get-BrowserManagedPatch')) 'Initialization did not use managed-patch-aware CUA recovery.'
     $generatedConfigBlock = [regex]::Match($adapterText,'(?ms)^:WRITE_CONFIG\r?\n.*?(?=^:WRITE_ENV\r?$)').Value
     Assert ($generatedConfigBlock -and $generatedConfigBlock -notmatch 'code_mode_tool_description_first|thread_context') 'Future initialization reintroduced obsolete configuration.'
     Assert ($adapterText.Contains('--codex-gui-action')) 'GUI init entry was not added.'

@@ -16,11 +16,11 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.1.5";
+    public const string Version = "2.2.0";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup"};
+    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","desktop-update","official-cli-update"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -44,7 +44,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("Missing resource: "+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -52,11 +52,11 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
+    public static bool NeedsAdmin(string operation) { return operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"subagents", false}, {"cuaRepair", true},
+            {"folderManagement", true}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}
@@ -97,6 +97,7 @@ public static class Core {
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
+        foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
         normalized["parentModel"]=ReadOptionString(source,"parentModel",DefaultParentModel);
         normalized["childModel"]=ReadOptionString(source,"childModel",DefaultChildModel);
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);

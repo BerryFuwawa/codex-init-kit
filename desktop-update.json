@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.1.5",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.5/CodexInitKit.exe",
-    "sha256":  "761c8d2f2a4a35eb3a102ba5aacb4dfb68888db198fd82ae234f1e61c4d72273",
-    "notes":  "Configuration compatibility checks and targeted cleanup with exact backups; initialization, CUA repair, startup protection and GitHub updates."
+    "version":  "2.2.0",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.0/CodexInitKit.exe",
+    "sha256":  "da6ada5189ab5279635aab20c7ecd5b0f6b7ba8799112b0faa6c00928044211e",
+    "notes":  "Browser connection repair with verified backups; separate official CLI and desktop updates; partial initialization results and CLI recovery guidance."
 }

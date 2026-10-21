@@ -28,6 +28,9 @@ $script:DefaultOptions = [ordered]@{
     folderManagement = $true
     subagents = $false
     cuaRepair = $true
+    browserRepair = $true
+    officialCliUpdate = $true
+    desktopUpdate = $true
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-5.6-luna'
     parentEffort = 'high'
@@ -51,6 +54,7 @@ function Write-BackendErrorLine {
 function Write-BackendLog { param([string]$Message) Write-BackendLine $Message }
 function Write-BackendProgress {
     param([int]$Step,[int]$Total,[Parameter(Mandatory=$true)][string]$Title)
+    if ($script:InitializationProgressActive) { return }
     $payload = [ordered]@{ step = $Step; total = $Total; title = $Title }
     Write-BackendLine ('@@PROGRESS@@' + ($payload | ConvertTo-Json -Compress))
 }
@@ -119,6 +123,7 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $projectPath = & $get 'projectPath'
     if ($null -ne $projectPath -and $projectPath -isnot [string]) { throw 'Option projectPath must be a string.' }
     $normalized.projectPath = if ($null -eq $projectPath) { '' } else { $projectPath.Trim() }
@@ -326,7 +331,7 @@ function Invoke-ChildProcess {
         $stdoutBuilder = New-Object System.Text.StringBuilder
         while (($line = $process.StandardOutput.ReadLine()) -ne $null) {
             [void]$stdoutBuilder.AppendLine($line)
-            Write-BackendLine $line
+            if (-not ($script:InitializationProgressActive -and $line.StartsWith('@@PROGRESS@@'))) { Write-BackendLine $line }
         }
         $process.WaitForExit()
         $stdout = $stdoutBuilder.ToString(); $stderr = $stderrTask.Result
@@ -521,6 +526,26 @@ set "CONFIG_RESULT=FAIL"
     $workRoot = Join-Path $PayloadRoot '.backend'
     [void][IO.Directory]::CreateDirectory($workRoot)
     $adapterPath = Join-Path $workRoot ('init-adapter-' + [Guid]::NewGuid().ToString('N') + '.cmd')
+    # Use the same managed-patch-aware CUA library in the GUI's original
+    # five-stage script. The standalone legacy init component stays unchanged.
+    if ($sourceText -match '(?m)^::CUAB64:') {
+        $cuaText=[IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'cua.cmd'),[Text.Encoding]::UTF8)
+        $cuaMarker='#==POWERSHELL=='
+        $cuaCode=$cuaText.Substring($cuaText.LastIndexOf($cuaMarker)+$cuaMarker.Length)
+        $cuaEncoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cuaCode))
+        $cuaLines=for($i=0;$i -lt $cuaEncoded.Length;$i+=180){'::CUAB64:'+$cuaEncoded.Substring($i,[Math]::Min(180,$cuaEncoded.Length-$i))}
+        $replacement=($cuaLines -join "`r`n")+"`r`n"
+        $sourceText=[regex]::Replace($sourceText,'(?m)^::CUAB64:[A-Za-z0-9+/=]+\r?\n(?:^::CUAB64:[A-Za-z0-9+/=]+\r?\n)*',[Text.RegularExpressions.MatchEvaluator]{param($m) $replacement})
+    }
+    # GUI initialization never forcibly terminates a user's reopened task.
+    # Exit the private cmd worker itself if Codex reappears after preflight.
+    if ($sourceText -match '(?m)^:STOP_CODEX\r?$') {
+        $stopCode="if (@(Get-Process -Name ChatGPT,codex,codex-latest,codex-code-mode-host,codex-command-runner -ErrorAction SilentlyContinue).Count) { [Console]::Error.WriteLine('Codex is running. Save work and exit before initialization.'); exit 1 }; exit 0"
+        $stopEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($stopCode))
+        $stopBlock=":STOP_CODEX`r`npowershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $stopEncoded`r`nif errorlevel 1 exit 1`r`nexit /b 0`r`n`r`n"
+        $sourceText=[regex]::Replace($sourceText,'(?ms)^:STOP_CODEX\r?\n.*?(?=^:[A-Z_]+\r?$)',[Text.RegularExpressions.MatchEvaluator]{param($m) $stopBlock})
+        if($sourceText -match '(?i)taskkill\s+/f'){throw 'Unrecognized process termination in init adapter; stopped.'}
+    }
     $sourceText = Set-InitConsoleProtocol $sourceText ([IO.Path]::ChangeExtension($adapterPath,'.scripts'))
     # cmd.exe stores byte offsets when CALL enters a label. Mixed LF/CRLF
     # introduced by PowerShell here-strings can corrupt the return position.
@@ -797,7 +822,7 @@ function Invoke-GuardOperation {
         'guard-install' { Install-Or-RepairProtection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-update' { if (-not (Convert-ToBoolean $beforeInstalled)) { throw 'Startup protection is not installed.' }; Update-ProtectedRuntime | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-native' { Restore-DesktopNative | ForEach-Object { Write-BackendLine $_ } | Out-Null }
-        'guard-current' { Switch-ToOfficialCurrent | ForEach-Object { Write-BackendLine $_ } | Out-Null }
+        'guard-current' { [void](Invoke-OfficialCliUpdate $PayloadRoot -OnlyIfMissing); Initialize-GuardRuntime $guard -ForModification; Switch-ToOfficialCurrent | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-rollback' { Rollback-Protection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-uninstall' { Remove-Protection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'doctor' { Run-Doctor | ForEach-Object { Write-BackendLine $_ } | Out-Null }
@@ -966,7 +991,12 @@ function Invoke-BackendMain {
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
             'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }
             'config-cleanup' { return (Invoke-ConfigCompatibility -Clean -ProjectPath $input.Options.projectPath) }
-            'initialize' { [void](Invoke-InitOperation 'one-click' $input.PayloadRoot $input.Drive $input.ProxyPort $input.Options); if($input.InstallProtection){[void](Invoke-GuardOperation 'guard-install' $input.PayloadRoot)}; return 0 }
+            'initialize' { return (Invoke-Initialize220 $input) }
+            'desktop-update' { [void](Invoke-DesktopUpdate $input.PayloadRoot); return 0 }
+            'official-cli-update' { return (Invoke-OfficialCliUpdate $input.PayloadRoot) }
+            'browser-check' { return (Invoke-BrowserOperation 'check' $input.PayloadRoot $input.ProxyPort $input.Options) }
+            'browser-repair' { return (Invoke-BrowserOperation 'repair' $input.PayloadRoot $input.ProxyPort $input.Options) }
+            'browser-rollback' { return (Invoke-BrowserOperation 'rollback' $input.PayloadRoot $input.ProxyPort $input.Options) }
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
             'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }
             'cua-check' { return (Invoke-CuaOperation 'check' $input.PayloadRoot) }
@@ -987,6 +1017,8 @@ function Invoke-BackendMain {
         if ($null -ne $proxySnapshot) { Restore-TransientProxyEnvironment $proxySnapshot }
     }
 }
+. (Join-Path $PSScriptRoot 'Backend220.ps1')
+
 # Dot-sourcing exposes helpers for adapter tests without starting a worker.
 if ($MyInvocation.InvocationName -ne '.') {
     exit (Invoke-BackendMain -RequestedOperation $Operation -RequestedPayloadRoot $PayloadRoot -RequestedDrive $Drive -RequestedProxyPort $ProxyPort -RequestedInstallProtection:$InstallProtection.IsPresent -RequestedJobFile $JobFile -RequestedOptionsBase64 $OptionsBase64)

@@ -136,11 +136,98 @@ function Get-TreeInventory {
     return [pscustomobject]@{ Root = $rootPath; Files = $files; Directories = $directories; Count = $files.Count; Bytes = $bytes }
 }
 
+function Get-BrowserStateRoot {
+    return (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexInitKit\Desktop\BrowserConnection')
+}
+function Get-BrowserLauncher {
+    param([string]$Root)
+    Assert-NoReparsePoint $Root -Tree
+    $matches = @(Get-ChildItem -LiteralPath $Root -Filter 'cua-repl.mjs' -File -Recurse -ErrorAction Stop)
+    if ($matches.Count -ne 1) { throw 'Cannot uniquely identify cua-repl.mjs; this runtime is unsupported.' }
+    Assert-NoReparsePoint $Root -Tree
+    return (Assert-ContainedPath $matches[0].FullName $Root)
+}
+function New-BrowserLauncherBytes {
+    param([byte[]]$Original,[string]$Proxy)
+    $text = [Text.UTF8Encoding]::new($false,$true).GetString($Original)
+    $known = @'
+#!/usr/bin/env node
+import * as cua_repl from "@oai/cua-repl";
+
+try {
+  await cua_repl.launch();
+} catch (error) {
+  const error_message = error instanceof Error ? error.message : String(error);
+  console.error(`cua_repl could not start: ${error_message}`);
+  process.exitCode = 1;
+}
+'@
+    if ($text.TrimStart([char]0xfeff).Replace("`r`n","`n").TrimEnd("`n") -cne $known.TrimEnd("`n")) { throw 'Unknown official launcher structure; no file was changed.' }
+    $uri=$null
+    if (-not [Uri]::TryCreate($Proxy,[UriKind]::Absolute,[ref]$uri) -or $uri.Scheme -ne 'http' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment) { throw 'Invalid managed proxy URL.' }
+    $ip=$null
+    if (-not [Net.IPAddress]::TryParse($uri.DnsSafeHost.Trim('[',']'),[ref]$ip) -or $uri.Port -lt 1 -or $uri.Port -gt 65535) { throw 'Invalid managed proxy endpoint.' }
+    $values=[ordered]@{HTTP_PROXY=$Proxy;HTTPS_PROXY=$Proxy;NO_PROXY='localhost,127.0.0.1,::1';NODE_USE_ENV_PROXY='1'} | ConvertTo-Json -Compress
+    $newline=if($text.Contains("`r`n")){"`r`n"}else{"`n"}
+    $injection = @'
+// Codex Init Kit managed browser proxy v1. Original import and launch are retained.
+const codexInitKitBrowserProxy = __VALUES__;
+Object.assign(process.env, codexInitKitBrowserProxy);
+process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST = [...new Set((process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST || "").split(",").filter(Boolean).concat(Object.keys(codexInitKitBrowserProxy)))].join(",");
+
+'@
+    $injection=$injection.Replace('__VALUES__',$values).Replace("`r`n","`n").Replace("`n",$newline)+$newline
+    return ,([Text.Encoding]::UTF8.GetBytes($text.Replace('try {',$injection+'try {')))
+}
+function Get-BrowserBytesHash {
+    param([byte[]]$Bytes)
+    $hash=[Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($hash.ComputeHash($Bytes)).Replace('-','').ToLowerInvariant() } finally { $hash.Dispose() }
+}
+function Write-BrowserAtomic {
+    param([string]$Path,[byte[]]$Bytes)
+    Assert-NoReparsePoint (Split-Path -Parent $Path)
+    if(Test-Path -LiteralPath $Path){Assert-NoReparsePoint $Path}
+    $temporary=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try {
+        [IO.File]::WriteAllBytes($temporary,$Bytes)
+        if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+    } finally { if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force} }
+}
+function Get-BrowserManagedPatch {
+    param([string]$Source,[string]$Target,[switch]$AllowOriginal)
+    $id=Split-Path -Leaf $Target
+    if($id -notmatch '^[0-9a-f]{16}$'){throw 'Invalid browser runtime ID.'}
+    $stateRoot=Get-BrowserStateRoot
+    $recordPath=Join-Path $stateRoot ($id+'.json')
+    if(-not(Test-Path -LiteralPath $recordPath)){return $null}
+    Assert-NoReparsePoint $stateRoot -Tree
+    $record=[IO.File]::ReadAllText($recordPath,[Text.Encoding]::UTF8)|ConvertFrom-Json
+    if($record.schema -ne 1 -or $record.runtimeId -ne $id -or $record.source -ne $Source -or $record.target -ne $Target){throw 'Managed patch belongs to another app version or runtime; recheck required.'}
+    $sourceLauncher=Get-BrowserLauncher $Source
+    $relative=$sourceLauncher.Substring((Get-FullDirectoryPath $Source).TrimEnd('\').Length+1)
+    $launcher=Assert-ContainedPath (Join-Path $Target $relative) $Target
+    Assert-NoReparsePoint $Target -Tree
+    $original=[IO.File]::ReadAllBytes($sourceLauncher)
+    $originalHash=Get-BrowserBytesHash $original
+    $backup=Join-Path $stateRoot ($id+'-'+$originalHash+'.bin')
+    if($record.originalHash -ne $originalHash -or -not(Test-Path -LiteralPath $backup) -or (Get-FileDigest $backup).Hash -ne $originalHash){throw 'Original bytes or backup hash changed; refusing overwrite.'}
+    $patched=New-BrowserLauncherBytes $original $record.proxy
+    $patchedHash=Get-BrowserBytesHash $patched
+    if($record.patchedHash -ne $patchedHash){throw 'Managed patch metadata hash mismatch.'}
+    $current=(Get-FileDigest $launcher).Hash
+    if($current -ne $patchedHash -and -not($AllowOriginal -and $current -eq $originalHash)){throw 'Runtime has third-party changes or a hash mismatch; refusing overwrite.'}
+    return [pscustomobject]@{Record=$record;Path=$recordPath;Launcher=$launcher;Relative=$relative;Original=$original;Patched=$patched;OriginalHash=$originalHash;PatchedHash=$patchedHash;CurrentHash=$current}
+}
+
+
 function Compare-TreeInventory {
     param($Expected, [string]$Target)
     if (-not (Test-Path -LiteralPath $Target -PathType Container)) {
         return [pscustomobject]@{ Passed = $false; Reason = 'Target directory is missing.' }
     }
+    $managed = $null
+    if ((Split-Path -Leaf $Target) -match '^[0-9a-f]{16}$' -and $Expected.Root -ne $Target) { $managed = Get-BrowserManagedPatch $Expected.Root $Target -AllowOriginal }
     $actual = Get-TreeInventory $Target
     if ($actual.Count -ne $Expected.Count) {
         return [pscustomobject]@{ Passed = $false; Reason = ('File count differs: expected {0}, actual {1}.' -f $Expected.Count, $actual.Count) }
@@ -154,6 +241,7 @@ function Compare-TreeInventory {
         }
         $a = $actual.Files[$relative]
         $e = $Expected.Files[$relative]
+        if ($managed -and $relative -eq $managed.Relative -and $a.Hash -eq $managed.PatchedHash -and $e.Hash -eq $managed.OriginalHash) { continue }
         if ($a.Length -ne $e.Length -or $a.Hash -ne $e.Hash) {
             return [pscustomobject]@{ Passed = $false; Reason = ('File content differs: ' + $relative) }
         }
@@ -202,6 +290,8 @@ function Invoke-RuntimeRepair {
     Assert-NoReparsePoint $targetPath -Tree
     if ($targetPath.Equals($SourceInventory.Root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Source and target must differ.' }
     if ($targetPath.StartsWith($SourceInventory.Root + '\', [StringComparison]::OrdinalIgnoreCase) -or $SourceInventory.Root.StartsWith($targetPath + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Source and target must not contain each other.' }
+    $managed = Get-BrowserManagedPatch $SourceInventory.Root $targetPath -AllowOriginal
+    $reapply = $managed -and $managed.CurrentHash -eq $managed.PatchedHash
     $initial = Compare-TreeInventory $SourceInventory $targetPath
     if ($initial.Passed) { return [pscustomobject]@{ Changed = $false; Backup = $null; Quarantine = $null } }
     if ($InstallLocation) { Confirm-CodexStopped $InstallLocation $RuntimeRoot }
@@ -220,6 +310,7 @@ function Invoke-RuntimeRepair {
         if ($InstallLocation) { Confirm-CodexStopped $InstallLocation $RuntimeRoot }
         $copyLog = Join-Path $RunDirectory 'XCOPY.log'
         if ($CopyAction) { & $CopyAction $SourceInventory.Root $targetPath $copyLog } else { Copy-RuntimeTree $SourceInventory.Root $targetPath $copyLog }
+        if ($reapply) { Write-BrowserAtomic $managed.Launcher $managed.Patched }
         $verified = Compare-TreeInventory $SourceInventory $targetPath
         if (-not $verified.Passed) { throw ('Verification failed: ' + $verified.Reason) }
         $sourceNow = Compare-TreeInventory $SourceInventory $SourceInventory.Root

@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.1.5
+# Codex Init Kit Desktop 2.2.0
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -22,7 +22,7 @@
 
 桌面版自带 CLI 和官方独立 CLI 都来自 OpenAI。可以按需要切换；切换前保存工作并退出 Codex，目标组件需要通过检查。这里管理的是桌面应用使用的 CLI，终端找不到 `codex` 命令时仍需检查终端安装和 PATH。
 
-维护恢复中的启动保护栏右侧显示当前模式。按钮顺序为「安装 / 修复保护」「切换 CLI」「更新官方 CLI」「诊断助手」。桌面原生模式只显示「切换官方独立 CLI」；独立模式只显示「切换桌面原生 CLI」。未读到状态或模式异常时显示重新检测入口。
+维护恢复中的启动保护栏右侧显示当前模式。按钮顺序为「安装 / 修复保护」「切换 CLI」「更新官方独立 CLI」「更新桌面版（含原生 CLI）」「诊断助手」。桌面原生模式只显示「切换官方独立 CLI」；独立模式只显示「切换桌面原生 CLI」。未读到状态或模式异常时显示重新检测入口。
 
 诊断助手会检查独立 CLI 和桌面组件，并运行 Codex Doctor。支持识别 Doctor 的 [!!] 和 [XX] 提示，区分检查发现失败项与程序未能完成执行。更新配置一致和会话文件容量统计会作为信息提示展示。结束后弹出大白话建议，同时保留在启动保护栏下方。组件缺失时建议安装／修复；识别到代理、登录、模型权限或文件权限等明确错误提示时，给出对应排查步骤。不能可靠判断时会提示查看详细日志，不会把运行完成当作所有功能都正常。诊断助手不会自动执行修复或初始化。
 
@@ -30,9 +30,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.1.5](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.1.5)，发布于 2026-10-13，更新内容见 [2.1.5 更新说明](Release-2.1.5.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.5/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.2.0](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.0)，发布于 2026-10-21，更新内容见 [2.2.0 更新说明](Release-2.2.0.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.0/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件为 599,040 字节，SHA-256 为 `761c8d2f2a4a35eb3a102ba5aacb4dfb68888db198fd82ae234f1e61c4d72273`，可与发布页资产信息和 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.1.5/SHA256SUMS.txt) 核对。
+正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.0/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -42,7 +42,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、四项可选功能（子代理默认关闭，其余默认开启），以及推荐／手动选择模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、七项可选功能（子代理默认关闭，其余默认开启），以及推荐／手动选择模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
 
 确认页会明确提示这是全局重置。原 `AGENTS.md` 的完整副本位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复；项目目录中的 `AGENTS.md` 不属于重置范围。
 
@@ -50,7 +50,8 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 | --- | --- | --- |
 | 概览 | 查看最近状态、默认模型和当前环境 | 刷新只读状态、进入初始化 |
 | 初始化 | 三步向导：选择工作盘与代理、确认变更、执行并查看结果 | 备份并重置配置与全局规则、按选择创建并绑定工作目录、检查／修复 CUA、按选择写入 Luna 规则；可选安装启动保护 |
-| 维护恢复 | 独立维护 CUA、启动保护和代理 | CUA 检查／修复、安装或更新保护器、切换桌面原生 CLI模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
+| 浏览器连接 | 组件、代理和环境分项检查 | 检查连接、准备修复、恢复原始文件和复制重启后测试指令；[操作及边界](BrowserConnection.md) |
+| 维护恢复 | 独立维护 CUA、两类 CLI、启动保护和代理 | CUA 检查／修复、安装或更新保护器、切换桌面原生 CLI模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
 | 配置兼容检查 | 位于「维护恢复」；只读检查或定向清理 | 显示用户配置、profile 和所选项目的旧设置；先备份再移除可靠布尔赋值，提供恢复脚本 |
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
@@ -61,7 +62,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.1.5` |
+| 版本 | `2.2.0` |
 | 内嵌初始化组件 | `4.8.4` |
 | 内嵌启动保护组件 | `5.2.2` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
@@ -70,9 +71,21 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 | 子代理 | 默认关闭；启用时为 `gpt-5.6-luna`，`max`；最多 6 个，委派深度 1 |
 | 桌面数据根目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop` |
 | 日志目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs` |
-| 内嵌 payload | `init.cmd`、`guard.cmd`、`cua.cmd`、`Backend.ps1` |
+| 内嵌 payload | `init.cmd`、`guard.cmd`、`cua.cmd`、`Backend.ps1`、`Backend220.ps1` 及回归资源 |
 
-需要管理员权限的 worker 会检查当前 Windows 用户 SID；授权账户与启动 GUI 的账户不一致时，操作会停止。状态、CUA 检查和 Doctor 不需要管理员权限。所有实际配置变更仍以 Backend 和原有脚本的行为为准。
+需要管理员权限的 worker 会检查当前 Windows 用户 SID；授权账户与启动 GUI 的账户不一致时，操作会停止。状态、CUA 检查、浏览器连接检查和 Doctor 不需要管理员权限。所有实际配置变更仍以 Backend 和原有脚本的行为为准。
+
+## 浏览器、CLI 与初始化顺序
+
+概览仅在确认当前使用桌面原生 CLI 时显示红色切换引导，状态未知和独立 CLI 模式时隐藏。点击只跳转到维护恢复，滚动定位并柔和闪动切换按钮三次；关闭系统动画时静态高亮。实际点击切换按钮会先检查并按需准备官方独立 CLI。
+
+初始化顺序为：前置退出检查 → 更新桌面版 → 原有配置、目录及 CUA 流程 → 更新独立 CLI → 可选安装保护 → 浏览器修复。三个新增项目默认勾选。新增步骤失败但原组件仍可用时继续，最终显示部分完成及未完成项目；桌面包更新待完成或需重启时暂停 CUA、保护安装和浏览器修复。完整初始化仍会备份并重建配置及全局规则，不因本次更新改变原有重置语义。
+
+维护页的「更新官方独立 CLI」不要求安装启动保护，不新增登录任务，并保留当前 CLI 模式。「更新桌面版（含原生 CLI）」核对官方 Store 包身份，通过 winget 精确更新应用，原生 CLI 随应用更新；不会单独覆盖 WindowsApps 内的程序。使用静默、协议接受和禁交互参数，保存输出及退出码，20 分钟超时；核对更新后安装版本和内置 CLI 签名及版本探针。缺少 winget、源不可用或网络失败时报告未完成，可点击浏览器页的商店入口手动更新，不自动安装 winget。
+
+官方目标为 9PLM9XGG6VKS，已安装包族必须为 OpenAI.Codex_2p2nqsd0c76g0 且 Store 签名。其他通道不会被自动改装。实现依据 [Microsoft winget upgrade](https://learn.microsoft.com/en-us/windows/package-manager/winget/upgrade) 和[官方 Windows 部署说明](https://learn.chatgpt.com/docs/enterprise/windows-deployment)。
+
+浏览器修复最后应用，动态重新识别更新后的运行时。文件、代理端口、隔离 Node 子进程环境与重启后的真实 Chrome 连接分别展示；403 不作为 Chrome 成功依据。操作及回滚见[浏览器连接说明](BrowserConnection.md)。本次真实 Chrome 工具验收被当前会话的 nodeRepl.fetch request failed 阻挡；自动回归不替代重启后验收，也未更新开发时正在运行的 Codex。
 
 ## 更新流程
 
@@ -95,11 +108,11 @@ powershell -ExecutionPolicy Bypass -File .\tools\Build-Desktop.ps1
 .\build\desktop\CodexInitKit.exe --self-test
 ```
 
-源码入口的职责分别是：`app/Core.cs` 负责资源提取、worker、哈希和更新；`app/MainWindow.cs` 负责五页界面、向导、确认和日志；`app/Program.cs` 负责 WPF 与 CLI 入口。已发布 EXE 通过正式编译、内嵌资源与后台模拟回归、无窗口五页构建、只读状态、更新清单校验和临时文件原子替换测试。发布后再次通过 GitHub 清单在线查询，且发布资产校验值与清单一致。真实初始化、运行时切换和完整升级重启未在用户正在使用的 Codex 上执行。
+源码入口的职责分别是：`app/Core.cs` 负责资源提取、worker、哈希和更新；`app/Backend220.ps1` 负责浏览器补丁和两类更新的编排；`app/MainWindow.cs` 负责六页界面、向导、确认和日志；`app/Program.cs` 负责 WPF 与 CLI 入口。已发布 EXE 通过正式编译、内嵌资源与后台模拟回归、无窗口六页构建、只读状态、更新清单校验和临时文件原子替换测试。发布后再次通过 GitHub 清单在线查询，且发布资产校验值与清单一致。真实初始化、运行时切换和完整升级重启未在用户正在使用的 Codex 上执行。
 
 ### 无窗口 CLI 验收
 
-`--verify` 不启动主窗口，检查内嵌资源的长度与 SHA-256、Backend PowerShell 语法和内嵌回归测试、WPF 五页重建与导航、非法 worker 参数拒绝、更新清单来源／HTTPS／SHA-256 拒绝，以及临时文件原子替换和备份；`--status-json` 只读调用 `status` 并把状态和日志路径写入报告；`--check-update-json` 只读查询 GitHub 并校验清单，默认使用代理端口 `10808`，不下载或替换 EXE。GUI EXE 请用 `Start-Process -Wait -PassThru` 取得退出码，再读取 JSON：
+`--verify` 不启动主窗口，检查内嵌资源的长度与 SHA-256、Backend PowerShell 语法和内嵌回归测试、WPF 六页重建与导航、非法 worker 参数拒绝、更新清单来源／HTTPS／SHA-256 拒绝，以及临时文件原子替换和备份；`--status-json` 只读调用 `status` 并把状态和日志路径写入报告；`--check-update-json` 只读查询 GitHub 并校验清单，默认使用代理端口 `10808`，不下载或替换 EXE。GUI EXE 请用 `Start-Process -Wait -PassThru` 取得退出码，再读取 JSON：
 
 ```powershell
 $exe = (Resolve-Path .\build\desktop\CodexInitKit.exe).Path
@@ -123,17 +136,17 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 ## 实际变更与回滚边界
 
-`--render-preview <目录>` 在内存中渲染五页预览 PNG，不打开窗口；可配合 CLI 报告检查布局。`tests/Desktop.Tests.ps1` 可自动运行无窗口验证与只读状态检测，传入 `-CheckLiveUpdate` 时额外查询 GitHub 清单。
+`--render-preview <目录>` 在内存中渲染六页预览 PNG，不打开窗口；可配合 CLI 报告检查布局。`tests/Desktop.Tests.ps1` 可自动运行无窗口验证与只读状态检测，传入 `-CheckLiveUpdate` 时额外查询 GitHub 清单。
 
 需要管理员权限的脚本提取到 ProgramData 下使用随机名称和受保护 ACL 的工作目录；仅 Administrators 与 SYSTEM 可读写，执行后清理。普通只读 worker 在 LocalAppData 下执行。日志单独保留。
 
-- 初始化会真实备份并重置当前用户 Codex 配置，可能关闭或停止 Codex 进程，写入 `.env`、全局 `CODEX_HOME\AGENTS.md`、工作目录和用户 PATH。全局规则会从RTK 引用和基础规则重建，只追加本次勾选的文件夹管理块或 Luna 块；旧全局自定义内容只在本次会话 `Backups\AGENTS.md` 中保留，项目目录内的 `AGENTS.md` 不变。开始前保存工作并关闭 Codex。
+- 初始化会真实备份并重置当前用户 Codex 配置，开始前必须退出 Codex，检测到进程仍在运行时停止操作，写入 `.env`、全局 `CODEX_HOME\AGENTS.md`、工作目录和用户 PATH。全局规则会从RTK 引用和基础规则重建，只追加本次勾选的文件夹管理块或 Luna 块；旧全局自定义内容只在本次会话 `Backups\AGENTS.md` 中保留，项目目录内的 `AGENTS.md` 不变。开始前保存工作并关闭 Codex。
 - 初始化回滚只恢复最近一次初始化备份；它不恢复 CUA 运行时备份，也不删除初始化期间已创建的标准工作目录。
 - CUA 修复保留自己的运行时备份。启动保护的安装、更新、切换、回滚和卸载使用保护器自己的状态与备份，不等同于初始化回滚。
 - 更新器只替换当前桌面 EXE，成功后删除旧版；更新清单或下载校验失败时不改动当前版本。脚本独立更新器仍按各自规则保留脚本备份。
 
 ## 视觉参考
 
-README 中的界面图片直接从当前 EXE 离线渲染，使用 192 DPI（200% 缩放）。维护截图可运行 `tools/Render-Documentation.ps1 -Executable <EXE路径> -Dpi 192`；概览为 2240 × 2000 像素，维护恢复为 2240 × 1800 像素，完整设置图为 2240 × 3000 像素，不打开窗口或执行初始化。
+README 中的界面图片直接从当前 EXE 离线渲染，使用 192 DPI（200% 缩放）。维护截图可运行 `tools/Render-Documentation.ps1 -Executable <EXE路径> -Dpi 192`；概览为 2240 × 2000 像素，维护恢复和浏览器连接为 2240 × 2400 像素，完整设置图为 2240 × 3600 像素，不打开窗口或执行初始化。
 
 界面布局与交互取 [WPF UI](https://github.com/lepoco/wpfui) 和 [Microsoft PowerToys](https://github.com/microsoft/PowerToys) 作为视觉参考。它们不属于运行时依赖；本项目未复制其代码或组件。
