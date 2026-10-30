@@ -384,7 +384,7 @@ function Get-CurrentPackage {
     return $packages[0]
 }
 
-function Get-AppStartupCode {
+function Get-AppStartupImplementation {
     param([string]$InstallLocation)
     $asarPath = Join-Path $InstallLocation 'app\resources\app.asar'
     $stream = $null
@@ -402,31 +402,40 @@ function Get-AppStartupCode {
         $header = [Text.Encoding]::UTF8.GetString($jsonBytes) | ConvertFrom-Json
         $vite = $header.files.PSObject.Properties['.vite'].Value
         $build = $vite.files.PSObject.Properties['build'].Value
-        $entries = @($build.files.PSObject.Properties | Where-Object { $_.Name -match '^application-network-startup-.*\.js$' })
-        if ($entries.Count -ne 1) { throw 'Cannot uniquely identify the current runtime implementation.' }
-        $entry = $entries[0].Value
-        [long]$size = $entry.size
-        if ($size -le 0 -or $size -gt 8388608) { throw 'Unsupported runtime implementation size.' }
-        $unpackedProperty = $entry.PSObject.Properties['unpacked']
-        if ($unpackedProperty -and $unpackedProperty.Value) {
-            $unpackedRoot = $asarPath + '.unpacked'
-            $unpackedFile = Assert-ContainedPath (Join-Path $unpackedRoot ('.vite\build\' + $entries[0].Name)) $unpackedRoot
-            return [IO.File]::ReadAllText($unpackedFile, [Text.Encoding]::UTF8)
+        # Newer desktop builds split this code across early-bootstrap chunks.
+        # Select by a unique runtime marker; the caller still validates the full
+        # known hashing algorithm before deriving or changing any runtime.
+        $entries = @($build.files.PSObject.Properties | Where-Object { $_.Name -match '^(application-network-startup|early-bootstrap)-.*\.js$' })
+        $implementations = [Collections.Generic.List[object]]::new()
+        foreach ($candidate in $entries) {
+            $entry = $candidate.Value
+            [long]$size = $entry.size
+            if ($size -le 0 -or $size -gt 8388608) { throw 'Unsupported runtime implementation size.' }
+            $unpackedProperty = $entry.PSObject.Properties['unpacked']
+            if ($unpackedProperty -and $unpackedProperty.Value) {
+                $unpackedRoot = $asarPath + '.unpacked'
+                $unpackedFile = Assert-ContainedPath (Join-Path $unpackedRoot ('.vite\build\' + $candidate.Name)) $unpackedRoot
+                $code = [IO.File]::ReadAllText($unpackedFile, [Text.Encoding]::UTF8)
+            } else {
+                if ([string]$entry.offset -notmatch '^\d+$') { throw 'Invalid ASAR entry offset.' }
+                [long]$offset = 8 + $headerSize + [long]$entry.offset
+                if ($offset -lt 0 -or ($offset + $size) -gt $stream.Length) { throw 'ASAR entry is outside the archive.' }
+                $stream.Position = $offset
+                $bytes = $reader.ReadBytes([int]$size)
+                if ($bytes.Length -ne $size) { throw 'Truncated runtime implementation.' }
+                $code = [Text.Encoding]::UTF8.GetString($bytes)
+            }
+            if ($code.Contains('bin/node_repl.exe')) { $implementations.Add([pscustomobject]@{Name=$candidate.Name; Code=$code}) }
         }
-        if ([string]$entry.offset -notmatch '^\d+$') { throw 'Invalid ASAR entry offset.' }
-        [long]$offset = 8 + $headerSize + [long]$entry.offset
-        if ($offset -lt 0 -or ($offset + $size) -gt $stream.Length) { throw 'ASAR entry is outside the archive.' }
-        $stream.Position = $offset
-        $bytes = $reader.ReadBytes([int]$size)
-        if ($bytes.Length -ne $size) { throw 'Truncated runtime implementation.' }
-        return [Text.Encoding]::UTF8.GetString($bytes)
+        if ($implementations.Count -ne 1) { throw 'Cannot uniquely identify the current runtime implementation.' }
+        return $implementations[0]
     } finally {
         if ($reader) { $reader.Dispose() } elseif ($stream) { $stream.Dispose() }
     }
 }
 
 function Assert-KnownRuntimeAlgorithm {
-    param([string]$Code)
+    param([string]$Code, [ValidateSet('direct','streamed')][string]$Format)
     $quote = '[\x60\x22\x27]'
     $markers = '\[\s*' + $quote + 'manifest\.json' + $quote + '\s*,\s*' + $quote + 'bin/node\.exe' + $quote + '\s*,\s*' + $quote + 'bin/node_repl\.exe' + $quote + '\s*\]'
     $hashAlgorithm = 'function\s+(?<name>[$\w]+)\((?<list>[$\w]+)\)\{let\s+(?<hash>[$\w]+)=\(0,[$\w]+\.createHash\)\(' + $quote + 'sha256' + $quote + '\);for\(let\s+(?<item>[$\w]+)\s+of\s+\k<list>\)\k<hash>\.update\(\k<item>\.executableName\),\k<hash>\.update\(' + $quote + '\\0' + $quote + '\),\k<hash>\.update\(\k<item>\.digest\),\k<hash>\.update\(' + $quote + '\\0' + $quote + '\);return\s+\k<hash>\.digest\(' + $quote + 'hex' + $quote + '\)\}'
@@ -434,7 +443,29 @@ function Assert-KnownRuntimeAlgorithm {
     if (-not [regex]::IsMatch($Code, $markers) -or -not $match.Success) { throw 'This app version changed its runtime identity algorithm. The tool stopped without modifying the runtime.' }
     $slice = [regex]::Escape($match.Groups['name'].Value) + '\([$\w]+\)\.slice\(0,16\)'
     $fileHash = 'createHash\)\(' + $quote + 'sha256' + $quote + '\)\.update\([\s\S]{0,400}?readFileSync\)[\s\S]{0,100}?\.digest\(' + $quote + 'hex' + $quote + '\)'
-    if (-not [regex]::IsMatch($Code, $slice) -or -not [regex]::IsMatch($Code, $fileHash)) { throw 'Unrecognized runtime hash calculation. The tool stopped without modifying the runtime.' }
+    $fileHashKnown = $false
+    if ($Format -eq 'direct') {
+        $fileHashKnown = [regex]::IsMatch($Code, $fileHash)
+    } elseif ($Format -eq 'streamed') {
+        # Newer builds hash each source file in a synchronous chunked reader.
+        # Match the complete data flow, including the source path and every byte.
+        $streamHash = 'function\s+(?<hashFn>[$\w]+)\(\{destinationPath:(?<dest>[$\w]+),executableName:(?<exe>[$\w]+),operation:(?<op>[$\w]+),sourcePath:(?<source>[$\w]+),filePath:(?<path>[$\w]+)\}\)\{return\s+[$\w]+\(\{destinationPath:\k<dest>,executableName:\k<exe>,operation:\k<op>,sourcePath:\k<source>\},\(\)=>\{let\s+(?<hasher>[$\w]+)=\(0,[$\w]+\.createHash\)\(' + $quote + 'sha256' + $quote + '\);return\s+(?<reader>[$\w]+)\(\k<path>,(?<chunk>[$\w]+)=>\{\k<hasher>\.update\(\k<chunk>\)\}\),\k<hasher>\.digest\(' + $quote + 'hex' + $quote + '\)\}\)\}'
+        $streamMatch = [regex]::Match($Code, $streamHash)
+        if ($streamMatch.Success) {
+            $reader = [regex]::Escape($streamMatch.Groups['reader'].Value)
+            $streamReader = 'function\s+' + $reader + '\((?<path>[$\w]+),(?<callback>[$\w]+)\)\{let\s+(?<fd>[$\w]+)=\(0,(?<fs>[$\w]+)\.openSync\)\(\k<path>,' + $quote + 'r' + $quote + '\);try\{let\s+(?<length>[$\w]+)=\(0,\k<fs>\.fstatSync\)\(\k<fd>\)\.size,(?<buffer>[$\w]+)=Buffer\.allocUnsafe\(Math\.min\(Math\.max\(1,\k<length>\),\d+\)\);for\(;;\)\{let\s+(?<read>[$\w]+)=\(0,\k<fs>\.readSync\)\(\k<fd>,\k<buffer>\);if\(0===\k<read>\)return;\k<callback>\(\k<buffer>\.subarray\(0,\k<read>\)\)\}\}finally\{\(0,\k<fs>\.closeSync\)\(\k<fd>\)\}\}'
+            $hashFn = [regex]::Escape($streamMatch.Groups['hashFn'].Value)
+            $sourceHash = 'function\s+(?<collector>[$\w]+)\(\{destinationPath:(?<dest>[$\w]+),executableName:(?<exe>[$\w]+),sourcePath:(?<path>[$\w]+)\}\)\{[\s\S]{0,1800}?return\{digest:' + $hashFn + '\(\{destinationPath:\k<dest>,executableName:\k<exe>,filePath:\k<path>,operation:' + $quote + 'hash_source' + $quote + ',sourcePath:\k<path>\}\),executableName:\k<exe>,'
+            $sourceMatch = [regex]::Match($Code, $sourceHash)
+            if ($sourceMatch.Success) {
+                $collector = [regex]::Escape($sourceMatch.Groups['collector'].Value)
+                $combinedHash = [regex]::Escape($match.Groups['name'].Value)
+                $sourceList = '(?<list>[$\w]+)=' + $markers + '\.map\((?<item>[$\w]+)=>' + $collector + '\(\{destinationPath:[$\w]+,executableName:\k<item>,sourcePath:\(0,[$\w]+\.join\)\([$\w]+,\k<item>\)\}\)\),[$\w]+=' + $combinedHash + '\(\k<list>\)\.slice\(0,16\)'
+                $fileHashKnown = [regex]::IsMatch($Code, $streamReader) -and [regex]::IsMatch($Code, $sourceList)
+            }
+        }
+    }
+    if (-not [regex]::IsMatch($Code, $slice) -or -not $fileHashKnown) { throw 'Unrecognized runtime hash calculation. The tool stopped without modifying the runtime.' }
 }
 
 function Get-RuntimeIdFromSource {
@@ -456,7 +487,9 @@ function Get-RuntimeIdFromSource {
 
 function Get-RequiredRuntimeId {
     param([string]$Source, [string]$InstallLocation)
-    Assert-KnownRuntimeAlgorithm (Get-AppStartupCode $InstallLocation)
+    $implementation = Get-AppStartupImplementation $InstallLocation
+    $format = if ($implementation.Name -match '^application-network-startup-') { 'direct' } else { 'streamed' }
+    Assert-KnownRuntimeAlgorithm $implementation.Code -Format $format
     return Get-RuntimeIdFromSource $Source
 }
 
