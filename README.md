@@ -1,5 +1,7 @@
 # Codex Init Kit
 
+源码包新增可选的 [Codex 启动前浏览器代理检查入口](docs/BrowserStartup.md)：从 `scripts/Codex_Browser_Start.cmd` 启动，在应用更新后定位新运行时、备份修复代理传递，再打开官方应用。无需执行整套初始化；真实浏览器连接仍需启动后验证。
+
 <img src="assets/logo.svg" alt="Codex Init Kit Logo" width="96" height="96">
 
 这是一个给 Windows 上的 Codex 做配置和维护的小工具。你不用逐个打开脚本、找配置文件：下载一个 EXE，就可以整理工作目录、重新配置模型和代理、检查电脑操作组件，以及排查部分启动问题。
