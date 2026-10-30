@@ -10,13 +10,12 @@
 
 **[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md)
 
-当前版本 **[v2.2.1](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.1)**（2026-10-30），[完整更新说明](docs/Release-2.2.1.md)：
+当前版本 **[v2.2.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.2)**，[完整更新说明](docs/Release-2.2.2.md)：
 
-- 新增「修复并启动 Codex」，将启动前浏览器代理修复集成进 EXE；感谢 [@loslav 的 PR #2](https://github.com/BerryFuwawa/codex-init-kit/pull/2)。
-- 合入 [PR #3](https://github.com/BerryFuwawa/codex-init-kit/pull/3)，兼容新版桌面应用的运行时定位与分块哈希；未知结构仍会停止修复。
-- 默认父模型和启用后的子代理均为 GPT-6.1 Terra / max；子代理仍默认关闭。模型列表加入最新的 gpt-6.1-terra。
-- 已知旧浏览器补丁可在校验并备份后迁移；未知修改和版本变化会停止。真实 Chrome 连接仍需重启后测试。
-- 「维护恢复」新增桌面启动检查与修复，针对启动组件复制时报 `EPERM / rename_staging` 的情况准备缺失文件；需退出并重新启动 Codex 验证。
+- 桌面错误日志、弹窗和结果提示默认使用中文，可切换查看并复制原始日志。
+- 常见外部错误提供中文解释；未知原因明确提示查看原文。日志解释在本地完成。
+- 默认父模型和启用后的子模型均改为 **GPT-6.1 Sol / high**；子代理仍默认关闭。
+- 保留浏览器修复并启动、新版运行时识别及桌面启动修复功能。
 
 ## 它能解决什么问题？
 
@@ -120,8 +119,8 @@ RTK 集成前会自动执行 `rtk telemetry disable` 关闭匿名统计，并为
 | 设置 | 默认值 |
 | --- | --- |
 | 工作根目录 | `<盘符>:\Codex`；优先选择可用的 `D` 盘 |
-| 父模型 | `gpt-6.1-terra` · `max` |
-| 子代理 | 默认关闭；启用时使用 `gpt-6.1-terra` · `max` |
+| 父模型 | `gpt-6.1-sol` · `high` |
+| 子代理 | 默认关闭；启用时使用 `gpt-6.1-sol` · `high` |
 | 并行与深度 | 最多 6 个子代理，委派深度 1 |
 | HTTP 代理 | 默认开启，`http://127.0.0.1:10808`；可填写端口、IP 或取消勾选关闭 |
 
@@ -146,7 +145,7 @@ RTK 集成前会自动执行 `rtk telemetry disable` 关闭匿名统计，并为
 | 回滚启动保护 | 验证并恢复保护器记录的上一可用运行时 |
 | 卸载启动保护 | 移除登录自动维护并恢复相关覆盖配置，保留用户数据与官方后备文件 |
 
-桌面执行日志位于 `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs`。初始化备份位于 Windows 实际 Documents 目录下的 `Codex初始化备份`。详细路径和操作边界见 [桌面版说明](docs/Desktop.md)。
+桌面执行日志位于 `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs`。默认显示和保存中文日志，原始输出可单独查看；使用方法见[中文与原始日志](docs/Logs.md)。初始化备份位于 Windows 实际 Documents 目录下的 `Codex初始化备份`。详细路径和操作边界见 [桌面版说明](docs/Desktop.md)。
 
 ## 界面展示
 
@@ -176,7 +175,11 @@ RTK 集成前会自动执行 `rtk telemetry disable` 关闭匿名统计，并为
 
 </details>
 
-图片来自 2.2.1 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。浏览器连接页提供检查、修复、恢复和重启后测试指引。维护恢复页分别管理两类更新并保留配置兼容清理。初始化设置图包含代理端口与 IP、七项功能选择和模型选择；子代理默认未勾选。模型设置图展示模型选择模式，此时子模型及子思考强度置灰，默认父模型为 `gpt-6.1-terra / max`。图中展开了完整内容，实际窗口可滚动。概览使用示例状态，状态以你电脑上的检测结果为准。
+**日志：** 中文说明保留错误码和路径，原始输出可通过按钮切换查看。下图为隔离渲染的示例。
+
+![中文错误日志与原文切换入口](assets/screenshots/logs.png)
+
+图片来自 2.2.2 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。浏览器连接页提供检查、修复、恢复和重启后测试指引。维护恢复页分别管理两类更新并保留配置兼容清理。初始化设置图包含代理端口与 IP、七项功能选择和模型选择；子代理默认未勾选。模型设置图展示模型选择模式，此时子模型及子思考强度置灰，默认父模型为 `gpt-6.1-sol / high`。图中展开了完整内容，实际窗口可滚动。概览使用示例状态，状态以你电脑上的检测结果为准。
 
 ![浏览器连接检查、修复并启动、代理与分项验证](assets/screenshots/browser-connection.png)
 

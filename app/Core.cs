@@ -16,23 +16,23 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.1";
+    public const string Version = "2.2.2";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
-    const string DefaultParentModel = "gpt-6.1-terra";
-    const string DefaultChildModel = "gpt-6.1-terra";
-    const string DefaultParentEffort = "max";
-    const string DefaultChildEffort = "max";
+    const string DefaultParentModel = "gpt-6.1-sol";
+    const string DefaultChildModel = "gpt-6.1-sol";
+    const string DefaultParentEffort = "high";
+    const string DefaultChildEffort = "high";
     static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
     static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
     public static string Sid { get { return WindowsIdentity.GetCurrent().User.Value; } }
     public static bool Admin { get { return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); } }
     public static string Hash(string path) { using(var s=File.OpenRead(path)) using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(s)).Replace("-", "").ToLowerInvariant(); }
-    public static string Quote(string value) { if(value.Contains("\"") || value.Contains("\r") || value.Contains("\n")) throw new ArgumentException("Invalid argument"); return "\""+value+"\""; }
+    public static string Quote(string value) { if(value.Contains("\"") || value.Contains("\r") || value.Contains("\n")) throw new ArgumentException("参数中包含不允许的引号或换行。"); return "\""+value+"\""; }
     public static string Logs { get { var path=Path.Combine(Root,"Logs"); Directory.CreateDirectory(path); return path; } }
     public static string Extract(string directory,bool privileged=false) {
         if(privileged) {
@@ -40,13 +40,13 @@ public static class Core {
             var admins=new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid,null);var system=new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null);
             acl.SetOwner(admins);
             foreach(var sid in new[]{admins,system})acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.None,AccessControlType.Allow));
-            if(Directory.Exists(directory))throw new IOException("Job directory already exists");
+            if(Directory.Exists(directory))throw new IOException("任务目录已存在，操作已停止。");
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
         foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
-                if(stream==null) throw new InvalidOperationException("Missing resource: "+name);
+                if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
             }
         }
@@ -74,29 +74,29 @@ public static class Core {
         object value;
         if(source==null || !source.TryGetValue(key,out value) || value==null) return fallback;
         if(value is bool) return (bool)value;
-        throw new ArgumentException("Option "+key+" must be boolean");
+        throw new ArgumentException("选项 "+key+" 必须为布尔值。");
     }
     static string ReadOptionString(Dictionary<string,object> source,string key,string fallback) {
         object value;
         if(source==null || !source.TryGetValue(key,out value) || value==null) return fallback;
         var text=value as string;
-        if(text==null || String.IsNullOrWhiteSpace(text)) throw new ArgumentException("Option "+key+" must be a non-empty string");
-        if((key=="parentModel" || key=="childModel") && !ModelIdPattern.IsMatch(text)) throw new ArgumentException("Option "+key+" contains an invalid model id");
-        if((key=="parentEffort" || key=="childEffort") && !EffortPattern.IsMatch(text)) throw new ArgumentException("Option "+key+" contains an invalid effort");
+        if(text==null || String.IsNullOrWhiteSpace(text)) throw new ArgumentException("选项 "+key+" 必须为有效文本。");
+        if((key=="parentModel" || key=="childModel") && !ModelIdPattern.IsMatch(text)) throw new ArgumentException("选项 "+key+" 的模型 ID 无效。");
+        if((key=="parentEffort" || key=="childEffort") && !EffortPattern.IsMatch(text)) throw new ArgumentException("选项 "+key+" 的思考强度无效。");
         return text;
     }
     public static string NormalizeProxyHost(string value) {
         if(String.IsNullOrWhiteSpace(value)) return DefaultProxyHost;
         IPAddress address;
         var text=value.Trim();
-        if(!IPAddress.TryParse(text,out address)) throw new ArgumentException("Option proxyHost must be a valid IPv4 or IPv6 address");
+        if(!IPAddress.TryParse(text,out address)) throw new ArgumentException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");
         return address.ToString();
     }
     static string ReadProxyHost(Dictionary<string,object> source) {
         object value;
         if(source==null || !source.TryGetValue("proxyHost",out value) || value==null) return DefaultProxyHost;
         var text=value as string;
-        if(text==null) throw new ArgumentException("Option proxyHost must be a string");
+        if(text==null) throw new ArgumentException("代理 IP 必须为文本。");
         return NormalizeProxyHost(text);
     }
     public static Dictionary<string,object> NormalizeOptions(Dictionary<string,object> source) {
@@ -113,13 +113,13 @@ public static class Core {
         normalized["proxyHost"]=ReadProxyHost(source);
         object projectPath;
         if(source.TryGetValue("projectPath",out projectPath)) {
-            if(projectPath!=null && !(projectPath is string))throw new ArgumentException("Option projectPath must be a string");
+            if(projectPath!=null && !(projectPath is string))throw new ArgumentException("项目路径必须为文本。");
             normalized["projectPath"]=projectPath==null?"":((string)projectPath).Trim();
         }
         return normalized;
     }
     static Dictionary<string,object> DecodeOptions(string value) {
-        if(String.IsNullOrWhiteSpace(value)) throw new ArgumentException("Worker options are empty");
+        if(String.IsNullOrWhiteSpace(value)) throw new ArgumentException("后台任务选项为空。");
         var bytes=Convert.FromBase64String(value);
         var json= new UTF8Encoding(false,true).GetString(bytes);
         return NormalizeOptions(Json.Deserialize<Dictionary<string,object>>(json));
@@ -165,7 +165,7 @@ public static class Core {
         return StartWorker(operation,id,drive,port,guard,null);
     }
     public static Process StartWorker(string operation,string id,string drive,int port,bool guard,Dictionary<string,object> options) {
-        if(!Operations.Contains(operation)) throw new ArgumentException("Unsupported operation");
+        if(!Operations.Contains(operation)) throw new ArgumentException("不支持此操作。");
         if(port<0 || port>65535) throw new ArgumentOutOfRangeException("port");
         var args="--worker "+operation+" "+id+" "+drive+" "+port+" "+(guard?"1":"0")+" "+Sid;
         if(options!=null) args+=" "+EncodeOptions(options);
@@ -179,7 +179,7 @@ public static class Core {
     static string ProxyAddress(string proxyHost,int proxyPort) {
         var normalized=NormalizeProxyHost(proxyHost);
         IPAddress address;
-        if(!IPAddress.TryParse(normalized,out address)) throw new ArgumentException("Proxy host must be a valid IPv4 or IPv6 address");
+        if(!IPAddress.TryParse(normalized,out address)) throw new ArgumentException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");
         var host=address.AddressFamily==AddressFamily.InterNetworkV6?"["+normalized+"]":normalized;
         return "http://"+host+":"+proxyPort;
     }
@@ -198,7 +198,7 @@ public static class Core {
     }
     public static Dictionary<string,object> CheckUpdate(int port,string proxyHost) {
         var commit=ReadJson(Fetch("https://api.github.com/repos/"+Repository+"/commits/main",port,proxyHost));
-        var sha=Value(commit,"sha",""); if(!System.Text.RegularExpressions.Regex.IsMatch(sha,"^[0-9a-f]{40}$")) throw new InvalidDataException("Invalid commit");
+        var sha=Value(commit,"sha",""); if(!System.Text.RegularExpressions.Regex.IsMatch(sha,"^[0-9a-f]{40}$")) throw new InvalidDataException("更新提交标识无效。");
         return ValidateUpdate(Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",port,proxyHost));
     }
     public static Dictionary<string,object> ValidateUpdate(string json) {
@@ -232,11 +232,11 @@ public static class Core {
         return "'"+value.Replace("'","''")+"'";
     }
     public static string BuildUpdateScript(string stage,string target,int pid,string logPath,bool restart) {
-        if(String.IsNullOrWhiteSpace(stage)) throw new ArgumentException("Update stage is required", "stage");
-        if(String.IsNullOrWhiteSpace(target)) throw new ArgumentException("Update target is required", "target");
-        if(String.IsNullOrWhiteSpace(logPath)) throw new ArgumentException("Update log path is required", "logPath");
+        if(String.IsNullOrWhiteSpace(stage)) throw new ArgumentException("未指定更新文件。", "stage");
+        if(String.IsNullOrWhiteSpace(target)) throw new ArgumentException("未指定更新目标。", "target");
+        if(String.IsNullOrWhiteSpace(logPath)) throw new ArgumentException("未指定更新日志路径。", "logPath");
         var stagePath=Path.GetFullPath(stage); var targetPath=Path.GetFullPath(target); var resultLog=Path.GetFullPath(logPath);
-        if(String.Equals(stagePath,targetPath,StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Update stage and target must differ");
+        if(String.Equals(stagePath,targetPath,StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("更新文件和当前程序不能使用同一路径。");
         var expectedStageHash=Hash(stagePath); var expectedTargetHash=Hash(targetPath);
         var backupPath=targetPath+".codex-update-backup-"+Guid.NewGuid().ToString("N")+".tmp";
         var rollbackPath=targetPath+".codex-update-rollback-"+Guid.NewGuid().ToString("N")+".tmp";
@@ -245,24 +245,25 @@ public static class Core {
         script.Append("$stage=").Append(PowerShellLiteral(stagePath)).Append(";");
         script.Append("$target=").Append(PowerShellLiteral(targetPath)).Append(";");
         script.Append("$log=").Append(PowerShellLiteral(resultLog)).Append(";");
+        script.Append("$chineseLog=").Append(PowerShellLiteral(DesktopLocalization.ChineseLogPath(resultLog))).Append(";");
         script.Append("$backup=").Append(PowerShellLiteral(backupPath)).Append(";");
         script.Append("$rollback=").Append(PowerShellLiteral(rollbackPath)).Append(";");
         script.Append("$expectedStageHash=").Append(PowerShellLiteral(expectedStageHash)).Append(";");
         script.Append("$expectedTargetHash=").Append(PowerShellLiteral(expectedTargetHash)).Append(";");
         script.Append("$replaced=$false;$exitCode=1;");
-        script.Append("function Get-Sha([string]$Path){if(-not [IO.File]::Exists($Path)){throw 'File not found: '+$Path};$stream=[IO.File]::OpenRead($Path);$hash=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose();$hash.Dispose()}};");
+        script.Append("function Get-Sha([string]$Path){if(-not [IO.File]::Exists($Path)){throw '找不到文件：'+$Path};$stream=[IO.File]::OpenRead($Path);$hash=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose();$hash.Dispose()}};");
         script.Append("function Test-Sha([string]$Path,[string]$Expected){try{if(-not [IO.File]::Exists($Path)){return $false};return ((Get-Sha $Path) -ceq $Expected)}catch{return $false}};");
-        script.Append("function Write-UpdateLog([string]$Status,[string]$Message){try{$parent=[IO.Path]::GetDirectoryName($log);if($parent){[IO.Directory]::CreateDirectory($parent)|Out-Null};$line=(Get-Date -Format o)+' ['+$Status+'] '+$Message;[IO.File]::AppendAllText($log,$line+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))}catch{}};");
+        script.Append("function Write-UpdateLog([string]$Status,[string]$Message){try{$parent=[IO.Path]::GetDirectoryName($log);if($parent){[IO.Directory]::CreateDirectory($parent)|Out-Null};$time=Get-Date -Format o;$line=$time+' ['+$Status+'] '+$Message;[IO.File]::AppendAllText($log,$line+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)));$label=if($Status -eq 'success'){'成功'}else{'失败'};$translated=$Message;if($Message -match '[A-Za-z]{2,} [A-Za-z]{2,}'){$translated='更新操作未完成，原因尚未识别；请查看原始 update.log。';if($Message -match '(HRESULT: -?[0-9]+|0x[0-9a-fA-F]{4,8})'){$translated+=' 错误码：'+$Matches[1]}};[IO.File]::AppendAllText($chineseLog,$time+' 【'+$label+'】 '+$translated+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))}catch{}};");
         if(pid>0) script.Append("Wait-Process -Id ").Append(pid.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" -ErrorAction SilentlyContinue;");
         script.Append("try{");
-        script.Append("if(-not (Test-Sha $stage $expectedStageHash)){throw 'Update stage checksum mismatch'};");
-        script.Append("if(-not (Test-Sha $target $expectedTargetHash)){throw 'Current executable changed before update'};");
+        script.Append("if(-not (Test-Sha $stage $expectedStageHash)){throw '更新文件校验失败'};");
+        script.Append("if(-not (Test-Sha $target $expectedTargetHash)){throw '更新前当前程序已变化'};");
         script.Append("[IO.File]::Replace($stage,$target,$backup);$replaced=$true;");
-        script.Append("if(-not (Test-Sha $target $expectedStageHash)){throw 'Updated executable checksum mismatch'};");
+        script.Append("if(-not (Test-Sha $target $expectedStageHash)){throw '更新后程序校验失败'};");
         if(restart) script.Append("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;");
         script.Append("if([IO.File]::Exists($backup)){[IO.File]::Delete($backup)};");
-        script.Append("Write-UpdateLog 'success' 'Update installed';$exitCode=0;");
-        script.Append("}catch{$failure=$_.Exception.Message;if($replaced -and (Test-Sha $target $expectedStageHash) -and (Test-Sha $backup $expectedTargetHash)){try{[IO.File]::Replace($backup,$target,$rollback);if(-not (Test-Sha $target $expectedTargetHash)){throw 'Rollback checksum mismatch'};if([IO.File]::Exists($rollback)){[IO.File]::Delete($rollback)};$replaced=$false;$failure=$failure+'; rollback succeeded'}catch{$failure=$failure+'; rollback failed: '+$_.Exception.Message}};Write-UpdateLog 'failure' $failure;}");
+        script.Append("Write-UpdateLog 'success' '更新已安装。';$exitCode=0;");
+        script.Append("}catch{$failure=$_.Exception.Message+' (HRESULT: '+$_.Exception.HResult+')';if($replaced -and (Test-Sha $target $expectedStageHash) -and (Test-Sha $backup $expectedTargetHash)){try{[IO.File]::Replace($backup,$target,$rollback);if(-not (Test-Sha $target $expectedTargetHash)){throw '回滚文件校验失败'};if([IO.File]::Exists($rollback)){[IO.File]::Delete($rollback)};$replaced=$false;$failure=$failure+'；回滚成功'}catch{$failure=$failure+'；回滚失败：'+$_.Exception.Message}};Write-UpdateLog 'failure' $failure;}");
         script.Append("finally{if([IO.File]::Exists($stage)){try{[IO.File]::Delete($stage)}catch{}};if($exitCode -eq 0 -or -not $replaced){if([IO.File]::Exists($backup)){try{[IO.File]::Delete($backup)}catch{}};if([IO.File]::Exists($rollback)){try{[IO.File]::Delete($rollback)}catch{}}}};exit $exitCode;");
         return script.ToString();
     }

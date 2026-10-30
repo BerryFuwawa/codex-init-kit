@@ -26,7 +26,7 @@ public static class Program {
         }
         if(args.Length>0 && args[0]!="--preview")return 64;
         var app=new Application();
-        app.DispatcherUnhandledException+=(s,e)=>{MessageBox.Show(e.Exception.Message,"Codex Init Kit",MessageBoxButton.OK,MessageBoxImage.Error); e.Handled=true;};
+        app.DispatcherUnhandledException+=(s,e)=>{var message=DesktopLocalization.ExceptionText(e.Exception);try{var path=Path.Combine(Core.Logs,"ui-"+Guid.NewGuid().ToString("N")+".log");File.WriteAllText(path,e.Exception.ToString(),new UTF8Encoding(false));DesktopLocalization.SaveChineseLog(path,message);}catch{}MessageBox.Show(message,"Codex Init Kit",MessageBoxButton.OK,MessageBoxImage.Error); e.Handled=true;};
         var window=new MainWindow(args.Contains("--preview"));
         return app.Run(window);
     }
@@ -44,6 +44,7 @@ public static class Program {
         var dir=Path.Combine(Path.GetTempPath(),"CodexKit-verify-"+Guid.NewGuid().ToString("N"));
         try {
             Core.Extract(dir);
+            DesktopLocalizationTests.Run(dir);checks["chinese_error_messages"]=true;
             var logo=Brand.Logo();if(logo.PixelWidth!=512||logo.PixelHeight!=512)throw new InvalidDataException("Invalid logo resource");checks["logo_resource"]=true;
             foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend.Tests.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
             var ps=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe");
@@ -76,7 +77,7 @@ public static class Program {
             checks["worker_rejects_invalid_operation"]=Core.Worker(new[]{"--worker","invalid",Guid.NewGuid().ToString("N"),"D","10808","0",Core.Sid})==64;
             checks["worker_rejects_invalid_drive"]=Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"&","10808","0",Core.Sid})==64;
             var options=Core.NormalizeOptions(new Dictionary<string,object>{{"folderManagement",false},{"subagents",false},{"cuaRepair",false},{"parentModel","custom-parent"},{"childModel","custom-child"}});if((bool)options["folderManagement"]||(bool)options["subagents"]||(bool)options["cuaRepair"]||Convert.ToString(options["parentModel"])!="custom-parent")throw new InvalidDataException("Setup options were not preserved");checks["setup_options"]=true;
-            var defaults=Core.NormalizeOptions(null);if(Convert.ToString(defaults["parentModel"])!="gpt-6.1-terra"||Convert.ToString(defaults["childModel"])!="gpt-6.1-terra"||Convert.ToString(defaults["parentEffort"])!="max"||Convert.ToString(defaults["childEffort"])!="max"||!(bool)defaults["folderManagement"]||(bool)defaults["subagents"]||!(bool)defaults["cuaRepair"]||Convert.ToString(defaults["proxyHost"])!=Core.DefaultProxyHost)throw new InvalidDataException("Setup defaults changed");checks["setup_option_defaults"]=true;
+            var defaults=Core.NormalizeOptions(null);if(Convert.ToString(defaults["parentModel"])!="gpt-6.1-sol"||Convert.ToString(defaults["childModel"])!="gpt-6.1-sol"||Convert.ToString(defaults["parentEffort"])!="high"||Convert.ToString(defaults["childEffort"])!="high"||!(bool)defaults["folderManagement"]||(bool)defaults["subagents"]||!(bool)defaults["cuaRepair"]||Convert.ToString(defaults["proxyHost"])!=Core.DefaultProxyHost)throw new InvalidDataException("Setup defaults changed");checks["setup_option_defaults"]=true;
             if(Core.NeedsAdmin("config-check")||Core.NeedsAdmin("config-cleanup")||Convert.ToString(Core.NormalizeOptions(new Dictionary<string,object>{{"projectPath","D:\\chosen project"}})["projectPath"])!="D:\\chosen project")throw new InvalidDataException("Config compatibility worker options failed");checks["config_compatibility_worker"]=true;
             var customProxy=Core.NormalizeOptions(new Dictionary<string,object>{{"proxyHost","192.168.50.10"}});if(Convert.ToString(customProxy["proxyHost"])!="192.168.50.10")throw new InvalidDataException("Custom IPv4 proxy host was not preserved");
             var customIpv6=Core.NormalizeOptions(new Dictionary<string,object>{{"proxyHost","2001:db8::7"}});if(Convert.ToString(customIpv6["proxyHost"])!="2001:db8::7")throw new InvalidDataException("Custom IPv6 proxy host was not preserved");
@@ -98,7 +99,8 @@ public static class Program {
                 using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();if((proc.ExitCode==0)!=(scenario=="success"))throw new IOException("Updater exit status: "+scenario+" "+output);}
                 var expected=scenario=="success"?"new":scenario=="target_changed"?"changed":"old";
                 if(File.ReadAllText(current)!=expected||File.Exists(next)||Directory.GetFiles(fixture,"*.tmp").Length!=0||!File.Exists(updateLog))throw new IOException("Updater regression: "+scenario);
-                if(scenario=="restart_failed"&&!File.ReadAllText(updateLog).Contains("rollback succeeded"))throw new IOException("Updater rollback missing");
+                if(scenario=="restart_failed"&&!File.ReadAllText(updateLog).Contains("回滚成功"))throw new IOException("Updater rollback missing");
+                var chineseUpdateLog=DesktopLocalization.ChineseLogPath(updateLog);if(!File.Exists(chineseUpdateLog)||!File.ReadAllText(chineseUpdateLog,Encoding.UTF8).Contains(scenario=="success"?"成功":"失败"))throw new IOException("Chinese updater log missing: "+scenario);
                 checks["updater_"+scenario]=true;
             }
         }catch(Exception ex){errors.Add(ex.ToString());}

@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.1
+# Codex Init Kit Desktop 2.2.2
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -31,11 +31,13 @@
 
 CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Windows 版本曾出现组件复制失败、逐文件重试或反复生成 `.staging-*` 目录的问题，使 Codex 启动很慢。修复会对照官方源补齐正确版本的组件，再完整校验；若整机卡顿源于这段读写，也可能改善。它不保证解决其他原因的卡顿，不修改官方复制逻辑，也不批量删除旧临时目录。相关现象见 [启动缓慢报告](https://github.com/openai/codex/issues/41822) 和 [组件复制失败报告](https://github.com/openai/codex/issues/42501)。
 
+中文日志和错误弹窗覆盖各项桌面操作，未知外部错误会明确提示原因尚未识别。日志解释在本地完成；原始内容保留用于诊断。文件命名、复制与更新日志见[日志说明](Logs.md)。
+
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.2.1](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.1)，发布于 2026-10-30，更新内容见 [2.2.1 更新说明](Release-2.2.1.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.1/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.2.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.2)，更新内容见 [2.2.2 更新说明](Release-2.2.2.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.1/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
+正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -57,7 +59,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 | 维护恢复 | 独立维护 CUA、两类 CLI、启动保护和代理 | CUA 检查／修复、安装或更新保护器、切换桌面原生 CLI模式、切换或回滚官方独立 CLI、运行 Doctor、卸载保护器、回滚初始化 |
 | 配置兼容检查 | 位于「维护恢复」；只读检查或定向清理 | 显示用户配置、profile 和所选项目的旧设置；先备份再移除可靠布尔赋值，提供恢复脚本 |
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
-| 日志 | 查看执行输出、失败原因和备份位置 | 打开日志目录、复制当前日志 |
+| 日志 | 默认查看中文说明，按需切换原始输出 | 切换中文／原文、打开日志目录、复制当前日志 |
 
 初始化向导第二步会展示实际工作盘、代理端口、模型和启动保护选择，并在执行前弹出确认；确认内容会说明全局 `CODEX_HOME\AGENTS.md` 将完整备份并重建，旧的全局自定义内容只保留在备份中。修改操作在独立 worker 中运行，页面关闭会被阻止到当前操作结束；管理员授权取消时不会开始执行。
 
@@ -65,9 +67,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.1` |
-| 内嵌初始化组件 | `4.8.5` |
-| 内嵌启动保护组件 | `5.2.3` |
+| 版本 | `2.2.2` |
+| 内嵌初始化组件 | `4.8.6` |
+| 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
 | 父模型 | `gpt-6.1-terra`，`max` |

@@ -30,6 +30,7 @@ $argsList+="/resource:$(Join-Path $root 'app\DesktopCoreRecovery.ps1'),Payload.D
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopCoreRecovery.Tests.ps1'),Payload.DesktopCoreRecovery.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\RuntimeDiscovery.Tests.ps1'),Payload.RuntimeDiscovery.Tests.ps1"
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' | ForEach-Object FullName)
+$argsList+=(Join-Path $root 'tests\DesktopLocalization.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

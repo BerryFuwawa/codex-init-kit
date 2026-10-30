@@ -31,10 +31,10 @@ $script:DefaultOptions = [ordered]@{
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
-    parentModel = 'gpt-6.1-terra'
-    childModel = 'gpt-6.1-terra'
-    parentEffort = 'max'
-    childEffort = 'max'
+    parentModel = 'gpt-6.1-sol'
+    childModel = 'gpt-6.1-sol'
+    parentEffort = 'high'
+    childEffort = 'high'
 }
 
 function Set-BackendOutputEncoding {
@@ -384,8 +384,8 @@ if /i "%~1"=="--codex-gui-rollback" (
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
     $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-terra"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-terra"')
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=max"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=max"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
     # Global AGENTS is rebuilt from scratch during the base stage. Old markers
@@ -517,7 +517,7 @@ set "CONFIG_RESULT=FAIL"
         @('CODEX_GUI_FOLDER_MANAGEMENT','echo 阶段 1/5：确认文件夹管理盘符。','echo 阶段 1/5：跳过工作盘确认（文件夹管理未勾选）。'),
         @('CODEX_GUI_FOLDER_MANAGEMENT','echo 阶段 3/5：安装文件夹管理并创建标准目录。','echo 阶段 3/5：跳过文件夹管理（未勾选）。'),
         @('CODEX_GUI_CUA_REPAIR','echo 阶段 4/5：检查并按需修复 Codex CUA 运行时。','echo 阶段 4/5：跳过 CUA 检查与修复（未勾选）。'),
-        @('CODEX_GUI_SUBAGENTS','echo 阶段 5/5：安装 GPT6.1 TERRA MAX 多线程提示词。','echo 阶段 5/5：跳过子代理规则安装（未勾选）。')
+        @('CODEX_GUI_SUBAGENTS','echo 阶段 5/5：安装 GPT6.1 SOL HIGH 多线程提示词。','echo 阶段 5/5：跳过子代理规则安装（未勾选）。')
     )
     foreach ($stage in $optionalStageMessages) {
         $sourceText = $sourceText.Replace($stage[1],('if /i "%'+$stage[0]+'%"=="1" '+$stage[1])+[Environment]::NewLine+('if /i "%'+$stage[0]+'%"=="0" '+$stage[2]))
@@ -654,6 +654,7 @@ function Set-ScopedModelSettings {
                 $block = $block.Replace('Do not create Sol, Terra, GPT-6, Astra, or any other non-Luna child under this protocol.', 'Use the configured child model above; do not substitute another child model.')
                 $block = $block.Replace('gpt-5.6-luna',[string]$resolved.childModel)
                 $block = $block.Replace('gpt-6.1-terra',[string]$resolved.childModel)
+                $block = $block.Replace('gpt-6.1-sol',[string]$resolved.childModel)
                 $block = $block.Replace('GPT5.6 LUNA MAX',([string]$resolved.childModel + ' ' + [string]$resolved.childEffort))
                 $block = $block.Replace('GPT6.1 TERRA MAX',([string]$resolved.childModel + ' ' + [string]$resolved.childEffort))
                 $block = $block.Replace('GPT5.6 LUNA',[string]$resolved.childModel)
@@ -765,9 +766,9 @@ function Initialize-GuardRuntime {
     if ($errors.Count -gt 0) { throw 'guard.cmd embedded PowerShell payload has syntax errors.' }
     $documents = Get-DocumentsPath
     $script:ErrorActionPreference='Stop'; $script:ProgressPreference='SilentlyContinue'
-    $script:ToolVersion='V5.2.3'; $script:SourceCmd=$GuardPath; $script:SourceDir=Split-Path -Parent $GuardPath
+    $script:ToolVersion='V5.2.4'; $script:SourceCmd=$GuardPath; $script:SourceDir=Split-Path -Parent $GuardPath
     $script:InstallerUrl='https://chatgpt.com/codex/install.ps1'; $script:UpdateIntervalHours=24
-    $script:DefaultParentModelId='gpt-6.1-terra'; $script:DefaultParentReasoningEffort='max'; $script:LunaMaxThreads=6
+    $script:DefaultParentModelId='gpt-6.1-sol'; $script:DefaultParentReasoningEffort='high'; $script:LunaMaxThreads=6
     $script:Documents=$documents; $script:InstallRoot=Join-Path $documents 'Codex启动保护管理器'
     $script:StateDir=Join-Path $script:InstallRoot 'State'; $script:StateFile=Join-Path $script:StateDir 'guard-state.json'
     $script:StartupDir=[Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)

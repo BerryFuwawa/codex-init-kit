@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.2.1",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.1/CodexInitKit.exe",
-    "sha256":  "88d07f71548997782e45596cd98049f8333794576df42b7bebe5da6ce618cee3",
-    "notes":  "Browser repair and launch, desktop startup recovery, and GPT-6.1 Terra max model defaults."
+    "version":  "2.2.2",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/CodexInitKit.exe",
+    "sha256":  "87f07a240fe80b15fd2d70df39cc9691c16a6ee197eba03f79ac735d244e2fcb",
+    "notes":  "桌面错误日志中文化，可切换原始输出；父模型和子模型默认 GPT-6.1 Sol / high。"
 }

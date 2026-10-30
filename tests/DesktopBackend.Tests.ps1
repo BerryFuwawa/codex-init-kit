@@ -139,7 +139,7 @@ enabled = true
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
-    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-terra' -and $resolved.Options.parentEffort -eq 'max' -and $resolved.Options.childModel -eq 'gpt-6.1-terra' -and $resolved.Options.childEffort -eq 'max') 'Default parent and child must be GPT-6.1-TERRA MAX.'
+    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'high' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'high') 'Default parent and child must be GPT-6.1-SOL HIGH.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
     Assert ((Convert-BackendOptions @{proxyHost='192.168.1.1'}).proxyHost -eq '192.168.1.1') 'Router proxy IP was not preserved.'
@@ -170,7 +170,7 @@ enabled = true
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
     Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
-    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=max"')) 'GUI adapter lost the max default or custom effort override.'
+    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')) 'GUI adapter lost the high default or custom effort override.'
 
     # Run the real RTK integration subroutine with a fake RTK. A fresh install
     # asks for telemetry consent unless disable was executed before every init.
@@ -587,7 +587,7 @@ END CODEX LUNA PROMPT V1.3
     $pmPath=Join-Path $scratch 'prompt-manager-fixture.ps1'
     [IO.File]::WriteAllText($pmPath,$pmCode,[Text.UTF8Encoding]::new($true))
     foreach($case in @(
-        @{name='standalone';gui='0';parent='gpt-6.1-terra';parentEffort='max';child='gpt-6.1-terra';childEffort='max'},
+        @{name='standalone';gui='0';parent='gpt-6.1-sol';parentEffort='high';child='gpt-6.1-sol';childEffort='high'},
         @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'}
     )){
         $fixtureHome=Join-Path $scratch ('prompt-model-'+$case.name);[void][IO.Directory]::CreateDirectory($fixtureHome)
