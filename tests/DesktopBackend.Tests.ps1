@@ -139,7 +139,7 @@ enabled = true
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
-    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'high') 'Default parent must be GPT-6.1-SOL HIGH.'
+    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-terra' -and $resolved.Options.parentEffort -eq 'max' -and $resolved.Options.childModel -eq 'gpt-6.1-terra' -and $resolved.Options.childEffort -eq 'max') 'Default parent and child must be GPT-6.1-TERRA MAX.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
     Assert ((Convert-BackendOptions @{proxyHost='192.168.1.1'}).proxyHost -eq '192.168.1.1') 'Router proxy IP was not preserved.'
@@ -170,7 +170,7 @@ enabled = true
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
     Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
-    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')) 'GUI adapter lost the high default or custom effort override.'
+    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=max"')) 'GUI adapter lost the max default or custom effort override.'
 
     # Run the real RTK integration subroutine with a fake RTK. A fresh install
     # asks for telemetry consent unless disable was executed before every init.
@@ -579,6 +579,33 @@ END CODEX LUNA PROMPT V1.3
     $originalInitPath = Join-Path $payload 'init.cmd'
     $originalInitText = $script:InputEncoding.GetString([IO.File]::ReadAllBytes($originalInitPath))
     if ($originalInitText.Length -gt 0 -and $originalInitText[0] -eq [char]0xFEFF) { $originalInitText = $originalInitText.Substring(1) }
+    # Execute the actual embedded prompt manager against isolated homes. This
+    # exercises both standalone defaults and GUI custom parent/child settings.
+    $pmParts=[regex]::Matches($originalInitText,'(?m)^::PMB64:([^\r\n]+)') | ForEach-Object {$_.Groups[1].Value}
+    Assert (@($pmParts).Count -gt 0) 'Prompt-manager payload missing.'
+    $pmCode=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($pmParts -join '')))
+    $pmPath=Join-Path $scratch 'prompt-manager-fixture.ps1'
+    [IO.File]::WriteAllText($pmPath,$pmCode,[Text.UTF8Encoding]::new($true))
+    foreach($case in @(
+        @{name='standalone';gui='0';parent='gpt-6.1-terra';parentEffort='max';child='gpt-6.1-terra';childEffort='max'},
+        @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'}
+    )){
+        $fixtureHome=Join-Path $scratch ('prompt-model-'+$case.name);[void][IO.Directory]::CreateDirectory($fixtureHome)
+        [IO.File]::WriteAllText((Join-Path $fixtureHome 'config.toml'),"model = `"old`"`nmodel_reasoning_effort = `"low`"`n",[Text.UTF8Encoding]::new($false))
+        $oldBlock="user instruction`nBEGIN CODEX LUNA PROMPT V1.3`nmodel = gpt-5.6-luna`nEND CODEX LUNA PROMPT V1.3`n"
+        [IO.File]::WriteAllText((Join-Path $fixtureHome 'AGENTS.md'),$oldBlock,[Text.UTF8Encoding]::new($false))
+        $psi=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))
+        $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+        $psi.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$pmPath+'"'
+        foreach($entry in @{CODEX_HOME_DIR=$fixtureHome;CODEX_PROMPT_MANAGER_ACTION='install-luna';CODEX_GUI_NO_PAUSE=$case.gui;CODEX_GUI_PARENT_MODEL=$case.parent;CODEX_GUI_PARENT_EFFORT=$case.parentEffort;CODEX_GUI_CHILD_MODEL=$case.child;CODEX_GUI_CHILD_EFFORT=$case.childEffort}.GetEnumerator()){$psi.EnvironmentVariables[$entry.Key]=[string]$entry.Value}
+        $child=[Diagnostics.Process]::Start($psi);$out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
+        if(-not $child.WaitForExit(30000)){$child.Kill();throw 'Prompt manager fixture timed out.'}
+        Assert ($child.ExitCode -eq 0) ('Prompt manager '+$case.name+' failed: '+$out.Result+' '+$err.Result);$child.Dispose()
+        $fixtureConfig=[IO.File]::ReadAllText((Join-Path $fixtureHome 'config.toml'));$fixtureAgents=[IO.File]::ReadAllText((Join-Path $fixtureHome 'AGENTS.md'))
+        Assert ($fixtureConfig -match ('(?m)^model = "'+[regex]::Escape($case.parent)+'"\r?$') -and $fixtureConfig -match ('(?m)^model_reasoning_effort = "'+$case.parentEffort+'"\r?$')) ('Parent selection lost in '+$case.name)
+        Assert ($fixtureAgents.Contains('model = '+$case.child) -and $fixtureAgents.Contains('model_reasoning_effort = '+$case.childEffort) -and $fixtureAgents.Contains('user instruction')) ('Child selection or existing text lost in '+$case.name)
+        Assert (([regex]::Matches($fixtureAgents,'(?m)^BEGIN CODEX LUNA PROMPT V1\.3\r?$')).Count -eq 1 -and $fixtureAgents -notmatch 'Do not create Sol, Terra|model = gpt-5\.6-luna') ('Legacy block was not safely replaced in '+$case.name)
+    }
     $rebuildSection = [regex]::Match($originalInitText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
     $rebuildCommandMatch = [regex]::Match($rebuildSection,'(?m)^powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ([A-Za-z0-9+/=]+)')
     Assert ($rebuildCommandMatch.Success) 'Original init source did not contain the REBUILD_AGENTS_FILE payload.'

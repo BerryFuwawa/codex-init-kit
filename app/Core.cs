@@ -16,16 +16,16 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.0";
+    public const string Version = "2.2.1";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","desktop-update","official-cli-update"};
+    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
-    const string DefaultParentModel = "gpt-6.1-sol";
-    const string DefaultChildModel = "gpt-5.6-luna";
-    const string DefaultParentEffort = "high";
+    const string DefaultParentModel = "gpt-6.1-terra";
+    const string DefaultChildModel = "gpt-6.1-terra";
+    const string DefaultParentEffort = "max";
     const string DefaultChildEffort = "max";
     static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
     static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
@@ -44,7 +44,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("Missing resource: "+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -52,7 +52,15 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
+    public static bool NeedsAdmin(string operation) { return operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
+
+    public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
+        const string family="OpenAI.Codex_2p2nqsd0c76g0";
+        var package=Value(prepared,"packageFullName","");var app=Value(prepared,"appId","");
+        if(Value(prepared,"packageFamilyName","")!=family || !Regex.IsMatch(package,@"^OpenAI\.Codex_[A-Za-z0-9._-]+_2p2nqsd0c76g0\z") || !Regex.IsMatch(app,@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z"))throw new InvalidDataException("官方桌面应用身份无效，启动已停止。");
+        foreach(var key in new[]{"packageFullName","packageFamilyName","appId"})if(!String.Equals(Value(prepared,key,""),Value(current,key,""),StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("桌面应用已更新，请重新执行浏览器修复后启动。");
+        return @"shell:AppsFolder\"+family+"!"+app;
+    }
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {

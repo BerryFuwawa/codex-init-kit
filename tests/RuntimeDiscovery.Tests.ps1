@@ -1,10 +1,12 @@
-param([string]$KitRoot = (Split-Path $PSScriptRoot -Parent))
+param([string]$KitRoot = (Split-Path $PSScriptRoot -Parent),[string]$PayloadRoot)
 $ErrorActionPreference = 'Stop'
-. (Join-Path $KitRoot 'app\Backend.ps1')
+$testPayloadRoot=$PayloadRoot
+if($testPayloadRoot){. (Join-Path $testPayloadRoot 'Backend.ps1');$cuaSource=Join-Path $testPayloadRoot 'cua.cmd'}
+else {. (Join-Path $KitRoot 'app\Backend.ps1');$cuaSource=Join-Path $KitRoot 'scripts\Codex_CUA_Repair.cmd'}
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('CodexKit-runtime-test-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($scratch)
 try {
-    Copy-Item -LiteralPath (Join-Path $KitRoot 'scripts\Codex_CUA_Repair.cmd') -Destination (Join-Path $scratch 'cua.cmd')
+    Copy-Item -LiteralPath $cuaSource -Destination (Join-Path $scratch 'cua.cmd')
     Import-CuaLibrary $scratch
     $source = Join-Path $scratch 'source'
     [void][IO.Directory]::CreateDirectory((Join-Path $source 'bin'))

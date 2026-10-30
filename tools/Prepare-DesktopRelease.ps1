@@ -14,7 +14,7 @@ $manifest=[ordered]@{
     version=$version
     url=('https://github.com/BerryFuwawa/codex-init-kit/releases/download/v'+$version+'/CodexInitKit.exe')
     sha256=$hash
-    notes='Browser connection repair with verified backups; separate official CLI and desktop updates; partial initialization results and CLI recovery guidance.'
+    notes='Browser repair and launch, desktop startup recovery, and GPT-6.1 Terra max model defaults.'
 }
 [IO.File]::WriteAllText((Join-Path $root 'desktop-update.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path (Split-Path $Executable -Parent) 'SHA256SUMS.txt'),($hash+'  CodexInitKit.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))

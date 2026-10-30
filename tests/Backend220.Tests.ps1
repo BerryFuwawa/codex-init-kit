@@ -64,10 +64,15 @@ try {
     Remove-Item -LiteralPath (Join-Path $target 'node_modules') -Recurse -Force
     # Actual subprocess inheritance probe through Node, without executing the live Codex runtime.
     $bounded=$functions['Invoke-BoundedProcess'];$nodeExe=$node.Source
-    $slowCode=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('Write-Output fixture-before-timeout; Start-Sleep -Seconds 30'))
+    # Separate deadline enforcement from output retention: a cold PowerShell
+    # can take more than one second to start and print its first line.
+    $sleepCode=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('Start-Sleep -Seconds 30'))
     $watch=[Diagnostics.Stopwatch]::StartNew()
-    $timed=& $bounded (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') @('-NoProfile','-NonInteractive','-EncodedCommand',$slowCode) 1
-    Assert220 ($timed.TimedOut -and $watch.Elapsed.TotalSeconds -lt 15 -and $timed.Output -match 'fixture-before-timeout') 'Bounded process did not terminate and retain output.'
+    $timed=& $bounded (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') @('-NoProfile','-NonInteractive','-EncodedCommand',$sleepCode) 1
+    Assert220 ($timed.TimedOut -and $watch.Elapsed.TotalSeconds -lt 15) 'Bounded process did not enforce its deadline.'
+    $slowCode=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('Write-Output fixture-before-timeout; Start-Sleep -Seconds 30'))
+    $timedWithOutput=& $bounded (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') @('-NoProfile','-NonInteractive','-EncodedCommand',$slowCode) 8
+    Assert220 ($timedWithOutput.TimedOut -and $timedWithOutput.Output -match 'fixture-before-timeout') 'Output already emitted before timeout was not retained.'
     function Invoke-BoundedProcess {param($FilePath,$Arguments,$TimeoutSeconds,$Environment=@{}) & $bounded $nodeExe $Arguments $TimeoutSeconds $Environment}
     $envProbe=& $functions['Test-BrowserEnvironment'] $context 'http://127.0.0.1:10808'
     Assert220 ($envProbe -match '继承通过') 'Node inheritance probe failed.'

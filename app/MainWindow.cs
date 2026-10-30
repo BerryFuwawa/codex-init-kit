@@ -30,7 +30,7 @@ public class MainWindow : Window {
     readonly CheckBox guard=new CheckBox();
     readonly CheckBox proxyEnabled=new CheckBox(),folderManagement=new CheckBox(),subagents=new CheckBox(),cuaRepair=new CheckBox();
     readonly CheckBox browserRepair=new CheckBox(),officialCliUpdate=new CheckBox(),desktopUpdate=new CheckBox();
-    Dictionary<string,object> browserReport;
+    Dictionary<string,object> browserReport,browserStartTarget;
     string initializationSummary="";
     Button recoveryGuide,officialSwitch;
     readonly ComboBox modelMode=new ComboBox();
@@ -41,6 +41,7 @@ public class MainWindow : Window {
     Dictionary<string,object> status, update,diagnosisContext;
     string diagnosticAdvice="";
     string compatibilityAdvice="", compatibilityProjectPath="";
+    string desktopCoreAdvice="";
     string page="概览", lastLog="", operationTitle="";
     bool busy, preview, checkingUpdate;
     int wizard;
@@ -50,13 +51,13 @@ public class MainWindow : Window {
         proxyHost.Text="192.168.1.20";var settings=Options();if(Convert.ToString(settings["proxyHost"])!="192.168.1.20")throw new InvalidOperationException("Custom proxy host was not preserved");
         proxyHost.Text="not-an-ip";var rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsafe proxy host accepted");
         proxyEnabled.IsChecked=false;port.Text="invalid";proxyHost.Text="not-an-ip";settings=Options();if(Port()!=0||port.IsEnabled||proxyHost.IsEnabled||Convert.ToString(settings["proxyHost"])!="")throw new InvalidOperationException("Disabled proxy did not ignore its fields");proxyEnabled.IsChecked=true;port.Text="10808";proxyHost.Text="";
-        var defaults=Options();if(Convert.ToString(defaults["parentModel"])!="gpt-6.1-sol"||Convert.ToString(defaults["parentEffort"])!="high"||parentModel.IsEnabled||parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Recommended defaults changed");
+        var defaults=Options();if(Convert.ToString(defaults["parentModel"])!="gpt-6.1-terra"||Convert.ToString(defaults["parentEffort"])!="max"||parentModel.IsEnabled||parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Recommended defaults changed");
         modelMode.SelectedIndex=1;if(!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Disabled subagents allowed child selection");
         subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled)throw new InvalidOperationException("Enabled subagents did not allow child selection");modelMode.SelectedIndex=1;parentModel.SelectedItem="gpt-6-astra";childModel.SelectedItem="gpt-6-luna";parentEffort.SelectedItem="ultra";childEffort.SelectedItem="high";settings=Options();if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childEffort"])!="high"||parentModel.IsEditable||childModel.IsEditable||!InitSummary().Contains("gpt-6-luna / high"))throw new InvalidOperationException("Preset model selection failed");
-        if(parentModel.Items.Count!=8||childModel.Items.Count!=8||childEffort.Items.Contains("ultra"))throw new InvalidOperationException("Preset dropdown choices were lost");
+        if(parentModel.Items.Count!=9||childModel.Items.Count!=9||childEffort.Items.Contains("ultra"))throw new InvalidOperationException("Preset dropdown choices were lost");
         childModel.SelectedItem="gpt-5.5";if(!childEffort.Items.Cast<string>().SequenceEqual(new[]{"low","medium","high","xhigh"}))throw new InvalidOperationException("Effort choices did not follow model selection");
         childEffort.ItemsSource=new[]{"ultra"};childEffort.SelectedItem="ultra";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsupported UI effort accepted");RefreshEfforts(childEffort,"gpt-5.5","max");
-        parentModel.SelectedItem=null;parentModel.Text="vendor/custom";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unlisted model accepted");parentModel.SelectedItem="gpt-6.1-sol";
+        parentModel.SelectedItem=null;parentModel.Text="vendor/custom";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unlisted model accepted");parentModel.SelectedItem="gpt-6.1-terra";
         folderManagement.IsChecked=false;subagents.IsChecked=false;cuaRepair.IsChecked=false;guard.IsChecked=false;settings=Options();if((bool)settings["folderManagement"]||(bool)settings["subagents"]||(bool)settings["cuaRepair"]||childModel.IsEnabled||childEffort.IsEnabled||!parentModel.IsEnabled||!parentEffort.IsEnabled||Convert.ToString(settings["childEffort"])!="max")throw new InvalidOperationException("Optional setup switches failed");
         subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled||Convert.ToString(childModel.SelectedItem)!="gpt-5.5")throw new InvalidOperationException("Re-enabling subagents lost custom selection");
         modelMode.SelectedIndex=0;if(parentModel.IsEnabled||parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Recommended mode allowed model editing");folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
@@ -65,6 +66,7 @@ public class MainWindow : Window {
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="维护恢复"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
         var newDefaults=Options();foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})if(!(bool)newDefaults[key])throw new InvalidOperationException("New default disabled: "+key);
+        Navigate("浏览器连接");var browserSettings=(StackPanel)((Border)content.Children[1]).Child;var browserInputs=browserSettings.Children.OfType<TextBox>().ToArray();var browserToggle=browserSettings.Children.OfType<CheckBox>().First();var browserButtons=browserSettings.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).ToArray();if(!browserButtons.Contains("修复并启动 Codex")||browserInputs.Length!=2)throw new InvalidOperationException("Browser startup entry is missing");browserInputs[0].Text="192.168.5.8";browserInputs[1].Text="7890";if(ProxyHost()!="192.168.5.8"||Port()!=7890)throw new InvalidOperationException("Browser proxy settings did not synchronize");browserToggle.IsChecked=false;if(proxyEnabled.IsChecked!=false)throw new InvalidOperationException("Browser proxy switch did not synchronize");browserToggle.IsChecked=true;proxyHost.Text="";port.Text="10808";
         VerifyMaintenanceModes();
         foreach(var name in new[]{"概览","初始化","浏览器连接","维护恢复","更新","日志","初始化"}) { Navigate(name); Measure(new Size(1120,800)); Arrange(new Rect(0,0,1120,800)); UpdateLayout(); }
         wizard=1;Navigate("初始化");UpdateLayout(); wizard=2;Navigate("初始化");UpdateLayout();Navigate("日志");UpdateLayout();
@@ -110,12 +112,12 @@ public class MainWindow : Window {
         proxyEnabled.Checked+=(s,e)=>{port.IsEnabled=true;proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{port.IsEnabled=false;proxyHost.IsEnabled=false;};
         modelMode.Style=(Style)Resources["KitCombo"];modelMode.ItemsSource=new[]{"使用推荐模型","选择模型与思考强度"};modelMode.SelectedIndex=0;modelMode.SelectionChanged+=(s,e)=>UpdateModelInputs();
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
-        parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem="high";childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="max";
-        parentModel.Text="gpt-6.1-sol";childModel.Text="gpt-5.6-luna";
+        parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem="max";childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="max";
+        parentModel.Text="gpt-6.1-terra";childModel.Text="gpt-6.1-terra";
         foreach(var input in new[]{parentModel,childModel}){input.Style=(Style)Resources["KitCombo"];input.IsEditable=false;input.IsTextSearchEnabled=true;input.FontSize=14;input.ToolTip="仅可从预设官方模型列表选择。";}
         RefreshModelChoices();
-        var modelTextProperty=System.ComponentModel.DependencyPropertyDescriptor.FromProperty(ComboBox.TextProperty,typeof(ComboBox));modelTextProperty.AddValueChanged(parentModel,(s,e)=>RefreshEfforts(parentEffort,parentModel.Text,"high"));modelTextProperty.AddValueChanged(childModel,(s,e)=>RefreshEfforts(childEffort,childModel.Text,"max"));
-        parentModel.SelectionChanged+=(s,e)=>{if(parentModel.SelectedItem!=null)RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"high");};childModel.SelectionChanged+=(s,e)=>{if(childModel.SelectedItem!=null)RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"max");};
+        var modelTextProperty=System.ComponentModel.DependencyPropertyDescriptor.FromProperty(ComboBox.TextProperty,typeof(ComboBox));modelTextProperty.AddValueChanged(parentModel,(s,e)=>RefreshEfforts(parentEffort,parentModel.Text,"max"));modelTextProperty.AddValueChanged(childModel,(s,e)=>RefreshEfforts(childEffort,childModel.Text,"max"));
+        parentModel.SelectionChanged+=(s,e)=>{if(parentModel.SelectedItem!=null)RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"max");};childModel.SelectionChanged+=(s,e)=>{if(childModel.SelectedItem!=null)RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"max");};
         modelCheck.Foreground=MutedBrush;modelCheck.TextWrapping=TextWrapping.Wrap;modelCheck.Margin=new Thickness(0,8,0,12);
         subagents.Checked+=(s,e)=>UpdateModelInputs();subagents.Unchecked+=(s,e)=>UpdateModelInputs();UpdateModelInputs();
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
@@ -148,21 +150,21 @@ public class MainWindow : Window {
             var labels=new Dictionary<string,string>{{"desktopVersion","桌面版本"},{"desktopHealth","组件状态"},{"runtimeMode","当前 CLI 模式"},{"runtimeModeDetail","运行时说明"},{"currentCliPath","当前 CLI 路径"},{"configModel","当前模型"},{"configEffort","当前推理强度"},{"protectionInstalled","启动保护已安装"},{"processRunning","Codex 正在运行"},{"backupPath","初始化备份"}};
             foreach(var pair in labels) { var value=status.ContainsKey(pair.Key)?status[pair.Key]:null;var display=pair.Key=="runtimeMode"?RuntimeMode(value):pair.Key=="currentCliPath"&&String.IsNullOrWhiteSpace(Convert.ToString(value))&&Convert.ToString(status.ContainsKey("runtimeMode")?status["runtimeMode"]:null)=="DesktopNative"?"由桌面应用自动选择":Format(value);var row=T(pair.Value+"   "+display,pair.Key=="runtimeMode"?16:13,pair.Key=="runtimeMode"?Accent:MutedBrush);if(pair.Key=="runtimeMode")row.FontWeight=FontWeights.SemiBold;p.Children.Add(row); }
         }
-        var model=Card("默认模型","父模型  GPT6.1 SOL · 高推理\n子代理默认关闭；启用子代理时使用 GPT5.6 LUNA · MAX · 最多 6 个，单层调用");
-        model.Children.Add(T("gpt-6.1-sol / high    ·    子代理默认关闭，启用后为 gpt-5.6-luna / max",12,Accent));
+        var model=Card("默认模型","父模型  GPT6.1 TERRA · MAX\n子代理默认关闭；启用子代理时使用 GPT6.1 TERRA · MAX · 最多 6 个，单层调用");
+        model.Children.Add(T("gpt-6.1-terra / max    ·    子代理默认关闭，启用后为 gpt-6.1-terra / max",12,Accent));
     }
     static string Format(object value) { if(value==null)return "未检测"; if(value is bool)return (bool)value?"是":"否"; var text=Convert.ToString(value);if(text=="healthy")return "完整";if(text=="missing")return "未找到";if(text=="incomplete")return "组件不完整";return text; }
     static string RuntimeMode(object value) { var text=Convert.ToString(value);if(text=="DesktopNative")return "桌面原生";if(text=="OfficialStandalone")return "官方独立 CLI";return "需要检查"; }
     void VerifyRuntimeDisplay(string mode,string path) { var card=content.Children.Count>1?content.Children[1] as Border:null;var panel=card==null?null:card.Child as StackPanel;var texts=panel==null?new string[0]:panel.Children.OfType<TextBlock>().Select(x=>x.Text).ToArray();if(!texts.Any(x=>x.Contains(RuntimeMode(mode)))||!texts.Any(x=>x.Contains(path)))throw new InvalidOperationException("Runtime mode status was not displayed"); }
     int Port() { if(proxyEnabled.IsChecked!=true)return 0;int v; if(!int.TryParse(port.Text,out v)||v<1||v>65535)throw new InvalidOperationException("代理端口需为 1–65535 的整数。"); return v; }
-    void UpdateModelInputs(){var custom=modelMode.SelectedIndex==1;parentModel.IsEnabled=custom;childModel.IsEnabled=custom&&subagents.IsChecked==true;parentEffort.IsEnabled=custom;childEffort.IsEnabled=custom&&subagents.IsChecked==true;if(!custom){parentModel.SelectedItem="gpt-6.1-sol";childModel.SelectedItem="gpt-5.6-luna";parentEffort.SelectedItem="high";childEffort.SelectedItem="max";}RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"high");RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"max");modelCheck.Text=modelCatalog.Source+"\n"+(subagents.IsChecked==true?"子代理已开启：将写入所选子代理模型和思考强度。":"子代理未开启：子模型与思考强度已禁用，勾选子代理多线程后可设置。");}
+    void UpdateModelInputs(){var custom=modelMode.SelectedIndex==1;parentModel.IsEnabled=custom;childModel.IsEnabled=custom&&subagents.IsChecked==true;parentEffort.IsEnabled=custom;childEffort.IsEnabled=custom&&subagents.IsChecked==true;if(!custom){parentModel.SelectedItem="gpt-6.1-terra";childModel.SelectedItem="gpt-6.1-terra";parentEffort.SelectedItem="max";childEffort.SelectedItem="max";}RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"max");RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"max");modelCheck.Text=modelCatalog.Source+"\n"+(subagents.IsChecked==true?"子代理已开启：将写入所选子代理模型和思考强度。":"子代理未开启：子模型与思考强度已禁用，勾选子代理多线程后可设置。");}
     void RefreshEfforts(ComboBox combo,string model,string fallback){CatalogModel entry;var values=modelCatalog.Models.TryGetValue((model??"").Trim(),out entry)?entry.Efforts:new string[0];var current=Convert.ToString(combo.SelectedItem);combo.ItemsSource=values;combo.SelectedItem=values.Contains(current)?current:values.Contains(fallback)?fallback:entry!=null&&values.Contains(entry.DefaultEffort)?entry.DefaultEffort:values.FirstOrDefault();}
     string Effort(ComboBox combo,string fallback){return modelMode.SelectedIndex==1?Convert.ToString(combo.SelectedItem):fallback;}
-    void CheckModels(){try{modelCatalog=ModelCatalog.Preset();RefreshModelChoices();RefreshEfforts(parentEffort,parentModel.Text,"high");RefreshEfforts(childEffort,childModel.Text,"max");var p=Model(parentModel,"gpt-6.1-sol");var c=Model(childModel,"gpt-5.6-luna");modelCheck.Text=modelCatalog.Source+"\n"+modelCatalog.Check(p,Effort(parentEffort,"high"))+"\n"+(subagents.IsChecked==true?modelCatalog.Check(c,Effort(childEffort,"max")):"子代理未开启：跳过子模型检查。")+"\n预设列表不代表当前账号一定有调用权限。";}catch(Exception ex){modelCheck.Text=ex.Message;}}
-    void RefreshModelChoices(){var values=modelCatalog.Models.Keys.ToArray();foreach(var combo in new[]{parentModel,childModel}){var current=Convert.ToString(combo.SelectedItem);if(current.Length==0)current=combo==parentModel?"gpt-6.1-sol":"gpt-5.6-luna";combo.ItemsSource=values;combo.SelectedItem=values.Contains(current)?current:values.FirstOrDefault();}}
+    void CheckModels(){try{modelCatalog=ModelCatalog.Preset();RefreshModelChoices();RefreshEfforts(parentEffort,parentModel.Text,"max");RefreshEfforts(childEffort,childModel.Text,"max");var p=Model(parentModel,"gpt-6.1-terra");var c=Model(childModel,"gpt-6.1-terra");modelCheck.Text=modelCatalog.Source+"\n"+modelCatalog.Check(p,Effort(parentEffort,"max"))+"\n"+(subagents.IsChecked==true?modelCatalog.Check(c,Effort(childEffort,"max")):"子代理未开启：跳过子模型检查。")+"\n预设列表不代表当前账号一定有调用权限。";}catch(Exception ex){modelCheck.Text=ex.Message;}}
+    void RefreshModelChoices(){var values=modelCatalog.Models.Keys.ToArray();foreach(var combo in new[]{parentModel,childModel}){var current=Convert.ToString(combo.SelectedItem);if(current.Length==0)current=combo==parentModel?"gpt-6.1-terra":"gpt-6.1-terra";combo.ItemsSource=values;combo.SelectedItem=values.Contains(current)?current:values.FirstOrDefault();}}
     string Model(ComboBox input,string fallback){var value=modelMode.SelectedIndex==1?Convert.ToString(input.SelectedItem):fallback;if(!modelCatalog.Models.ContainsKey(value))throw new InvalidOperationException("请从下拉框选择预设模型。");return value;}
     string ProxyHost() { if(proxyEnabled.IsChecked!=true)return "";var text=(proxyHost.Text??"").Trim();if(text.Length==0)return Core.DefaultProxyHost;System.Net.IPAddress address;if(!System.Net.IPAddress.TryParse(text,out address))throw new InvalidOperationException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");return address.ToString(); }
-    Dictionary<string,object> Options(){var p=Model(parentModel,"gpt-6.1-sol");var pe=Effort(parentEffort,"high");var c=subagents.IsChecked==true?Model(childModel,"gpt-5.6-luna"):"gpt-5.6-luna";var ce=subagents.IsChecked==true?Effort(childEffort,"max"):"max";modelCatalog.Check(p,pe);if(subagents.IsChecked==true)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"folderManagement",folderManagement.IsChecked==true},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"parentModel",p},{"parentEffort",pe},{"childModel",c},{"childEffort",ce}};}
+    Dictionary<string,object> Options(){var p=Model(parentModel,"gpt-6.1-terra");var pe=Effort(parentEffort,"max");var c=subagents.IsChecked==true?Model(childModel,"gpt-6.1-terra"):"gpt-6.1-terra";var ce=subagents.IsChecked==true?Effort(childEffort,"max"):"max";modelCatalog.Check(p,pe);if(subagents.IsChecked==true)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"folderManagement",folderManagement.IsChecked==true},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"parentModel",p},{"parentEffort",pe},{"childModel",c},{"childEffort",ce}};}
     Dictionary<string,object> ProxyOptions(){return new Dictionary<string,object>{{"proxyHost",ProxyHost()}};}
     string ModelChecks(Dictionary<string,object> options){return modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。";}
     string ProxySummary(){var value=Port();if(value==0)return "关闭（不写入本地 HTTP 代理）";var host=ProxyHost();if(host.Contains(":")&&!host.StartsWith("["))host="["+host+"]";return "http://"+host+":"+value;}
@@ -177,7 +179,7 @@ public class MainWindow : Window {
             var hostRow=new StackPanel{Orientation=Orientation.Horizontal};hostRow.Children.Add(new TextBlock{Text="代理 IP（默认 127.0.0.1）",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});hostRow.Children.Add(proxyHost);proxyRows.Children.Add(hostRow);p.Children.Add(proxyRows);
             p.Children.Add(T("填写 V2RayN、Clash、软路由等提供的 HTTP／混合代理端口。端口默认按 V2RayN 的 10808 填写，请以你的实际设置为准。IP 留空使用 127.0.0.1；软路由在局域网其他设备时，请填写可访问的路由器 IP 地址。本工具不会启动代理服务。关闭后会忽略端口和 IP。",12,MutedBrush));
             var features=Card("02   选择要启用的功能","文件夹管理、CLI 启动保护、CUA、浏览器链接修复和两类更新默认开启；子代理多线程默认关闭。全局 AGENTS.md 会完整备份并重建，只写入本次选择的规则；未勾选功能不写入。基础配置仍会备份并重建。");foreach(var check in new[]{folderManagement,subagents,guard,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate})features.Children.Add(check);
-            var models=Card("03   模型设置","推荐父模型 gpt-6.1-sol / high，子代理 gpt-5.6-luna / max。父模型与子代理模型均通过下拉框选择。思考强度随模型切换，只显示对应模型支持的档位。模型列表随软件版本更新，实际调用权限取决于账号。");models.Children.Add(modelMode);ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);models.Children.Add(Button("检查所选配置",()=>CheckModels(),false));
+            var models=Card("03   模型设置","推荐父模型 gpt-6.1-terra / max，子代理 gpt-6.1-terra / max。父模型与子代理模型均通过下拉框选择。思考强度随模型切换，只显示对应模型支持的档位。模型列表随软件版本更新，实际调用权限取决于账号。");models.Children.Add(modelMode);ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);models.Children.Add(Button("检查所选配置",()=>CheckModels(),false));
             models.Children.Add(Button("下一步：查看变更  →",()=>{try{Port();Drive();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}},true));
         } else if(wizard==1) {
             var p=Card("02   确认初始化","将更新当前 Windows 用户的 Codex 配置。执行时会请求管理员授权。");
@@ -198,6 +200,9 @@ public class MainWindow : Window {
         officialSwitch=switchButton;
         Row(g,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),switchButton,Button("更新官方独立 CLI",async()=>await Run("official-cli-update","更新官方独立 CLI",true),false),Button("更新桌面版（含原生 CLI）",async()=>await Run("desktop-update","更新桌面版",true),false),Button("诊断助手",async()=>await Run("doctor","诊断助手",false),false));
         if(diagnosticAdvice.Length>0){g.Children.Add(T("\n最近一次诊断建议",16,TextBrush));g.Children.Add(T(diagnosticAdvice,13,MutedBrush));g.Children.Add(Link("查看详细日志",()=>Navigate("日志")));}
+        var core=Card("桌面启动修复","无法启动或提示无法加载组织设置时，可检查桌面版的启动组件。适用于运行文件复制出现 EPERM / rename_staging 的情况；其他原因需要分别排查。");
+        Row(core,Button("检查启动问题",async()=>await Run("desktop-core-check","检查桌面启动问题",false),true),Button("修复桌面启动组件",async()=>await Run("desktop-core-repair","修复桌面启动组件",true),false));
+        core.Children.Add(T(desktopCoreAdvice.Length>0?desktopCoreAdvice:"先检查当前版本和近期日志；修复前请保存工作并退出 Codex。不会强制结束任务，也不会覆盖已有的异常目录。",12,MutedBrush));
         var compatibility=Card("配置兼容检查","检查用户配置、profile 和下方明确指定的项目。清理只移除两项已失效设置，先备份并生成恢复脚本；不会重置配置、关闭 Codex 或切换 CLI。");
         compatibility.Children.Add(T("项目目录（可选，仅检查该项目的 .codex/config.toml）",12,MutedBrush));
         var projectInput=new TextBox{Text=compatibilityProjectPath,Style=(Style)Resources["KitInput"]};projectInput.TextChanged+=(s,e)=>compatibilityProjectPath=projectInput.Text;compatibility.Children.Add(projectInput);
@@ -232,7 +237,8 @@ public class MainWindow : Window {
         enabled.Checked+=(a,b)=>{proxyEnabled.IsChecked=true;hostInput.IsEnabled=portInput.IsEnabled=true;};enabled.Unchecked+=(a,b)=>{proxyEnabled.IsChecked=false;hostInput.IsEnabled=portInput.IsEnabled=false;};
         hostInput.TextChanged+=(a,b)=>proxyHost.Text=hostInput.Text;portInput.TextChanged+=(a,b)=>port.Text=portInput.Text;
         settings.Children.Add(enabled);settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(hostInput);settings.Children.Add(T("HTTP 代理端口",12,MutedBrush));settings.Children.Add(portInput);
-        Row(settings,Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),true),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",()=>{Clipboard.SetText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。");banner.Text="已复制 · 重启 Codex 后在新对话中运行测试";},false));
+        Row(settings,Button("修复并启动 Codex",async()=>await Run("browser-start-prepare","修复并启动 Codex",true),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",()=>{Clipboard.SetText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。");banner.Text="已复制 · 重启 Codex 后在新对话中运行测试";},false));
+        settings.Children.Add(T("通过此按钮启动时会先检查并按需修复；原来的 Codex 图标不会经过此检查。",12,MutedBrush));
         var checks=Card("分项验证","HTTP 403 只表示服务可达，不表示 Chrome 已连接。环境探针验证 Node 与子进程继承，真实 CUA 连接仍需重启后测试。");
         foreach(var item in new[]{new[]{"integrity","组件完整性"},new[]{"reachability","代理可达性"},new[]{"environment","环境继承探针"},new[]{"connection","真实连接验证"}})checks.Children.Add(T(item[1]+"："+Core.Value(browserReport,item[0],item[0]=="connection"?"待重启后验证":"未检查"),13,MutedBrush));
         checks.Children.Add(T("修改前请保存工作并彻底退出 Codex，再从独立 EXE 执行修复。本工具不会关闭 Chrome 或用户标签页。修复后重新启动 Codex，复制上方指令完成验收。",12,Accent));
@@ -248,9 +254,10 @@ public class MainWindow : Window {
             if(!buttons.SequenceEqual(new[]{"安装 / 修复保护",expected,"更新官方独立 CLI","更新桌面版（含原生 CLI）","诊断助手"}))throw new InvalidOperationException("Maintenance switch labels or order were wrong");var texts=((Grid)panel.Children[0]).Children.OfType<TextBlock>().Select(x=>x.Text).ToArray();if(!texts.Any(x=>x.Contains(mode=="DesktopNative"?"桌面原生 CLI":mode=="OfficialStandalone"?"官方独立 CLI":"需检查")))throw new InvalidOperationException("Maintenance status badge was missing");
             if(mode!="Unknown"&&((SolidColorBrush)panel.Children.OfType<WrapPanel>().First().Children.OfType<Button>().ElementAt(1).Background).Color!=Color.FromRgb(155,175,159))throw new InvalidOperationException("CLI switch highlight was lost");
             var configPanel=content.Children.OfType<Border>().Select(x=>x.Child as StackPanel).FirstOrDefault(x=>x!=null&&x.Children.OfType<TextBlock>().Any(t=>t.Text=="配置兼容检查"));if(configPanel==null||!configPanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).SequenceEqual(new[]{"检查配置","清理已废弃配置"}))throw new InvalidOperationException("Config compatibility controls missing");
+            var corePanel=content.Children.OfType<Border>().Select(x=>x.Child as StackPanel).FirstOrDefault(x=>x!=null&&x.Children.OfType<TextBlock>().Any(t=>t.Text=="桌面启动修复"));if(corePanel==null||!corePanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).SequenceEqual(new[]{"检查启动问题","修复桌面启动组件"}))throw new InvalidOperationException("Desktop startup recovery controls missing");
         }
         diagnosticAdvice=DiagnosticAdvice.Build(null,1,"[ERROR] proxy connection refused");Navigate("维护恢复");var guardPanel=(StackPanel)((Border)content.Children[0]).Child;if(!guardPanel.Children.OfType<TextBlock>().Any(x=>x.Text.Contains("建议怎么做")))throw new InvalidOperationException("Diagnostic advice was not retained in maintenance");var dialog=CreateDiagnosticDialog();if(dialog.Title!="诊断建议")throw new InvalidOperationException("Diagnostic dialog missing");dialog.Close();diagnosticAdvice="";status=null;wizard=0;Navigate("初始化");if(!(parentModel.Parent is Grid)||parentModel.Parent!=parentEffort.Parent||childModel.Parent!=childEffort.Parent||parentModel.Parent==childModel.Parent)throw new InvalidOperationException("Model and effort controls were not paired by row");
-        parentModel.ApplyTemplate();var popup=(System.Windows.Controls.Primitives.Popup)parentModel.Template.FindName("PART_Popup",parentModel);var popupScroll=((Border)popup.Child).Child as SmoothScrollViewer;if(popupScroll==null)throw new InvalidOperationException("Model dropdown scrolling is not smooth");double itemsHeight=10;foreach(var id in ModelCatalog.Preset().Models.Keys){var item=new ComboBoxItem{Content=id,Style=(Style)Resources["KitComboItem"]};item.Measure(new Size(320,Double.PositiveInfinity));itemsHeight+=item.DesiredSize.Height;if(item.FontSize!=12.5)throw new InvalidOperationException("Dropdown font was not compact");}if(itemsHeight>popupScroll.MaxHeight)throw new InvalidOperationException("Preset dropdown requires unnecessary scrolling");
+        parentModel.ApplyTemplate();var popup=(System.Windows.Controls.Primitives.Popup)parentModel.Template.FindName("PART_Popup",parentModel);var popupScroll=((Border)popup.Child).Child as SmoothScrollViewer;if(popupScroll==null)throw new InvalidOperationException("Model dropdown scrolling is not smooth");double itemsHeight=10;foreach(var id in ModelCatalog.Preset().Models.Keys){var item=new ComboBoxItem{Content=id,Style=(Style)Resources["KitComboItem"]};item.Measure(new Size(320,Double.PositiveInfinity));itemsHeight+=item.DesiredSize.Height;if(item.FontSize!=12.5)throw new InvalidOperationException("Dropdown font was not compact");}if(itemsHeight<=0||popupScroll.MaxHeight<=0)throw new InvalidOperationException("Preset dropdown scrolling is unavailable");
     }
     void Updates() {
         subtitle.Text="从项目 GitHub 发现新版本，确认后下载、校验并替换。";
@@ -275,7 +282,9 @@ public class MainWindow : Window {
             case "guard-current":return "先检查官方独立 CLI，缺失或不完整时从官方渠道准备，再切换。请先退出 Codex。";
             case "official-cli-update":return "更新官方独立 CLI 组件，保留当前 CLI 模式；不安装启动保护或登录任务。请先退出 Codex。";
             case "desktop-update":return "通过 winget 更新官方 Microsoft Store 桌面版（含原生 CLI），最长等待 20 分钟；不自动重启。请先退出 Codex。";
+            case "desktop-core-repair":return "请先保存工作并彻底退出 Codex。将核对当前官方桌面版，若当前版本的用户目录缺失，则复制并逐项校验四个启动组件。若目录已有异常文件、版本变化或无法识别，操作会停止，不会强制结束任务或覆盖已有目录。完成后仍需启动 Codex 验证。";
             case "browser-check":return "只读校验 CUA、代理端口及 Node 环境继承探针。真实 Chrome 连接需重启后测试。";
+            case "browser-start-prepare":return "请先保存工作并彻底退出 Codex。将检查当前版本和代理设置（"+ProxySummary()+"），必要时备份并修复浏览器入口，然后请求启动官方桌面应用。未知修改或校验失败时停止，不会强制结束任务或关闭 Chrome。";
             case "browser-repair":return "使用当前代理设置："+ProxySummary()+"。请先退出 Codex；校验官方入口后备份并应用补丁。未知结构或哈希异常时保留原文件。不会关闭 Chrome。";
             case "browser-rollback":return "请先退出 Codex。核对当前版本及前后哈希后，恢复本工具备份的原始入口；版本变化时拒绝覆盖。不会关闭 Chrome。";
             case "guard-update":return "从官方渠道下载并更新保护器管理的 CLI。请先关闭 Codex 桌面应用。";
@@ -286,19 +295,33 @@ public class MainWindow : Window {
         if(busy){banner.Text="请等待当前操作完成。";return;}
         var refreshStatus=false;
         try {
-            var configOperation=op=="config-check"||op=="config-cleanup";
-            int proxy=op=="status"||configOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(op=="status"?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            var configOperation=op=="config-check"||op=="config-cleanup";var coreOperation=op=="desktop-core-check"||op=="desktop-core-repair";
+            int proxy=op=="status"||configOperation||coreOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(op=="status"||coreOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            if(op=="browser-start-prepare" && Core.Admin)throw new InvalidOperationException("请以普通用户权限打开本工具，再使用修复并启动功能。");
             if(confirm && !Confirm(title,Impact(op)))return;
             if(configOperation)compatibilityAdvice="";
+            if(coreOperation)desktopCoreAdvice="";
             busy=true; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=true;
             if(op=="initialize")initializationSummary="";
+            if(op=="browser-start-prepare")browserStartTarget=null;
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
             var id=Guid.NewGuid().ToString("N"); lastLog=Path.Combine(Core.Logs,id+".log"); log.Text="";
             using(var process=Core.StartWorker(op,id,disk,proxy,op=="initialize"&&guard.IsChecked==true,options)) {
                 while(!process.HasExited) { await Task.Delay(300); ReadLog(); }
                 ReadLog(); progress.IsIndeterminate=false;
                 if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=log.Text;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;Navigate("维护恢复");}
+                else if(coreOperation){if(desktopCoreAdvice.Length==0)desktopCoreAdvice=log.Text;banner.Text=process.ExitCode==0?"桌面启动组件检查完成 · 请查看结果":"桌面启动检查或修复未完成 · 请查看原因";progress.Value=100;Navigate("维护恢复");if(process.ExitCode!=0&&!preview)MessageBox.Show(this,desktopCoreAdvice,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
                 else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,log.Text);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(log.Text);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;Navigate("维护恢复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
+                else if(op=="browser-start-prepare"){
+                    if(process.ExitCode!=0){banner.Text="浏览器准备未完成 · 请查看日志中的原因";progress.Value=100;Navigate("浏览器连接");if(!preview)MessageBox.Show(this,banner.Text+"\n\n"+log.Text,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
+                    else {
+                        if(browserStartTarget==null)throw new InvalidDataException("未收到经过校验的桌面应用身份。");
+                        var current=await VerifyBrowserStartTarget();
+                        var uri=Core.BrowserLaunchUri(browserStartTarget,current);
+                        var launch=new ProcessStartInfo("explorer.exe",uri){UseShellExecute=true,WindowStyle=ProcessWindowStyle.Hidden};Process.Start(launch);
+                        var reach=Core.Value(browserStartTarget,"reachability","");banner.Text=reach.Contains("不可达")?"已请求启动 Codex · 代理端口不可达，请检查代理":"已请求启动 Codex · 真实浏览器连接仍需验证";progress.Value=100;Navigate("浏览器连接");
+                    }
+                }
                 else if(op.StartsWith("browser-")){banner.Text=process.ExitCode==0?"浏览器检查或修复已准备 · 真实连接需重启后验证":"浏览器操作未完成 · 可查看原因后单独重试";progress.Value=100;Navigate("浏览器连接");}
                 else if(op=="initialize"&&process.ExitCode==2){banner.Text="初始化部分完成 · 请重试未完成项目";progress.Value=100;if(!preview)MessageBox.Show(this,initializationSummary,"初始化部分完成",MessageBoxButton.OK,MessageBoxImage.Warning);refreshStatus=true;}
                 else if(process.ExitCode!=0) { banner.Text=title+"未完成 · 退出码 "+process.ExitCode+" · 查看日志了解原因"; if(op!="status")MessageBox.Show(this,banner.Text,title,MessageBoxButton.OK,MessageBoxImage.Warning); }
@@ -313,9 +336,11 @@ public class MainWindow : Window {
         if(!File.Exists(lastLog))return;
         string text; using(var fs=new FileStream(lastLog,FileMode.Open,FileAccess.Read,FileShare.ReadWrite))using(var reader=new StreamReader(fs,Encoding.UTF8))text=reader.ReadToEnd();
         var display=new StringBuilder(); foreach(var line in text.Split('\n')) {
-            if(line.StartsWith("@@BROWSER@@")){try{browserReport=Core.ReadJson(line.Substring(11).Trim());}catch{display.AppendLine("浏览器结果无法读取。");}}
+            if(line.StartsWith("@@BROWSER_START@@")){try{browserStartTarget=Core.ReadJson(line.Substring(17).Trim());}catch{display.AppendLine("启动身份无法读取。");}}
+            else if(line.StartsWith("@@BROWSER@@")){try{browserReport=Core.ReadJson(line.Substring(11).Trim());}catch{display.AppendLine("浏览器结果无法读取。");}}
             else if(line.StartsWith("@@INIT_RESULT@@")){try{initializationSummary=Core.Value(Core.ReadJson(line.Substring(15).Trim()),"summary","");display.AppendLine(initializationSummary);}catch{display.AppendLine("初始化结果无法读取。");}}
             else if(line.StartsWith("@@CONFIG_COMPAT@@")){try{compatibilityAdvice=Core.Value(Core.ReadJson(line.Substring(17).Trim()),"summary","");}catch{display.AppendLine("配置检查结果无法读取，请查看详细日志。");}}
+            else if(line.StartsWith("@@DESKTOP_CORE@@")){try{var report=Core.ReadJson(line.Substring("@@DESKTOP_CORE@@".Length).Trim());desktopCoreAdvice=Core.Value(report,"summary","")+"\n桌面版本："+Core.Value(report,"version","未检测")+"\n近期日志："+Core.Value(report,"signal","未检查")+"\n组件目录："+Core.Value(report,"target","未检测");}catch{display.AppendLine("桌面启动检查结果无法读取，请查看详细日志。");}}
             else if(line.StartsWith("@@STATUS@@")) {try{status=Core.ReadJson(line.Substring(10).Trim());}catch(Exception ex){display.AppendLine("状态输出格式无效："+ex.Message);} }
             else if(line.StartsWith("@@DIAGNOSIS@@")){try{diagnosisContext=Core.ReadJson(line.Substring(13).Trim());}catch{display.AppendLine("未能读取组件检查结果；建议将依据诊断输出生成。");}}
             else if(line.StartsWith("@@PROGRESS@@")) {try{var p=Core.ReadJson(line.Substring(12).Trim());banner.Text=ProgressTitle(Core.Value(p,"title",operationTitle));int step,total;if(int.TryParse(Core.Value(p,"step","0"),out step)&&int.TryParse(Core.Value(p,"total","0"),out total)&&total>1){progress.IsIndeterminate=false;progress.Value=100.0*Math.Max(0,step-1)/total;}display.AppendLine(banner.Text);}catch(Exception ex){display.AppendLine("阶段输出格式无效："+ex.Message);} }
@@ -332,6 +357,16 @@ public class MainWindow : Window {
             Dictionary<string,object> refreshed=null;foreach(var line in text.Split('\n'))if(line.StartsWith("@@STATUS@@")){try{refreshed=Core.ReadJson(line.Substring(10).Trim());}catch{} }
             if(refreshed!=null){status=refreshed;if(page=="概览"||page=="维护恢复")Navigate(page);}
         } catch { }
+    }
+    async Task<Dictionary<string,object>> VerifyBrowserStartTarget() {
+        var id=Guid.NewGuid().ToString("N");var path=Path.Combine(Core.Logs,id+".log");
+        using(var process=Core.StartWorker("browser-start-verify",id,Environment.SystemDirectory.Substring(0,1),0,false,null)){
+            while(!process.HasExited)await Task.Delay(100);
+            if(process.ExitCode!=0)throw new InvalidDataException("重新检查桌面应用失败，请查看日志后重试。");
+        }
+        var lines=File.ReadAllLines(path,Encoding.UTF8);var line=lines.LastOrDefault(x=>x.StartsWith("@@BROWSER_START@@"));
+        if(line==null)throw new InvalidDataException("未收到桌面应用复核结果。");
+        return Core.ReadJson(line.Substring(17).Trim());
     }
     static string ProgressTitle(string value) {
         var titles=new Dictionary<string,string>{{"Confirm folder-management drive","确认工作盘"},{"Run full initialization and backup","备份并完成初始化配置"},{"Install folder management and binding","安装文件夹管理并绑定工作区"},{"Check and repair CUA runtime","检查并按需修复 CUA"},{"Install and verify Luna configuration","安装并校验 Luna 配置"},{"Rebuild proxy configuration","重建代理配置"},{"Rollback latest initialization backup","回滚最新初始化备份"},{"Check CUA runtime","检查 CUA"},{"Repair CUA runtime","修复 CUA"}};

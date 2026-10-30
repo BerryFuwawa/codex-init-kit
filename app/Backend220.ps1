@@ -225,6 +225,27 @@ function Invoke-BrowserOperation {
         Write-BrowserAtomic (Join-Path $root 'last-check.json') ([Text.Encoding]::UTF8.GetBytes(($report|ConvertTo-Json -Depth 5)))
     }
 }
+function Invoke-BrowserStartWorker {
+    param([string]$PayloadRoot,[int]$Port,[object]$Options,[switch]$VerifyOnly)
+    . (Assert-PayloadFile $PayloadRoot 'BrowserStartup.ps1')
+    if($VerifyOnly){
+        $package=Get-OfficialDesktopPackage
+        Assert-DesktopReady $package
+        $target=Get-BrowserLaunchTarget $package
+        Write-BackendLine ('@@BROWSER_START@@'+($target|ConvertTo-Json -Compress))
+        return 0
+    }
+    $mutex=$null;$acquired=$false
+    try {
+        $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $mutex=[Threading.Mutex]::new($false,('Local\CodexCUARepair-'+$sid))
+        try{$acquired=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$acquired=$true}
+        if(-not $acquired){throw 'Another CUA or browser operation is running.'}
+        return (Invoke-BrowserStartup -PayloadRoot $PayloadRoot -Port $Port -ProxyHost $Options.proxyHost -AllowDirect -PrepareOnly -EmitLaunchInfo)
+    } finally {
+        if($acquired -and $mutex){$mutex.ReleaseMutex()};if($mutex){$mutex.Dispose()}
+    }
+}
 function Invoke-Initialize220 {
     param($InputData)
     [void](Assert-DesktopStopped $InputData.PayloadRoot -AllowOtherChannel)

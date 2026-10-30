@@ -29,11 +29,11 @@ class DocumentationRenderer {
             type.GetField("status",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,new Dictionary<string,object>{
                 {"desktopVersion","示例"},{"desktopHealth","healthy"},{"runtimeMode","DesktopNative"},
                 {"runtimeModeDetail","使用 Codex 桌面应用自带的 CLI。"},{"currentCliPath",null},
-                {"configModel","gpt-6.1-sol"},{"configEffort","high"},{"protectionInstalled",true},
+                {"configModel","gpt-6.1-terra"},{"configEffort","max"},{"protectionInstalled",true},
                 {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"}});
             var pages=new[]{"概览","维护恢复","浏览器连接"};
             var files=new[]{"overview","maintenance","browser-connection"};
-            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:1200,dpi);}
+            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:i==1?1600:1200,dpi);}
             var adviceType=assembly.GetType("CodexKit.DiagnosticAdvice",true);var example=(string)adviceType.GetMethod("Build").Invoke(null,new object[]{new Dictionary<string,object>{{"standaloneHealthy",true},{"desktopFound",true},{"desktopHealthy",true}},1,adviceType.GetField("AsciiFixture").GetRawConstantValue()});type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,example);
             var diagnosis=(Window)type.GetMethod("CreateDiagnosticDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);var adviceView=(FrameworkElement)diagnosis.Content;adviceView.Measure(new Size(660,Double.PositiveInfinity));SaveView(adviceView,directory,"diagnosis",660,(int)Math.Ceiling(adviceView.DesiredSize.Height),dpi);diagnosis.Close();type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");
             navigate.Invoke(window,new object[]{"初始化"});type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window).GetType().GetProperty("SelectedIndex").SetValue(type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window),1,null);Save(window,directory,"settings-scroll",900,dpi);Save(window,directory,"settings",1800,dpi);

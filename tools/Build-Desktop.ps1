@@ -24,6 +24,11 @@ $argsList+="/resource:$(Join-Path $root 'app\ConfigCompatibility.cs'),Payload.Co
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopBackend.Tests.ps1'),Payload.Backend.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'app\Backend220.ps1'),Payload.Backend220.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\Backend220.Tests.ps1'),Payload.Backend220.Tests.ps1"
+$argsList+="/resource:$(Join-Path $root 'scripts\BrowserStartup.ps1'),Payload.BrowserStartup.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\BrowserStartup.Tests.ps1'),Payload.BrowserStartup.Tests.ps1"
+$argsList+="/resource:$(Join-Path $root 'app\DesktopCoreRecovery.ps1'),Payload.DesktopCoreRecovery.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\DesktopCoreRecovery.Tests.ps1'),Payload.DesktopCoreRecovery.Tests.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\RuntimeDiscovery.Tests.ps1'),Payload.RuntimeDiscovery.Tests.ps1"
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' | ForEach-Object FullName)
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }

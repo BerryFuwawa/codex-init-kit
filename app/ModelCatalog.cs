@@ -18,8 +18,8 @@ public sealed class ModelCatalog {
     public static readonly string[] CommonEfforts={"none","minimal","low","medium","high","xhigh","max","ultra"};
     public static bool ValidId(string value){return value!=null&&Regex.IsMatch(value,"^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}\\z");}
     public static ModelCatalog Preset(){
-        var result=new ModelCatalog{Source="内置模型列表 · 2026-10-04（官方 Codex 模型元数据）"};
-        foreach(var id in new[]{"gpt-6.1-sol","gpt-6-astra","gpt-6-sol","gpt-6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna","gpt-5.5"}){
+        var result=new ModelCatalog{Source="内置模型列表 · 2026-10-30（Codex 模型元数据；旧版模型需账号支持）"};
+        foreach(var id in new[]{"gpt-6.1-sol","gpt-6-astra","gpt-6.1-terra","gpt-6-sol","gpt-6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-5.6-luna","gpt-5.5"}){
             var efforts=id=="gpt-5.5"?new[]{"low","medium","high","xhigh"}:id.EndsWith("-luna")?new[]{"low","medium","high","xhigh","max"}:new[]{"low","medium","high","xhigh","max","ultra"};
             result.Models[id]=new CatalogModel{Id=id,DefaultEffort="medium",Efforts=efforts};
         }

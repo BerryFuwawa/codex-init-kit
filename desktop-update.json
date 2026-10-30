@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.2.0",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.0/CodexInitKit.exe",
-    "sha256":  "da6ada5189ab5279635aab20c7ecd5b0f6b7ba8799112b0faa6c00928044211e",
-    "notes":  "Browser connection repair with verified backups; separate official CLI and desktop updates; partial initialization results and CLI recovery guidance."
+    "version":  "2.2.1",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.1/CodexInitKit.exe",
+    "sha256":  "88d07f71548997782e45596cd98049f8333794576df42b7bebe5da6ce618cee3",
+    "notes":  "Browser repair and launch, desktop startup recovery, and GPT-6.1 Terra max model defaults."
 }

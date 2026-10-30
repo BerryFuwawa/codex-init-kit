@@ -3,6 +3,14 @@ function Get-BrowserAppId($Applications) {
     if($apps.Count -ne 1 -or -not $apps[0].Id){throw 'Cannot uniquely identify official app launch ID.'}
     return [string]$apps[0].Id
 }
+function Get-BrowserLaunchTarget {
+    param($Package)
+    if(-not $Package){$Package=Get-OfficialDesktopPackage}
+    [xml]$manifest=[IO.File]::ReadAllText((Join-Path $Package.InstallLocation 'AppxManifest.xml'))
+    $appId=Get-BrowserAppId @($manifest.Package.Applications.Application)
+    if($Package.PackageFamilyName -ne 'OpenAI.Codex_2p2nqsd0c76g0' -or $appId -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'){throw 'Unsupported official application identity.'}
+    return [pscustomobject]@{packageFullName=[string]$Package.PackageFullName;packageFamilyName=[string]$Package.PackageFamilyName;appId=$appId}
+}
 function Get-LegacyBrowserBytes {
     param([byte[]]$Original,[string]$Proxy,[string]$Date)
     # Regenerate the entire known entry, never trust a marker or execute its contents.
@@ -38,6 +46,8 @@ function Import-LegacyBrowserPatch {
     foreach($key in $expected.Files.Keys){if(-not $actual.Files.ContainsKey($key) -or $actual.Files[$key].Hash -ne $expected.Files[$key].Hash){throw 'Component hash differs; migration stopped.'}}
     if($CheckOnly){return $true}
     Confirm-CodexStopped $Context.Package.InstallLocation $Context.Root
+    # Verify bundled Node capability before adopting or writing a legacy patch.
+    [void](Test-BrowserEnvironment $Context $Proxy)
     $root=Get-BrowserStateRoot
     [void][IO.Directory]::CreateDirectory($root);Assert-NoReparsePoint $root -Tree
     $originalHash=Get-BrowserBytesHash $original
@@ -55,12 +65,12 @@ function Import-LegacyBrowserPatch {
     return $true
 }
 function Invoke-BrowserStartup {
-    param([string]$PayloadRoot,[int]$Port=10808,[string]$ProxyHost='127.0.0.1',[switch]$CheckOnly,[switch]$PrepareOnly)
+    param([string]$PayloadRoot,[int]$Port=10808,[string]$ProxyHost='127.0.0.1',[switch]$CheckOnly,[switch]$PrepareOnly,[switch]$AllowDirect,[switch]$EmitLaunchInfo)
     $context=Get-BrowserContext $PayloadRoot
-    [xml]$manifest=[IO.File]::ReadAllText((Join-Path $context.Package.InstallLocation 'AppxManifest.xml'))
-    $appId=Get-BrowserAppId @($manifest.Package.Applications.Application)
+    $target=Get-BrowserLaunchTarget $context.Package
     $proxy=Get-ProxyUrl $Port $ProxyHost
-    if(-not $proxy){throw 'Startup repair requires an HTTP/mixed proxy; use browser rollback for direct mode.'}
+    if(-not $proxy -and -not $AllowDirect){throw 'Startup repair requires an HTTP/mixed proxy; use browser rollback for direct mode.'}
+    if($CheckOnly -and -not $proxy){throw 'CheckOnly requires an HTTP/mixed proxy.'}
     Write-BackendLine ('Codex '+$context.Package.Version+' / runtime '+$context.Id)
     if($CheckOnly){
         if(-not(Test-Path -LiteralPath $context.Launcher)){Write-BackendLine 'Runtime missing; repair required.';return 2}
@@ -78,19 +88,30 @@ function Invoke-BrowserStartup {
         [void][IO.Directory]::CreateDirectory($run)
         [void](Invoke-RuntimeRepair -SourceInventory (Get-TreeInventory $context.Source) -Target $context.Target -RuntimeRoot $context.Root -RunDirectory $run -InstallLocation $context.Package.InstallLocation)
     }
-    [void](Import-LegacyBrowserPatch $context $proxy)
-    # The normal browser operation supplies Node/proxy checks, atomic writes and the common backup format.
-    $managed=Get-BrowserManagedPatch $context.Source $context.Target -AllowOriginal
-    if($managed -and $managed.CurrentHash -eq $managed.PatchedHash -and $managed.Record.proxy -eq $proxy){
-        $verified=Compare-TreeInventory (Get-TreeInventory $context.Source) $context.Target
-        if(-not $verified.Passed){throw $verified.Reason}
-        Write-BackendLine 'Managed patch already ready; no entry write required.'
-        $rc=0
-    }else{$rc=Invoke-BrowserOperation 'repair' $PayloadRoot $Port @{proxyHost=$ProxyHost}}
+    $reachability='Direct mode; no proxy injected.'
+    if(-not $proxy){
+        # The common repair path restores only our verified managed patch.
+        $rc=Invoke-BrowserOperation 'repair' $PayloadRoot 0 @{proxyHost=$ProxyHost}
+    }else{
+        [void](Import-LegacyBrowserPatch $context $proxy)
+        $managed=Get-BrowserManagedPatch $context.Source $context.Target -AllowOriginal
+        if($managed -and $managed.CurrentHash -eq $managed.PatchedHash -and $managed.Record.proxy -eq $proxy){
+            $verified=Compare-TreeInventory (Get-TreeInventory $context.Source) $context.Target
+            if(-not $verified.Passed){throw $verified.Reason}
+            [void](Test-BrowserEnvironment $context $proxy)
+            Write-BackendLine 'Managed patch already ready; no entry write required.'
+            $rc=0
+        }else{$rc=Invoke-BrowserOperation 'repair' $PayloadRoot $Port @{proxyHost=$ProxyHost}}
+        $reachability=Test-BrowserProxy $proxy
+        Write-BackendLine $reachability
+    }
     if($rc -ne 0){return $rc}
-    if((Get-OfficialDesktopPackage).PackageFullName -ne $context.Package.PackageFullName){throw 'App updated before launch; run again.'}
+    $current=Get-OfficialDesktopPackage
+    if($current.PackageFullName -ne $context.Package.PackageFullName){throw 'App updated before launch; run again.'}
+    Confirm-CodexStopped $context.Package.InstallLocation $context.Root
+    if($EmitLaunchInfo){Write-BackendLine ('@@BROWSER_START@@'+(@{packageFullName=$target.packageFullName;packageFamilyName=$target.packageFamilyName;appId=$target.appId;reachability=$reachability}|ConvertTo-Json -Compress))}
     if(-not $PrepareOnly){
-        Start-Process -FilePath explorer.exe -ArgumentList ('shell:AppsFolder\'+$context.Package.PackageFamilyName+'!'+$appId) -WindowStyle Hidden
+        Start-Process -FilePath explorer.exe -ArgumentList ('shell:AppsFolder\'+$target.packageFamilyName+'!'+$target.appId) -WindowStyle Hidden
         Write-BackendLine 'Official app launch requested. Actual browser connection still needs verification.'
     }
     return 0
