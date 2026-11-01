@@ -35,6 +35,7 @@ $script:DefaultOptions = [ordered]@{
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
+    cliMode = 'desktop-native'
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-6.1-sol'
     parentEffort = 'medium'
@@ -128,6 +129,10 @@ function Convert-BackendOptions {
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
     foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    $cliMode=& $get 'cliMode'
+    if($null -eq $cliMode){$cliMode=$script:DefaultOptions.cliMode}
+    if($cliMode -isnot [string] -or $cliMode -cnotin @('desktop-native','official-standalone')){throw '请选择有效的 CLI 模式。'}
+    $normalized.cliMode=$cliMode
     $normalized.githubMirrorEnabled=Convert-BackendOptionBoolean (& $get 'githubMirrorEnabled') 'githubMirrorEnabled' $true
     $customMirror=& $get 'customGithubMirror'
     if($null -ne $customMirror -and $customMirror -isnot [string]){throw '自定义 GitHub 镜像需为文本。'}
@@ -475,7 +480,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.7')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.8')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -889,9 +894,50 @@ function Get-GuardPayloadText {
     $encoded = $raw.Substring($start+$begin.Length,$finish-($start+$begin.Length)) -replace '\s',''
     try { return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) } catch { throw 'guard.cmd PowerShell payload is invalid base64.' }
 }
+function Convert-DesktopGuardRuntime {
+    param([Parameter(Mandatory=$true)][string]$Code)
+    $text=$Code -replace "`r`n","`n"
+    if($text.Contains('# CODEX INIT KIT: preserve explicitly selected standalone')){return $text}
+    $applyAnchor=@'
+    $desktop = Get-DesktopInfo
+    if ($desktop.Found -and $desktop.BundleHealthy) {
+        return (Set-DesktopNativeMode $State "Desktop 内置运行时完整；standalone 仅作为后备")
+'@
+    $applyPrefix=@'
+    # CODEX INIT KIT: preserve explicitly selected standalone
+    $active = Get-UserEnv "CODEX_CLI_PATH"
+    if ($State["ActiveMode"] -eq "OfficialCurrent" -and $active -and $State["ActiveCliPath"] -and $active -ieq $State["ActiveCliPath"] -and $Candidate -and $Candidate.Healthy -and $Candidate.Cli) {
+        Set-ActiveCli $Candidate.Cli $State "OfficialCurrent"
+        return "OfficialCurrent"
+    }
+'@
+    $autoAnchor=@'
+        if ($desktop.Found -and $desktop.BundleHealthy) {
+            Set-DesktopNativeMode $state "登录自动维护：Desktop 内置运行时完整" | Out-Null
+'@
+    $autoReplacement=@'
+        $active = Get-UserEnv "CODEX_CLI_PATH"
+        if ($state["ActiveMode"] -eq "OfficialCurrent" -and $active -and $state["ActiveCliPath"] -and $active -ieq $state["ActiveCliPath"] -and $managed.Healthy) {
+            Set-ActiveCli $managed.Cli $state "OfficialCurrent"
+        } elseif ($desktop.Found -and $desktop.BundleHealthy) {
+            Set-DesktopNativeMode $state "登录自动维护：Desktop 内置运行时完整" | Out-Null
+'@
+    if(-not $text.Contains($applyAnchor) -or -not $text.Contains($autoAnchor)){throw '启动保护自动维护结构不匹配，无法安全保留 CLI 选择。'}
+    return $text.Replace($applyAnchor,($applyPrefix+"`n"+$applyAnchor)).Replace($autoAnchor,$autoReplacement)
+}
+function Update-DesktopGuardAutoScript {
+    $state=Load-State
+    if(-not (Convert-ToBoolean $state['Installed'])){return}
+    if(-not (Test-Path -LiteralPath $script:AutoScript -PathType Leaf)){throw '启动保护自动维护脚本缺失，无法保证 CLI 选择在登录后保持。'}
+    $old=[IO.File]::ReadAllText($script:AutoScript,[Text.Encoding]::UTF8)
+    $updated=Convert-DesktopGuardRuntime $old
+    if($updated -eq $old){return}
+    $tmp=$script:AutoScript+'.'+[guid]::NewGuid().ToString('N')+'.tmp';$backup=$tmp+'.bak'
+    try{[IO.File]::WriteAllText($tmp,$updated,[Text.UTF8Encoding]::new($true));[IO.File]::Replace($tmp,$script:AutoScript,$backup)}finally{if(Test-Path -LiteralPath $tmp){Remove-Item -LiteralPath $tmp -Force};if(Test-Path -LiteralPath $backup){Remove-Item -LiteralPath $backup -Force}}
+}
 function Initialize-GuardRuntime {
     param([Parameter(Mandatory=$true)][string]$GuardPath,[switch]$ForModification)
-    $code = Get-GuardPayloadText $GuardPath
+    $code = Convert-DesktopGuardRuntime (Get-GuardPayloadText $GuardPath)
     $tokens=$null; $errors=$null
     $ast = [Management.Automation.Language.Parser]::ParseInput($code,[ref]$tokens,[ref]$errors)
     if ($errors.Count -gt 0) { throw 'guard.cmd embedded PowerShell payload has syntax errors.' }
@@ -962,6 +1008,7 @@ function Invoke-GuardOperation {
         'guard-uninstall' { Remove-Protection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'doctor' { Run-Doctor | ForEach-Object { Write-BackendLine $_ } | Out-Null }
     }
+    if($Action -in @('guard-install','guard-current','guard-update')){Update-DesktopGuardAutoScript}
     if ($Action -eq 'doctor') {
         $doctorExitCode = if ($null -eq $global:LASTEXITCODE) { 0 } else { [int]$global:LASTEXITCODE }
         $newDoctorLogs = @(Get-ChildItem -LiteralPath $script:LogDir -Filter 'doctor_*.txt' -File -ErrorAction SilentlyContinue |

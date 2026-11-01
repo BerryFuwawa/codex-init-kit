@@ -43,6 +43,20 @@
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
+  <Style x:Key="KitCliChoice" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="#EDF2FC"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Margin" Value="0,4,10,4"/><Setter Property="Padding" Value="16,10"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+      <Border x:Name="Choice" Background="#293348" BorderBrush="#61718E" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Choice" Property="Background" Value="#9EBCFF"/><Setter TargetName="Choice" Property="BorderBrush" Value="#9EBCFF"/><Setter Property="Foreground" Value="#101B31"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Choice" Property="BorderBrush" Value="#70DFC0"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style x:Key="KitComboItem" TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="#EDF2FC"/><Setter Property="Padding" Value="12,6"/><Setter Property="FontSize" Value="12.5"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Item" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="#293348"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Item" Property="Background" Value="#2E4063"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.2.7",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.7/CodexInitKit.exe",
-  "sha256": "0e673423ea69594f0ddc96c845acab6eff9570d628447f941af955c551adeaa5",
-  "notes": "模型设置默认继承现有全局配置，未设置时使用 gpt-6.1-sol / 中（medium）。"
+  "version": "2.2.8",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.8/CodexInitKit.exe",
+  "sha256": "82a955816f88ebf513791b62982e626e3044cdc206f12053d3705cda68e43986",
+  "notes": "初始化可选择原生或官方独立 CLI，结束后自动返回结果页并显示清晰提示。"
 }

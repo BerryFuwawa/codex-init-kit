@@ -281,17 +281,79 @@ function Invoke-BrowserStartWorker {
         if($acquired -and $mutex){$mutex.ReleaseMutex()};if($mutex){$mutex.Dispose()}
     }
 }
+function Get-InitializationCliSnapshot {
+    param([string]$EnvironmentKey='Environment',[string]$StatePath)
+    $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($EnvironmentKey,$false)
+    $values=@{}
+    try {
+        $names=if($key){@($key.GetValueNames())}else{@()}
+        foreach($name in @('CODEX_CLI_PATH','CODEX_CODE_MODE_HOST_PATH')){
+            $present=$names -contains $name
+            $values[$name]=[pscustomobject]@{Present=$present;Value=if($present){$key.GetValue($name,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)}else{$null};Kind=if($present){$key.GetValueKind($name)}else{$null};Process=[Environment]::GetEnvironmentVariable($name,'Process')}
+        }
+    } finally {if($key){$key.Dispose()}}
+    if(-not $StatePath){$StatePath=Join-Path (Get-GuardInstallRootPath) 'State\guard-state.json'}
+    $priorState=if(Test-Path -LiteralPath $statePath -PathType Leaf){[IO.File]::ReadAllText($statePath,[Text.Encoding]::UTF8)|ConvertFrom-Json}else{$null}
+    $priorMode=@{}
+    foreach($name in @('ActiveMode','ActiveCliPath','LastModeReason')){
+        $property=if($priorState){$priorState.PSObject.Properties[$name]}else{$null}
+        $priorMode[$name]=[pscustomobject]@{Present=($null -ne $property);Value=if($property){$property.Value}else{$null}}
+    }
+    return [pscustomobject]@{Values=$values;EnvironmentKey=$EnvironmentKey;StatePath=$statePath;PriorMode=$priorMode}
+}
+function Restore-InitializationCliSnapshot {
+    param($Snapshot,[string]$PayloadRoot)
+    $key=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($Snapshot.EnvironmentKey)
+    try {
+        foreach($name in $Snapshot.Values.Keys){
+            $entry=$Snapshot.Values[$name]
+            if($entry.Present){$key.SetValue($name,$entry.Value,$entry.Kind)}else{$key.DeleteValue($name,$false)}
+            [Environment]::SetEnvironmentVariable($name,$entry.Process,'Process')
+        }
+    } finally {$key.Dispose()}
+    if(Test-Path -LiteralPath $Snapshot.StatePath -PathType Leaf){
+        Initialize-GuardRuntime (Assert-PayloadFile $PayloadRoot 'guard.cmd') -ForModification
+        $state=Load-State
+        foreach($name in $Snapshot.PriorMode.Keys){$entry=$Snapshot.PriorMode[$name];if($entry.Present){$state[$name]=$entry.Value}else{[void]$state.Remove($name)}}
+        Save-State $state
+        Broadcast-Environment
+    } else {
+        Initialize-GuardRuntime (Assert-PayloadFile $PayloadRoot 'guard.cmd')
+        Broadcast-Environment
+    }
+    Write-BackendLine '已恢复初始化前的用户 CLI 路径设置；请查看实际模式与组件状态。'
+}
+function Assert-InitializationCliMode {
+    param([string]$Mode)
+    $desktop=Get-ReadOnlyDesktopInfo
+    $runtime=Get-ReadOnlyRuntimeModeInfo (Get-GuardInstallRootPath) $desktop.InstallLocation
+    $expected=if($Mode -eq 'desktop-native'){'DesktopNative'}else{'OfficialStandalone'}
+    if($runtime.Mode -ne $expected){throw ('CLI 模式核验失败：'+$runtime.Detail)}
+    return $(if($expected -eq 'DesktopNative'){'桌面版原生 CLI'}else{'官方独立 CLI'})
+}
+function Set-InitializationCliMode {
+    param([string]$Mode,[string]$PayloadRoot)
+    if($Mode -eq 'desktop-native'){
+        $package=Get-OfficialDesktopPackage;Assert-DesktopReady $package;[void](Test-DesktopCli $package $PayloadRoot -SkipVersionProbe)
+        [void](Invoke-GuardOperation 'guard-native' $PayloadRoot)
+    } else {
+        [void](Invoke-GuardOperation 'guard-current' $PayloadRoot)
+    }
+    return (Assert-InitializationCliMode $Mode)
+}
 function Invoke-Initialize220 {
     param($InputData)
     [void](Assert-DesktopStopped $InputData.PayloadRoot -AllowOtherChannel)
     $opts=$InputData.Options
+    $cliSnapshot=Get-InitializationCliSnapshot
     $steps=[Collections.Generic.List[object]]::new()
     if($opts.desktopUpdate){$steps.Add(@{Name='更新桌面版（含原生 CLI）';Kind='desktop'})}
     $steps.Add(@{Name='重建配置、目录及 CUA';Kind='base'})
     if($opts.officialCliUpdate){$steps.Add(@{Name='更新官方独立 CLI';Kind='official'})}
     if($InputData.InstallProtection){$steps.Add(@{Name='安装启动保护';Kind='guard'})}
+    $steps.Add(@{Name='应用所选 CLI';Kind='cli'})
     if($opts.browserRepair){$steps.Add(@{Name='浏览器连接修复';Kind='browser'})}
-    $results=[Collections.Generic.List[object]]::new();$index=0;$desktopSafe=$true;$basePassed=$false
+    $results=[Collections.Generic.List[object]]::new();$index=0;$desktopSafe=$true;$basePassed=$false;$cliResult=$null;$cliApplied=$false
     $script:InitializationProgressActive=$true
     try {
         foreach($step in $steps){
@@ -315,10 +377,32 @@ function Invoke-Initialize220 {
                     }
                     'official' {[void](Invoke-OfficialCliUpdate $InputData.PayloadRoot)}
                     'guard' {if(-not $desktopSafe){throw 'Desktop update pending; startup protection paused.'};[void](Invoke-GuardOperation 'guard-install' $InputData.PayloadRoot)}
+                    'cli' {
+                        if(-not $basePassed){throw '基础初始化未完成，未切换 CLI。'}
+                        if(-not $desktopSafe){throw '桌面更新尚未完成，已暂停切换 CLI。'}
+                        $selected=Set-InitializationCliMode $opts.cliMode $InputData.PayloadRoot
+                        $cliApplied=$true
+                    }
                     'browser' {if(-not $desktopSafe){throw 'Desktop update pending; browser repair paused.'};if((Invoke-BrowserOperation 'repair' $InputData.PayloadRoot $InputData.ProxyPort $opts) -ne 0){throw '浏览器修复未完成，可在浏览器连接页单独重试。'}}
                 }
-                $results.Add(@{name=$step.Name;state='complete';message='完成'})
-            } catch {$results.Add(@{name=$step.Name;state='incomplete';message=$_.Exception.Message});Write-BackendLine ('[INCOMPLETE] '+$step.Name+': '+$_.Exception.Message)}
+                $entry=@{name=$step.Name;state='complete';message=if($step.Kind -eq 'cli'){'已选择并核验：'+$selected}else{'完成'}}
+                $results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry;Write-BackendLine ('当前 CLI 模式：'+$selected)}
+            } catch {
+                $message=$_.Exception.Message
+                if($step.Kind -eq 'cli'){
+                    try{Restore-InitializationCliSnapshot $cliSnapshot $InputData.PayloadRoot;$message+='；已恢复初始化前的 CLI 路径设置。'}catch{$message+='；恢复原 CLI 设置失败：'+$_.Exception.Message}
+                }
+                $entry=@{name=$step.Name;state='incomplete';message=$message};$results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry}
+                Write-BackendLine ('[INCOMPLETE] '+$step.Name+': '+$message)
+            }
+        }
+        if($cliApplied){
+            try{$actual=Assert-InitializationCliMode $opts.cliMode;Write-BackendLine ('最终 CLI 模式：'+$actual)}
+            catch{
+                $cliResult.state='incomplete';$cliResult.message='最终 CLI 模式核验失败：'+$_.Exception.Message
+                try{Restore-InitializationCliSnapshot $cliSnapshot $InputData.PayloadRoot;$cliResult.message+='；已恢复初始化前的 CLI 路径设置。'}catch{$cliResult.message+='；恢复原 CLI 设置失败：'+$_.Exception.Message}
+                Write-BackendLine ('[INCOMPLETE] 应用所选 CLI: '+$cliResult.message)
+            }
         }
     } finally {$script:InitializationProgressActive=$false}
     $incomplete=@($results|Where-Object {$_.state -ne 'complete'})

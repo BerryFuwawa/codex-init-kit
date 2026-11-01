@@ -16,7 +16,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.7";
+    public const string Version = "2.2.8";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
@@ -68,7 +68,7 @@ public static class Core {
             {"folderManagement", true}, {"antiOverDefense", true}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
-            {"proxyHost", DefaultProxyHost}
+            {"proxyHost", DefaultProxyHost}, {"cliMode","desktop-native"}
         };
     }
     static bool ReadOptionBoolean(Dictionary<string,object> source,string key,bool fallback) {
@@ -115,6 +115,9 @@ public static class Core {
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
+        var cliMode=ReadOptionString(source,"cliMode","desktop-native");
+        if(cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
+        normalized["cliMode"]=cliMode;
         normalized["parentModel"]=ReadOptionString(source,"parentModel",DefaultParentModel);
         normalized["childModel"]=ReadOptionString(source,"childModel",DefaultChildModel);
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);

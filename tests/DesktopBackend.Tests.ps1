@@ -142,6 +142,8 @@ enabled = true
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
     Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'medium' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'medium') 'Default parent and child must be GPT-6.1-SOL MEDIUM.'
+    Assert ($resolved.Options.cliMode -eq 'desktop-native' -and (Convert-BackendOptions @{cliMode='official-standalone'}).cliMode -eq 'official-standalone') 'CLI mode default or explicit selection was lost.'
+    $rejected=$false;try{Convert-BackendOptions @{cliMode='unknown'}}catch{$rejected=$true};Assert $rejected 'Invalid CLI mode accepted.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ($resolved.Options.antiOverDefense -and -not (Convert-BackendOptions @{antiOverDefense=$false}).antiOverDefense) 'Anti-over-defense default or explicit false was lost.'
     $antiOptionB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"antiOverDefense":false}'))
@@ -518,6 +520,22 @@ function Install-Or-RepairProtection {
     [void][IO.Directory]::CreateDirectory($script:StateDir)
     @{ Installed = $true; ActiveMode = 'MockProtected' } |
         ConvertTo-Json -Compress | Set-Content -LiteralPath $script:StateFile -Encoding UTF8
+    [IO.File]::WriteAllText($script:AutoScript,(Get-GuardPayloadText $script:SourceCmd),[Text.UTF8Encoding]::new($true))
+}
+function Apply-SafeRuntime {
+    param($State,$Candidate,$FallbackMode)
+    $desktop = Get-DesktopInfo
+    if ($desktop.Found -and $desktop.BundleHealthy) {
+        return (Set-DesktopNativeMode $State "Desktop 内置运行时完整；standalone 仅作为后备")
+    }
+}
+function Auto-Maintain {
+    try {
+        $desktop = Get-DesktopInfo
+        if ($desktop.Found -and $desktop.BundleHealthy) {
+            Set-DesktopNativeMode $state "登录自动维护：Desktop 内置运行时完整" | Out-Null
+        }
+    } catch {}
 }
 '@
     $mockGuardBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($mockGuardCode))
