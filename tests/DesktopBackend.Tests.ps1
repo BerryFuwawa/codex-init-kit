@@ -176,11 +176,15 @@ enabled = true
     $memoryHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_MEMORY_HOME%`"`r`nset `"CONFIG_FILE=%CODEX_TEST_CONFIG%`"`r`nset `"DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol`"`r`nset `"DEFAULT_PARENT_REASONING_EFFORT=high`"`r`nset `"LUNA_MAX_THREADS=6`"`r`ncall :WRITE_CONFIG`r`nexit /b %errorlevel%`r`n"
     [IO.File]::WriteAllText($memoryWriter,$memoryHeader+$generatedConfigBlock,$script:InputEncoding)
     foreach($enabled in @('true','false','true')){
-        $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES=$enabled;CODEX_GUI_SUBAGENTS='0';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
+        $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES=$enabled;CODEX_GUI_SUBAGENTS='0';CODEX_GUI_CHILD_MODEL='gpt-6-luna';CODEX_GUI_CHILD_EFFORT='high';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
         $text=[IO.File]::ReadAllText($memoryConfig)
         Assert ($written.ExitCode -eq 0 -and $text.Contains('memories = '+$enabled) -and $text.Contains('generate_memories = '+$enabled) -and $text.Contains('use_memories = '+$enabled)) 'Actual configuration did not write all three selected memory flags.'
         Assert (([regex]::Matches($text,'(?m)^\[memories\]')).Count -eq 1 -and [IO.File]::ReadAllText($memoryState) -eq 'existing memory') 'Repeated configuration duplicated memory tables or changed existing memories.'
+        Assert ($text.Contains('multi_agent = false') -and $text.Contains('default_subagent_model = "gpt-6-luna"') -and $text.Contains('default_subagent_reasoning_effort = "high"') -and -not $text.Contains('enabled = true')) 'Disabled subagents lost model preferences or were enabled.'
     }
+    $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES='true';CODEX_GUI_SUBAGENTS='1';CODEX_GUI_CHILD_MODEL='gpt-6-luna';CODEX_GUI_CHILD_EFFORT='high';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
+    $text=[IO.File]::ReadAllText($memoryConfig)
+    Assert ($written.ExitCode -eq 0 -and $text.Contains('default_subagent_model = "gpt-6-luna"') -and $text.Contains('default_subagent_reasoning_effort = "high"')) 'Enabled subagent model defaults were not written to the actual config.'
     Assert ($adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_CHECKSUM_URL%"') -lt $adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_RELEASE_URL%"')) 'RTK ZIP started before its checksum list.'
     Assert ($adapterText.Contains('GitHubDownload.ps1') -and -not $adapterText.Contains('call :VERIFY_RTK_ZIP')) 'Desktop RTK download did not use the shared validation path.'
     Assert ($adapterText.Contains('--codex-gui-action')) 'GUI init entry was not added.'
@@ -543,6 +547,9 @@ function Install-Or-RepairProtection {
     }
     Assert ($statusObject.configModel -eq 'gpt-6.1-sol') 'Status config model parser failed.'
     Assert ($statusObject.configEffort -eq 'medium') 'Status config effort parser failed.'
+    [IO.File]::WriteAllText($config,"[agents]`nmodel = `"section-only`"`nmodel_reasoning_effort = `"high`"`n",[Text.UTF8Encoding]::new($false))
+    $configOnlyInSection=Get-ReadOnlyConfigInfo
+    Assert ($null -eq $configOnlyInSection.Model -and $null -eq $configOnlyInSection.Effort) 'Status mistook a section model for the root model.'
     Assert ($statusObject.root -eq [IO.Path]::GetFullPath($payload)) 'Status root field is wrong.'
 
     # Current persisted overrides take precedence over a stale Guard mode.

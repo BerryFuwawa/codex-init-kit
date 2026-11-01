@@ -36,6 +36,7 @@ $argsList+="/resource:$(Join-Path $root 'tests\DesktopUpdate225.Tests.ps1'),Payl
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' | ForEach-Object FullName)
 $argsList+=(Join-Path $root 'tests\DesktopLocalization.Tests.cs')
 $argsList+=(Join-Path $root 'tests\GitHubTransport.Tests.cs')
+$argsList+=(Join-Path $root 'tests\CurrentModelSettings.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

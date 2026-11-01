@@ -475,7 +475,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.6')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.7')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -485,6 +485,8 @@ if /i "%~1"=="--codex-gui-rollback" (
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('    echo [desktop]', "    echo [memories]`r`n    echo generate_memories = %CODEX_GUI_MEMORIES%`r`n    echo use_memories = %CODEX_GUI_MEMORIES%`r`n    echo.`r`n    echo [desktop]")
     $sourceText = $sourceText.Replace('    echo [features]', "    echo [features]`r`n    echo memories = %CODEX_GUI_MEMORIES%")
+    $sourceText = $sourceText.Replace('        echo [agents]', "        echo [agents]`r`n        echo default_subagent_model = `"%CODEX_GUI_CHILD_MODEL%`"`r`n        echo default_subagent_reasoning_effort = `"%CODEX_GUI_CHILD_EFFORT%`"")
+    $sourceText = $sourceText.Replace('        echo max_depth = 1' + [Environment]::NewLine + '    )', '        echo max_depth = 1' + [Environment]::NewLine + '    )' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" (' + [Environment]::NewLine + '        echo [agents]' + [Environment]::NewLine + '        echo default_subagent_model = "%CODEX_GUI_CHILD_MODEL%"' + [Environment]::NewLine + '        echo default_subagent_reasoning_effort = "%CODEX_GUI_CHILD_EFFORT%"' + [Environment]::NewLine + '    )')
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
     # Global AGENTS is rebuilt from scratch during the base stage. Old markers
     # must not force an unchecked feature to be enabled.
@@ -1016,7 +1018,8 @@ function Get-ReadOnlyDesktopInfo {
 function Get-ReadOnlyConfigInfo {
     $path=Join-Path (Get-CodexHomePath) 'config.toml'; $text=''
     if(Test-Path -LiteralPath $path -PathType Leaf){try{$text=[IO.File]::ReadAllText($path,[Text.UTF8Encoding]::new($false,$true))}catch{$text=[IO.File]::ReadAllText($path)}}
-    return [pscustomobject]@{Path=$path;Exists=(Test-Path -LiteralPath $path -PathType Leaf);Model=(Get-ConfigValue $text 'model');Effort=(Get-ConfigValue $text 'model_reasoning_effort')}
+    $rootText=($text -split '(?m)^\s*\[',2)[0]
+    return [pscustomobject]@{Path=$path;Exists=(Test-Path -LiteralPath $path -PathType Leaf);Model=(Get-ConfigValue $rootText 'model');Effort=(Get-ConfigValue $rootText 'model_reasoning_effort')}
 }
 function Get-ReadOnlyProtectionInstalled {
     $statePath=Join-Path (Get-GuardInstallRootPath) 'State\guard-state.json'

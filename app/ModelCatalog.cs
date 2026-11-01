@@ -11,6 +11,7 @@ namespace CodexKit {
 public sealed class CatalogModel {
     public string Id, DefaultEffort;
     public string[] Efforts;
+    public readonly HashSet<string> UnverifiedEfforts=new HashSet<string>(StringComparer.Ordinal);
 }
 public sealed class ModelCatalog {
     public readonly Dictionary<string,CatalogModel> Models=new Dictionary<string,CatalogModel>(StringComparer.Ordinal);
@@ -44,6 +45,11 @@ public sealed class ModelCatalog {
         return result;
     }
     static string Get(Dictionary<string,object> row,string key){object value;return row.TryGetValue(key,out value)?Convert.ToString(value):"";}
+    public void IncludeCurrent(string model,string effort) {
+        CatalogModel entry;
+        if(!Models.TryGetValue(model,out entry)){entry=new CatalogModel{Id=model,DefaultEffort=effort,Efforts=new string[0]};Models[model]=entry;}
+        if(!entry.Efforts.Contains(effort)){entry.Efforts=entry.Efforts.Concat(new[]{effort}).ToArray();entry.UnverifiedEfforts.Add(effort);}
+    }
     public string Check(string model,string effort) {
         if(!ValidId(model))throw new InvalidOperationException("模型 ID 格式不正确，例如 gpt-6.1-sol；不能填写展示名称或空格。");
         if(!Regex.IsMatch(effort??"","^[A-Za-z][A-Za-z0-9_-]{0,31}$"))throw new InvalidOperationException("请选择有效的思考强度。");
@@ -51,6 +57,7 @@ public sealed class ModelCatalog {
         if(!Models.TryGetValue(model,out entry))throw new InvalidOperationException("模型不在当前列表中，请重新检查并从下拉框选择。");
         if(entry.Efforts.Length==0)return "已找到 "+model+"，但列表未提供思考强度；该强度尚未验证。";
         if(!entry.Efforts.Contains(effort))throw new InvalidOperationException(model+" 的本机记录不支持 "+effort+"；支持："+string.Join("、",entry.Efforts));
+        if(entry.UnverifiedEfforts.Contains(effort))return "保留当前配置："+model+" / "+effort+"（不在内置列表中，尚未验证）。";
         return "配置核对通过："+model+" / "+effort+"。";
     }
 }

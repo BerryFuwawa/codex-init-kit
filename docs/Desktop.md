@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.6
+# Codex Init Kit Desktop 2.2.7
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -146,7 +146,7 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 ## 记忆与 GitHub 下载
 
-初始化默认勾选“启用 Codex 记忆”，开启生成与使用，取消后关闭但保留已有记忆。模型默认 gpt-6.1-sol / medium，可以直接更换，子模型仅在勾选子代理后可编辑。
+初始化默认勾选“启用 Codex 记忆”，开启生成与使用，取消后关闭但保留已有记忆。模型默认继承当前全局设置，未设置时使用 gpt-6.1-sol / medium；可以直接更换，子模型仅在勾选子代理后可编辑。
 
 “更新”页提供默认开启的 GitHub 自动镜像和自定义前缀，保存后下次启动继续使用，初始化下载共用该设置。它与 HTTP 代理开关独立，详见[镜像使用说明](GitHubMirrors.md)。
 
