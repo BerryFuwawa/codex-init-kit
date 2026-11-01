@@ -30,13 +30,17 @@ class DocumentationRenderer {
                 {"desktopVersion","示例"},{"desktopHealth","healthy"},{"runtimeMode","DesktopNative"},
                 {"runtimeModeDetail","使用 Codex 桌面应用自带的 CLI。"},{"currentCliPath",null},
                 {"configModel","gpt-6.1-sol"},{"configEffort","high"},{"protectionInstalled",true},
-                {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"}});
+                {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"},
+                {"rollbackEntries",new object[]{
+                    new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"detail","备份模型：gpt-6.1-sol"}},
+                    new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"detail","本地独立 CLI 缓存，执行前校验。"}}
+                }}});
             var pages=new[]{"概览","维护恢复","浏览器连接"};
             var files=new[]{"overview","maintenance","browser-connection"};
-            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1000:i==1?1600:1200,dpi);}
+            for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1100:i==1?1900:1200,dpi);}
             var sampleRoot=Path.Combine(Path.GetTempPath(),"CodexKit-doc-log-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(sampleRoot);
             try{
-                var sample=Path.Combine(sampleRoot,"example.log");File.WriteAllText(sample,"[FAIL] Codex is running. Save work and fully exit before continuing.\n[BROWSER INCOMPLETE] Runtime has third-party changes or a hash mismatch; refusing overwrite.\n[INCOMPLETE] 更新桌面版：Desktop update requires restart or is still pending; dependent repairs were paused.\n[ERROR] Unexpected vendor failure 0x80070005\n");
+                var sample=Path.Combine(sampleRoot,"example.log");var sampleText=new System.Text.StringBuilder();for(int line=1;line<=40;line++)sampleText.AppendLine("示例检查记录 "+line+"：读取组件状态。");sampleText.AppendLine("Config written: C:\\Users\\示例用户\\.codex\\config.toml");sampleText.AppendLine("[INCOMPLETE] 更新桌面版：Desktop update failed. Exit code -2147012867. Microsoft Store: ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS");sampleText.AppendLine("提示：自动更新未完成，无需担心；你可以自行在微软商店或 Codex 内手动更新。");sampleText.AppendLine("日志已保存；当前视图跟随底部最新内容。");File.WriteAllText(sample,sampleText.ToString());
                 type.GetField("lastLog",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,sample);type.GetField("rawLogText",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");type.GetField("logInputComplete",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,true);type.GetField("operationTitle",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"示例：执行结果与错误说明");type.GetMethod("ReadLog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);navigate.Invoke(window,new object[]{"日志"});Save(window,directory,"logs",1000,dpi);
             }finally{type.GetField("lastLog",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");Directory.Delete(sampleRoot,true);}
             var adviceType=assembly.GetType("CodexKit.DiagnosticAdvice",true);var example=(string)adviceType.GetMethod("Build").Invoke(null,new object[]{new Dictionary<string,object>{{"standaloneHealthy",true},{"desktopFound",true},{"desktopHealthy",true}},1,adviceType.GetField("AsciiFixture").GetRawConstantValue()});type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,example);
@@ -53,6 +57,7 @@ class DocumentationRenderer {
     }
     static void SaveView(FrameworkElement view,string directory,string name,int width,int height,int dpi) {
         view.Measure(new Size(width,height));view.Arrange(new Rect(0,0,width,height));view.UpdateLayout();
+        var frame=new System.Windows.Threading.DispatcherFrame();view.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new Action(()=>frame.Continue=false));System.Windows.Threading.Dispatcher.PushFrame(frame);view.UpdateLayout();
         var scale=dpi/96.0;var bitmap=new RenderTargetBitmap((int)Math.Round(width*scale),(int)Math.Round(height*scale),dpi,dpi,PixelFormats.Pbgra32);
         bitmap.Render(view);var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));
         using(var stream=File.Create(Path.Combine(directory,name+".png")))png.Save(stream);

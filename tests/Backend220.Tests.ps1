@@ -125,8 +125,8 @@ try {
     Assert220 ((Invoke-DesktopUpdate $PayloadRoot) -eq 'latest') 'Already latest not recognized.'
     foreach($scenario in @('missing','network','timeout','restart','unchanged','pending')){
         $wingetMissing=$scenario -eq 'missing';$timeout=$scenario -eq 'timeout';$after.Status=if($scenario -eq 'pending'){'DeploymentInProgress'}else{'Ok'}
-        $exit=if($scenario -eq 'network'){-1}elseif($scenario -eq 'restart'){3010}else{0}
-        $rejected=$false;try{Invoke-DesktopUpdate $PayloadRoot}catch{$rejected=$true}
+        $exit=if($scenario -eq 'network'){-2147012867}elseif($scenario -eq 'restart'){3010}else{0}
+        $rejected=$false;try{Invoke-DesktopUpdate $PayloadRoot}catch{$rejected=$true;if($scenario -eq 'network'){Assert220 ($_.Exception.Message.Contains('0x80072EFD') -and $_.Exception.Message.Contains('手动更新')) 'Store network failure lost its explanation.'}}
         Assert220 $rejected ('Desktop failure swallowed: '+$scenario)
     }
     # Independent update requires neither guard installation nor mode selection.

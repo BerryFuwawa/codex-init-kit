@@ -3,7 +3,7 @@ setlocal DisableDelayedExpansion
 chcp 65001 >nul
 rem Codex CUA recovery. Save work and fully exit Codex before using.
 rem Default: verify and repair if needed. /check: verification only.
-rem Backups stay beside the runtime; reports go under D:\Codex\Temp.
+rem Backups stay beside the runtime; reports use the selected or local user log directory.
 set "CODEX_CUA_FIX_SELF=%~f0"
 set "CODEX_CUA_FIX_MODE=repair"
 set "CODEX_CUA_FIX_NO_PAUSE="
@@ -493,6 +493,10 @@ function Get-RequiredRuntimeId {
     return Get-RuntimeIdFromSource $Source
 }
 
+function Get-RepairReportRoot {
+    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_CUA_FIX_REPORT_ROOT)) { return [IO.Path]::GetFullPath($env:CODEX_CUA_FIX_REPORT_ROOT) }
+    return (Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) 'OpenAI\Codex\logs\CUA')
+}
 function Invoke-RepairMain {
     $mutex = $null
     $acquired = $false
@@ -503,7 +507,7 @@ function Invoke-RepairMain {
         try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
         if (-not $acquired) { Write-Host '已有另一个修复窗口在运行，请使用那个窗口。'; return 10 }
         $runName = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
-        $runDirectory = Join-Path 'D:\Codex\Temp\codex-cua-recovery' $runName
+        $runDirectory = Join-Path (Get-RepairReportRoot) $runName
         [void][IO.Directory]::CreateDirectory($runDirectory)
         $script:LogFile = Join-Path $runDirectory 'Repair_Report.txt'
         Write-RepairMessage 'Codex CUA 运行时检查 / 修复工具' 'Cyan'

@@ -8,6 +8,15 @@ $scratch = Join-Path ([IO.Path]::GetTempPath()) ('CodexKit-runtime-test-' + [gui
 try {
     Copy-Item -LiteralPath $cuaSource -Destination (Join-Path $scratch 'cua.cmd')
     Import-CuaLibrary $scratch
+    $previousReportRoot=$env:CODEX_CUA_FIX_REPORT_ROOT
+    try {
+        $env:CODEX_CUA_FIX_REPORT_ROOT=Join-Path $scratch 'selected-reports'
+        if((Get-RepairReportRoot) -ne $env:CODEX_CUA_FIX_REPORT_ROOT){throw 'CUA ignored the selected report root.'}
+        $env:CODEX_CUA_FIX_REPORT_ROOT=''
+        $defaultReports=Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) 'OpenAI\Codex\logs\CUA'
+        if((Get-RepairReportRoot) -ne $defaultReports){throw 'CUA default reports require an unrelated drive.'}
+        if([IO.File]::ReadAllText((Join-Path $scratch 'cua.cmd')).Contains("Join-Path 'D:\Codex\Temp")){throw 'CUA retained a hardcoded D drive.'}
+    } finally {$env:CODEX_CUA_FIX_REPORT_ROOT=$previousReportRoot}
     $source = Join-Path $scratch 'source'
     [void][IO.Directory]::CreateDirectory((Join-Path $source 'bin'))
     [IO.File]::WriteAllText((Join-Path $source 'manifest.json'), 'manifest-test')
@@ -78,6 +87,17 @@ function j(e,t){let r=(0,s.openSync)(e,"r");try{let e=(0,s.fstatSync)(r).size,n=
     Assert-Rejected $wrongFile 'Changed source file hashing accepted'
     $unknown = New-AsarFixture 'unknown' ([ordered]@{'other.js'=$knownCode})
     Assert-Rejected $unknown 'Unknown bundle accepted'
+    # Run the actual check entrypoint with a fixture package and a user-local
+    # runtime. This reaches report creation without touching the live package.
+    $savedLocal=$env:LOCALAPPDATA;$savedReport=$env:CODEX_CUA_FIX_REPORT_ROOT;$savedMode=$env:CODEX_CUA_FIX_MODE
+    try {
+        $env:LOCALAPPDATA=Join-Path $scratch 'isolated-local';$env:CODEX_CUA_FIX_REPORT_ROOT=Join-Path $scratch 'entrypoint-reports';$env:CODEX_CUA_FIX_MODE='check'
+        $fixtureSource=Join-Path $old 'app\resources\cua_node';[void][IO.Directory]::CreateDirectory($fixtureSource)
+        Copy-Item -Path (Join-Path $source '*') -Destination $fixtureSource -Recurse
+        function Get-CurrentPackage {return [pscustomobject]@{InstallLocation=$old;Version='26.0.0.0';PackageFullName='fixture'}}
+        $code=Invoke-RepairMain
+        if($code -ne 2 -or @(Get-ChildItem -LiteralPath $env:CODEX_CUA_FIX_REPORT_ROOT -Filter 'Repair_Report.txt' -Recurse).Count -ne 1){throw 'CUA check entrypoint did not use its local report root.'}
+    }finally{$env:LOCALAPPDATA=$savedLocal;$env:CODEX_CUA_FIX_REPORT_ROOT=$savedReport;$env:CODEX_CUA_FIX_MODE=$savedMode}
     Write-Output 'PASS: old and renamed runtime bundles, unique validated implementation, changed algorithm and unknown bundle.'
 } finally {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'

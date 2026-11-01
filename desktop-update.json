@@ -1,8 +1,8 @@
 {
-    "schema_version":  1,
-    "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.2.3",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/CodexInitKit.exe",
-    "sha256":  "9979a7ceb2fd9c5ab131f5587ba989c3a870b4711c27bb8e2cc29aac6d7f6225",
-    "notes":  "新增默认勾选的防止过度防御：将 HERO 中文精简规则与实现、自主交付边界写入全局 AGENTS.md。"
+  "schema_version": 1,
+  "repository": "BerryFuwawa/codex-init-kit",
+  "version": "2.2.4",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.4/CodexInitKit.exe",
+  "sha256": "9b2cffd9b897bdb7b321fdf4d94f784926925ef66fac6470c2d6298a29a9516d",
+  "notes": "修复日志底部跟随；新增概览数据保留提示与历史备份选择回滚；修复无 D 盘时 CUA 检查失败，补齐中文日志和商店更新失败提示。"
 }

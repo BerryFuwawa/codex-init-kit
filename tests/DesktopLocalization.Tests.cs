@@ -28,6 +28,8 @@ public static class DesktopLocalizationTests {
             new[]{"The remote server returned an error: (403) Forbidden.","HTTP 状态码 403"}
         };
         foreach(var c in cases){var actual=DesktopLocalization.TranslateLine(c[0],true);Assert(actual.Contains(c[1]),"Chinese diagnostic lost its meaning: "+c[0]+" => "+actual);}
+        foreach(var code in new[]{"0x80072efd : unknown error","Desktop update failed. Exit code -2147012867. Microsoft Store: ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS"}){var message=DesktopLocalization.TranslateLine(code,true);Assert(message.Contains("无法连接微软商店")&&message.Contains("无需担心")&&message.Contains("0x80072EFD")&&message.Contains("手动更新"),"Store network failure was not explained");}
+        foreach(var normal in new[]{"GUI supplied folder management drive: C:","GUI confirmation already supplied for this operation.","Config written: C:\\Users\\me\\.codex\\config.toml","Folder-management drive confirmed: C:","Codex Full Reset + V2Ray Proxy v4.8.3","阶段 5/5：安装 GPT6.1 SOL HIGH 多线程提示词。","RESULT = PASS","No applicable upgrade found.","True","已重建配置：C:\\Users\\me\\.codex\\config.toml（GPT6.1 SOL HIGH）"})Assert(!DesktopLocalization.TranslateLine(normal).Contains("暂无中文说明"),"Normal initialization output was hidden: "+normal);
         var unknown="[FAIL] Unforeseen vendor crash with unfamiliar details 0x80070005 D:\\My Project\\用户日志.txt";
         var translated=DesktopLocalization.TranslateLine(unknown,true);
         Assert(translated.Contains("原因尚未识别")&&translated.Contains("0x80070005")&&translated.Contains("D:\\My Project\\用户日志.txt")&&!translated.Contains("Unforeseen"),"Unknown error was guessed or its context was lost");

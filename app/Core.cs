@@ -16,11 +16,11 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.3";
+    public const string Version = "2.2.4";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
+    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","rollback-selected","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -116,6 +116,11 @@ public static class Core {
         if(source.TryGetValue("projectPath",out projectPath)) {
             if(projectPath!=null && !(projectPath is string))throw new ArgumentException("项目路径必须为文本。");
             normalized["projectPath"]=projectPath==null?"":((string)projectPath).Trim();
+        }
+        object rollbackId;
+        if(source.TryGetValue("rollbackId",out rollbackId)) {
+            if(!(rollbackId is string)||!Regex.IsMatch((string)rollbackId,@"\A[a-f0-9]{64}\z"))throw new ArgumentException("回滚目标标识无效，请刷新备份列表。");
+            normalized["rollbackId"]=rollbackId;
         }
         return normalized;
     }

@@ -865,6 +865,61 @@ END CODEX LUNA PROMPT V1.3
         Assert ((Invoke-InitOperation 'proxy' $payload $null 10808 $tailOptions) -eq 0 -and (HashFile $agentsPath) -eq $tailAgentsHash) 'Proxy-only changes rewrote the global rules.'
     } finally { Set-Item Function:Invoke-ChildProcess $realChildProcess }
 
+    # Catalog and selected rollback stay inside isolated backup/cache roots.
+    $savedRollbackFunctions=@{}
+    foreach($name in @('Get-BackupRootPath','Get-CodexHomePath','Assert-DesktopStopped','Initialize-GuardRuntime','Test-DesktopRunning','Test-CanonicalPackage','Invoke-InitRollback','Load-State','Set-ActiveCli')) {
+        $command=Get-Item ('Function:'+$name) -ErrorAction SilentlyContinue
+        if($command){$savedRollbackFunctions[$name]=$command.ScriptBlock}
+    }
+    try {
+        $rollbackRoot=Join-Path $scratch 'rollback-snapshots';$rollbackHome=Join-Path $scratch 'rollback-home'
+        function Get-BackupRootPath {return $rollbackRoot}
+        function Get-CodexHomePath {return $rollbackHome}
+        Assert (@(Get-RollbackEntries).Count -eq 0) 'Empty backup roots did not produce an empty list.'
+        foreach($name in @('Codex_Full_Reset_20261030-120000','Codex_Full_Reset_20261101-140000')){
+            $sessionRoot=Join-Path $rollbackRoot $name
+            [void][IO.Directory]::CreateDirectory((Join-Path $sessionRoot 'Backups'))
+            [IO.File]::WriteAllText((Join-Path $sessionRoot 'session.meta'),"RESTORE_CONFIG=1`n")
+        }
+        [IO.File]::WriteAllText((Join-Path $sessionRoot 'desktop-version.txt'),'2.2.4')
+        [IO.File]::WriteAllText((Join-Path $sessionRoot 'Backups\config.toml'),'model = "gpt-6.1-sol"')
+        $releaseRoot=Join-Path $rollbackHome 'packages\standalone\releases\0.165.0'
+        foreach($file in @('codex-package.json','bin\codex.exe','bin\codex-code-mode-host.exe','codex-path\rg.exe','codex-resources\codex-command-runner.exe','codex-resources\codex-windows-sandbox-setup.exe')){
+            $path=Join-Path $releaseRoot $file;[void][IO.Directory]::CreateDirectory((Split-Path $path -Parent));[IO.File]::WriteAllText($path,'fixture')
+        }
+        [IO.File]::WriteAllText((Join-Path $releaseRoot 'codex-package.json'),'{"version":"0.165.0"}')
+        [void][IO.Directory]::CreateDirectory((Join-Path $rollbackHome 'packages\standalone\releases\broken'))
+        $catalog=@(Get-RollbackEntries)
+        Assert ($catalog.Count -eq 4 -and @($catalog|Where-Object {$_.kind -eq 'init'}).Count -eq 2) 'Rollback catalog did not include both backup types.'
+        $newInit=$catalog|Where-Object {$_.version -eq '备份工具 v2.2.4'}
+        $oldInit=$catalog|Where-Object {$_.kind -eq 'init' -and $_.version -eq '版本未记录'}
+        $cliEntry=$catalog|Where-Object {$_.version -eq '0.165.0'}
+        Assert ($newInit.time -eq '2026-11-01 14:00:00' -and $oldInit.available -and $cliEntry.available) 'Version/time metadata or legacy backup compatibility failed.'
+        Assert (@($catalog|Where-Object {-not $_.available}).Count -eq 1) 'Incomplete cache was selectable.'
+        $normalized=Convert-BackendOptions @{rollbackId=$newInit.id}
+        Assert ($normalized.rollbackId -ceq $newInit.id) 'Selected backup id was lost in backend options.'
+        $rejected=$false;try{Convert-BackendOptions @{rollbackId='..\outside'}}catch{$rejected=$true};Assert $rejected 'Unsafe rollback id accepted.'
+        $rollbackRunning=$false;$restoredPath='';$selectedCli='';$rollbackState=@{}
+        function Assert-DesktopStopped {if($rollbackRunning){throw 'fixture running'}}
+        function Initialize-GuardRuntime {}
+        function Test-DesktopRunning {return $rollbackRunning}
+        function Invoke-InitRollback {param($PayloadRoot,$ProxyPortValue,$SelectedPath) $script:restoredPath=$SelectedPath;return 0}
+        function Test-CanonicalPackage {param($Root) return [pscustomobject]@{Healthy=$cliHealthy;Version='0.165.0';Cli=(Join-Path $Root 'bin\codex.exe')}}
+        function Load-State {return $rollbackState}
+        function Set-ActiveCli {param($CliPath,$State,$Mode) $State.ActiveMode=$Mode;$State.ActiveCliPath=$CliPath;$script:selectedCli=$CliPath}
+        Assert ((Invoke-SelectedRollback $payload $oldInit.id 0) -eq 0 -and $script:restoredPath -eq $oldInit.path) 'Selected older snapshot was replaced by the latest backup.'
+        $cliHealthy=$true
+        Assert ((Invoke-SelectedRollback $payload $cliEntry.id 0) -eq 0 -and $script:selectedCli -eq (Join-Path $releaseRoot 'bin\codex.exe')) 'Selected CLI version was not activated.'
+        $cliHealthy=$false;$script:selectedCli=''
+        $rejected=$false;try{Invoke-SelectedRollback $payload $cliEntry.id 0}catch{$rejected=$true};Assert ($rejected -and -not $script:selectedCli) 'Invalid CLI package was activated.'
+        $rollbackRunning=$true;$script:restoredPath=''
+        $rejected=$false;try{Invoke-SelectedRollback $payload $oldInit.id 0}catch{$rejected=$true};Assert ($rejected -and -not $script:restoredPath) 'Rollback ignored running Codex.'
+        $rollbackRunning=$false
+        [IO.File]::AppendAllText((Join-Path $oldInit.path 'session.meta'),"RESTORE_ENV=1`n")
+        $rejected=$false;try{Resolve-SelectedRollback $oldInit.id}catch{$rejected=$true};Assert $rejected 'Changed backup marker did not invalidate the stale selection.'
+        $rejected=$false;try{Resolve-SelectedRollback ('0'*64)}catch{$rejected=$true};Assert $rejected 'An unknown rollback target was accepted.'
+    }finally{foreach($name in $savedRollbackFunctions.Keys){Set-Item ('Function:'+$name) $savedRollbackFunctions[$name]}}
+
     # Critical input failures remain non-zero and do not fall through.
     $rc = Invoke-BackendMain -RequestedOperation 'unknown-operation' -RequestedPayloadRoot $payload
     Assert ($rc -eq 1) 'Unknown operation was swallowed.'

@@ -128,6 +128,11 @@ function Convert-BackendOptions {
     $projectPath = & $get 'projectPath'
     if ($null -ne $projectPath -and $projectPath -isnot [string]) { throw 'Option projectPath must be a string.' }
     $normalized.projectPath = if ($null -eq $projectPath) { '' } else { $projectPath.Trim() }
+    $rollbackId = & $get 'rollbackId'
+    if ($null -ne $rollbackId) {
+        if ($rollbackId -isnot [string] -or $rollbackId -cnotmatch '\A[a-f0-9]{64}\z') { throw '回滚目标标识无效，请刷新备份列表。' }
+        $normalized.rollbackId = $rollbackId
+    }
     return $normalized
 }
 function Convert-ProxyHost {
@@ -170,6 +175,79 @@ function Get-LatestBackupPath {
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($latest) { return $latest.FullName }
     return $null
+}
+function New-RollbackEntryId {
+    param([string]$Kind,[IO.DirectoryInfo]$Directory,[string]$Marker)
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Kind+'|'+$Directory.FullName.ToUpperInvariant()+'|'+$Directory.CreationTimeUtc.Ticks)
+    if (Test-Path -LiteralPath $Marker -PathType Leaf) { $bytes += [IO.File]::ReadAllBytes($Marker) }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
+}
+function Get-RollbackEntries {
+    $entries = [Collections.Generic.List[object]]::new()
+    foreach ($kind in @('init','cli')) {
+        $root = if ($kind -eq 'init') { Get-BackupRootPath } else { Join-Path (Get-CodexHomePath) 'packages\standalone\releases' }
+        if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+        foreach ($directory in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction Stop)) {
+            if (($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+            if ($kind -eq 'init' -and $directory.Name -notmatch '^Codex_Full_Reset_[A-Za-z0-9_.-]+$') { continue }
+            $marker = Join-Path $directory.FullName $(if($kind -eq 'init'){'session.meta'}else{'codex-package.json'})
+            $available = Test-Path -LiteralPath $marker -PathType Leaf
+            $version = '版本未记录'; $detail = ''; $timestamp = $directory.CreationTime
+            if ($kind -eq 'init') {
+                $versionFile = Join-Path $directory.FullName 'desktop-version.txt'
+                if (Test-Path -LiteralPath $versionFile -PathType Leaf) {
+                    $recorded = ([IO.File]::ReadAllText($versionFile)).Trim()
+                    if ($recorded -match '^\d+\.\d+\.\d+$') { $version = '备份工具 v'+$recorded }
+                }
+                $stamp = [datetime]::MinValue
+                if ([datetime]::TryParseExact(($directory.Name -replace '^Codex_Full_Reset_',''),'yyyyMMdd-HHmmss',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::None,[ref]$stamp)) { $timestamp=$stamp }
+                $available = $available -and (Test-Path -LiteralPath (Join-Path $directory.FullName 'Backups') -PathType Container)
+                $configPath = Join-Path $directory.FullName 'Backups\config.toml'
+                if (Test-Path -LiteralPath $configPath -PathType Leaf) { $model=Get-ConfigValue ([IO.File]::ReadAllText($configPath)) 'model';if($model){$detail='备份模型：'+$model} }
+            } else {
+                if ($available) {
+                    try { $package=[IO.File]::ReadAllText($marker)|ConvertFrom-Json; $v=Get-ObjectPropertyValue $package 'version';if($v){$version=[string]$v} }
+                    catch { $available=$false }
+                }
+                if ($version -eq '版本未记录' -and $directory.Name -match '(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?)') { $version=$Matches[1] }
+                foreach ($file in @('bin\codex.exe','bin\codex-code-mode-host.exe','codex-path\rg.exe','codex-resources\codex-command-runner.exe','codex-resources\codex-windows-sandbox-setup.exe')) {
+                    if (-not (Test-Path -LiteralPath (Join-Path $directory.FullName $file) -PathType Leaf)) { $available=$false }
+                }
+                $detail='本地独立 CLI 缓存，执行前检查官方签名、完整性和实际版本。'
+            }
+            $entries.Add([ordered]@{id=New-RollbackEntryId $kind $directory $marker;kind=$kind;version=$version;time=$timestamp.ToString('yyyy-MM-dd HH:mm:ss');path=$directory.FullName;available=[bool]$available;detail=$(if($available){$detail}else{'备份或组件不完整，无法回滚。'})})
+        }
+    }
+    return @($entries | Sort-Object { $_.time } -Descending)
+}
+function Resolve-SelectedRollback {
+    param([string]$Id)
+    if ($Id -cnotmatch '\A[a-f0-9]{64}\z') { throw '请先选择一个可用的回滚项。' }
+    $entry = @(Get-RollbackEntries | Where-Object { $_.id -ceq $Id }) | Select-Object -First 1
+    if (-not $entry) { throw '所选备份已变化或被移除，请刷新列表后重新选择。' }
+    if (-not $entry.available) { throw '所选备份或组件不完整，未执行回滚。' }
+    return $entry
+}
+function Invoke-SelectedRollback {
+    param([string]$PayloadRoot,[string]$Id,[int]$ProxyPortValue=0)
+    $entry = Resolve-SelectedRollback $Id
+    [void](Assert-DesktopStopped $PayloadRoot -AllowOtherChannel)
+    if ($entry.kind -eq 'init') {
+        Write-BackendLine ('正在恢复初始化备份：'+$entry.time+' · '+$entry.version+' · '+$entry.path)
+        return (Invoke-InitRollback $PayloadRoot $ProxyPortValue $entry.path)
+    }
+    Initialize-GuardRuntime (Assert-PayloadFile $PayloadRoot 'guard.cmd') -ForModification
+    if (Test-DesktopRunning) { throw 'Codex is running. Save work and fully exit before continuing.' }
+    $package = Test-CanonicalPackage $entry.path
+    if (-not $package.Healthy) { throw '所选 CLI 的官方签名、完整性或版本校验失败，未切换运行时。' }
+    if ($entry.version -ne '版本未记录' -and $package.Version -ne $entry.version) { throw '所选 CLI 的实际版本与列表不符，请刷新后重试。' }
+    $state=Load-State
+    Set-ActiveCli $package.Cli $state 'Rollback'
+    $after=Load-State
+    if ($after.ActiveMode -ne 'Rollback' -or $after.ActiveCliPath -ne $package.Cli) { throw 'Protection rollback did not complete.' }
+    Write-BackendLine ('已回滚保护器 CLI：'+$package.Version+' · 缓存时间：'+$entry.time)
+    return 0
 }
 function Normalize-DriveLetter {
     param([string]$Value)
@@ -385,6 +463,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.4')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -725,9 +804,9 @@ function Resolve-InitRollbackPath {
     return $latest
 }
 function Invoke-InitRollback {
-    param([Parameter(Mandatory=$true)][string]$PayloadRoot,[int]$ProxyPortValue=0)
+    param([Parameter(Mandatory=$true)][string]$PayloadRoot,[int]$ProxyPortValue=0,[string]$SelectedPath)
     $init = Assert-PayloadFile $PayloadRoot 'init.cmd'
-    $rollback = Resolve-InitRollbackPath
+    $rollback = if ($SelectedPath) { $SelectedPath } else { Resolve-InitRollbackPath }
     $adapter = $null
     try {
         $adapter = New-InitAdapter $init $PayloadRoot '' $ProxyPortValue
@@ -961,6 +1040,8 @@ function Get-ReadOnlyStatus {
     $running=$false; try{$running=[bool](Get-Process -ErrorAction SilentlyContinue | Where-Object{$_.ProcessName -match '^(Codex|ChatGPT)$'})}catch{}
     $protectionRoot=Get-GuardInstallRootPath; $protectionInstalled=Get-ReadOnlyProtectionInstalled
     $runtime = Get-ReadOnlyRuntimeModeInfo $protectionRoot $desktop.InstallLocation
+    $rollbackEntries=@();$rollbackError=''
+    try { $rollbackEntries=@(Get-RollbackEntries) } catch { $rollbackError='备份列表读取失败：'+$_.Exception.Message }
     return [ordered]@{
         backendVersion=$script:BackendVersion; desktopVersion=$desktop.Version; desktopHealth=$desktop.Health; desktopHealthy=$desktop.Healthy; desktopFound=$desktop.Found
         desktopInstallLocation=$desktop.InstallLocation; configModel=$config.Model; configEffort=$config.Effort
@@ -969,6 +1050,7 @@ function Get-ReadOnlyStatus {
         runtimeMode=$runtime.Mode; runtimeModeDetail=$runtime.Detail; currentCliPath=$runtime.CliPath
         backupPath=if($latestBackup){$latestBackup}else{$backupRoot}; backupRoot=$backupRoot; latestBackupPath=$latestBackup
         statePath=Join-Path $protectionRoot 'State\guard-state.json'
+        rollbackEntries=$rollbackEntries; rollbackError=$rollbackError
     }
 }
 function Initialize-ConfigCompatibility {
@@ -1015,6 +1097,7 @@ function Invoke-BackendMain {
             'desktop-core-repair' { return (Invoke-DesktopCoreOperation 'repair' $input.PayloadRoot) }
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
             'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }
+            'rollback-selected' { return (Invoke-SelectedRollback $input.PayloadRoot $input.Options.rollbackId $input.ProxyPort) }
             'cua-check' { return (Invoke-CuaOperation 'check' $input.PayloadRoot) }
             'cua-repair' { return (Invoke-CuaOperation 'repair' $input.PayloadRoot) }
             'guard-install' { return (Invoke-GuardOperation 'guard-install' $input.PayloadRoot) }

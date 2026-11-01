@@ -6,7 +6,7 @@
 
 桌面版 2.2.3 新增的防止过度防御规则通过桌面初始化适配器写入；独立脚本保持现有功能及组件版本。
 
-桌面版 2.2.3 使用第 1 步内部版本 4.8.6 和第 2 步内部版本 5.2.4；脚本文件名沿用稳定入口名称。2.2.1 的浏览器启动按钮、两类更新编排和配置兼容清理属于桌面版功能。独立 CUA CMD 增加受管理浏览器补丁识别和修复后重应用；GUI 初始化会使用同一 CUA 代码。独立初始化和保护组件已同步新的模型默认值，独立初始化仍保留原有进程处理行为；GUI 初始化改为要求事先退出。初始化不会写入 `code_mode_tool_description_first` 或 `guardianv2.thread_context`，回归测试持续检查这一点。
+桌面版 2.2.4 使用第 1 步内部版本 4.8.6 和第 2 步内部版本 5.2.4；脚本文件名沿用稳定入口名称。2.2.1 的浏览器启动按钮、两类更新编排和配置兼容清理属于桌面版功能。独立 CUA CMD 增加受管理浏览器补丁识别和修复后重应用；GUI 初始化会使用同一 CUA 代码。独立初始化和保护组件已同步新的模型默认值，独立初始化仍保留原有进程处理行为；GUI 初始化改为要求事先退出。初始化不会写入 `code_mode_tool_description_first` 或 `guardianv2.thread_context`，回归测试持续检查这一点。
 
 **第 1 步负责“把配置整理好”**：目录放哪、模型用哪个、代理端口是多少，以及电脑操作组件是否完整。完整初始化会先备份再重建配置。
 
@@ -44,7 +44,7 @@ CUA 修复还针对一类启动卡顿：`%LOCALAPPDATA%\OpenAI\Codex\runtimes\cu
 | `5` 检查 GitHub 脚本更新 | 立即检查第 1 步脚本新版，确认后更新自身 |
 | `0` 退出 | 关闭本次菜单流程 |
 
-初始化备份与报告存放在 Windows 实际 Documents 目录下的 `Codex初始化备份\Codex_Full_Reset_<时间戳>`，每次会话包含 `Backups\AGENTS.md` 等完整备份、`Reset_Result.txt` 和 `Rollback.cmd`。`Rollback.cmd` 可恢复该会话已经记录的全局规则和其他备份配置；CUA 报告位于所选盘符的 `Codex\Temp\codex-cua-recovery`，CUA 运行时备份保留在运行时目录旁。**初始化回滚不会恢复 CUA 运行时备份，也不会删除已创建的标准工作目录。**
+初始化备份与报告存放在 Windows 实际 Documents 目录下的 `Codex初始化备份\Codex_Full_Reset_<时间戳>`，每次会话包含 `Backups\AGENTS.md` 等完整备份、`Reset_Result.txt` 和 `Rollback.cmd`。`Rollback.cmd` 可恢复该会话已经记录的全局规则和其他备份配置；CUA 报告默认位于 `%LOCALAPPDATA%\OpenAI\Codex\logs\CUA`；设置 `CODEX_CUA_FIX_REPORT_ROOT` 时使用指定目录，不再依赖 D 盘，CUA 运行时备份保留在运行时目录旁。**初始化回滚不会恢复 CUA 运行时备份，也不会删除已创建的标准工作目录。**
 
 ### 第 2 步：启动保护与更新管理
 

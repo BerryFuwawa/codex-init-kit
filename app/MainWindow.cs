@@ -22,6 +22,10 @@ public class MainWindow : Window {
     readonly TextBlock updateStatus=new TextBlock();
     Button updateNotice;
     readonly TextBox log=new TextBox();
+    readonly LogViewport logViewport;
+    ListBox rollbackList;
+    Button rollbackButton;
+    string selectedRollbackId="";
     readonly ProgressBar progress=new ProgressBar();
     readonly List<Button> navigation=new List<Button>();
     readonly ComboBox drive=new ComboBox();
@@ -76,6 +80,8 @@ public class MainWindow : Window {
         Navigate("浏览器连接");var browserSettings=(StackPanel)((Border)content.Children[1]).Child;var browserInputs=browserSettings.Children.OfType<TextBox>().ToArray();var browserToggle=browserSettings.Children.OfType<CheckBox>().First();var browserButtons=browserSettings.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).ToArray();if(!browserButtons.Contains("修复并启动 Codex")||browserInputs.Length!=2)throw new InvalidOperationException("Browser startup entry is missing");browserInputs[0].Text="192.168.5.8";browserInputs[1].Text="7890";if(ProxyHost()!="192.168.5.8"||Port()!=7890)throw new InvalidOperationException("Browser proxy settings did not synchronize");browserToggle.IsChecked=false;if(proxyEnabled.IsChecked!=false)throw new InvalidOperationException("Browser proxy switch did not synchronize");browserToggle.IsChecked=true;proxyHost.Text="";port.Text="10808";
         VerifyMaintenanceModes();
         VerifyChineseLogs();
+        VerifyLogScrolling();
+        VerifyRollbackSelection();
         foreach(var name in new[]{"概览","初始化","浏览器连接","维护恢复","更新","日志","初始化"}) { Navigate(name); Measure(new Size(1120,800)); Arrange(new Rect(0,0,1120,800)); UpdateLayout(); }
         wizard=1;Navigate("初始化");UpdateLayout(); wizard=2;Navigate("初始化");UpdateLayout();Navigate("日志");UpdateLayout();
         update=new Dictionary<string,object>{{"version",Core.Version}};ApplyUpdateState();if(updateNotice.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Update notice shown for current version");
@@ -91,6 +97,7 @@ public class MainWindow : Window {
         update=new Dictionary<string,object>{{"version",new Version(new Version(Core.Version).Major,new Version(Core.Version).Minor,new Version(Core.Version).Build+1).ToString()}};ApplyUpdateState();Navigate("概览");var updateView=(FrameworkElement)Content;updateView.Measure(new Size(1120,800));updateView.Arrange(new Rect(0,0,1120,800));updateView.UpdateLayout();var updateBitmap=new RenderTargetBitmap(1120,800,96,96,PixelFormats.Pbgra32);updateBitmap.Render(updateView);var updateEncoder=new PngBitmapEncoder();updateEncoder.Frames.Add(BitmapFrame.Create(updateBitmap));using(var file=File.Create(Path.Combine(directory,"检测到更新.png")))updateEncoder.Save(file);update=null;ApplyUpdateState();
     }
     public MainWindow(bool isPreview) {
+        logViewport=new LogViewport(log);
         preview=isPreview;modelCatalog=ModelCatalog.Preset(); Title="Codex Init Kit"; Width=1120; Height=800; MinWidth=940; MinHeight=720; WindowStartupLocation=WindowStartupLocation.CenterScreen;
         Icon=Brand.Logo();
         Background=BackgroundBrush; Foreground=TextBrush; FontFamily=new FontFamily("Microsoft YaHei UI"); FontSize=14;
@@ -144,12 +151,15 @@ public class MainWindow : Window {
     Button Link(string label,Action action) { var b=Button(label,action,false); b.Background=Brushes.Transparent; b.Foreground=Accent; b.Padding=new Thickness(0,6,0,6); b.FontSize=12; return b; }
     StackPanel Card(string title,string description) { var p=new StackPanel{Margin=new Thickness(22,18,22,18)}; p.Children.Add(T(title,18,TextBrush)); if(description.Length>0)p.Children.Add(T(description,13,MutedBrush)); var box=new Border{Background=PanelBrush,CornerRadius=new CornerRadius(12),Margin=new Thickness(0,0,0,14),Child=p}; content.Children.Add(box); return p; }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { foreach(var control in new FrameworkElement[]{drive,port,proxyHost,guard,log,proxyEnabled,folderManagement,antiOverDefense,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,modelMode,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
+    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyHost,guard,log,proxyEnabled,folderManagement,antiOverDefense,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,modelMode,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
         if(name=="概览")Overview(); else if(name=="初始化")Wizard(); else if(name=="浏览器连接")BrowserConnection(); else if(name=="维护恢复")Maintenance(); else if(name=="更新")Updates(); else LogsPage();
+        if(log.Parent!=null)logViewport.Attach();
     }
     void Overview() {
         subtitle.Text="把工作区、模型设置、CUA 修复与启动保护放在一起。";
         var hero=Card("让 Codex 准备好开始工作","按步骤配置工作区，完成文件夹管理后执行 CUA 检查与修复。每一步都有日志，关键更改先确认。");
+        var dataNotice=new StackPanel();var noticeTitle=T("本工具不会初始化数据与对话",15,Brushes.White);noticeTitle.FontWeight=FontWeights.SemiBold;dataNotice.Children.Add(noticeTitle);var noticeDetail=T("初始化会备份并重建配置，保留现有对话记录和项目文件。",13,Brushes.White);noticeDetail.Margin=new Thickness(0);dataNotice.Children.Add(noticeDetail);
+        hero.Children.Add(new Border{Name="DataPreservationNotice",Background=B("#176449"),CornerRadius=new CornerRadius(10),Padding=new Thickness(16,12,16,12),Margin=new Thickness(0,2,0,12),Child=dataNotice});
         var actions=new Grid();for(int i=0;i<3;i++)actions.ColumnDefinitions.Add(new ColumnDefinition{Width=i<2?GridLength.Auto:new GridLength(1,GridUnitType.Star)});
         var start=Button("开始初始化  →",()=>{wizard=0;Navigate("初始化");},true);actions.Children.Add(start);
         var refresh=Button("刷新状态",async()=>await Run("status","读取当前状态",false),false);Grid.SetColumn(refresh,1);actions.Children.Add(refresh);
@@ -159,7 +169,7 @@ public class MainWindow : Window {
             var labels=new Dictionary<string,string>{{"desktopVersion","桌面版本"},{"desktopHealth","组件状态"},{"runtimeMode","当前 CLI 模式"},{"runtimeModeDetail","运行时说明"},{"currentCliPath","当前 CLI 路径"},{"configModel","当前模型"},{"configEffort","当前推理强度"},{"protectionInstalled","启动保护已安装"},{"processRunning","Codex 正在运行"},{"backupPath","初始化备份"}};
             foreach(var pair in labels) { var value=status.ContainsKey(pair.Key)?status[pair.Key]:null;var display=pair.Key=="runtimeMode"?RuntimeMode(value):pair.Key=="currentCliPath"&&String.IsNullOrWhiteSpace(Convert.ToString(value))&&Convert.ToString(status.ContainsKey("runtimeMode")?status["runtimeMode"]:null)=="DesktopNative"?"由桌面应用自动选择":Format(value);var row=T(pair.Value+"   "+display,pair.Key=="runtimeMode"?16:13,pair.Key=="runtimeMode"?Accent:MutedBrush);if(pair.Key=="runtimeMode")row.FontWeight=FontWeights.SemiBold;p.Children.Add(row); }
         }
-        var model=Card("默认模型","父模型  GPT6.1 TERRA · MAX\n子代理默认关闭；启用子代理时使用 GPT6.1 TERRA · MAX · 最多 6 个，单层调用");
+        var model=Card("默认模型","父模型  GPT6.1 SOL · HIGH\n子代理默认关闭；启用子代理时使用 GPT6.1 SOL · HIGH · 最多 6 个，单层调用");
         model.Children.Add(T("gpt-6.1-sol / high    ·    子代理默认关闭，启用后为 gpt-6.1-sol / high",12,Accent));
     }
     static string Format(object value) { if(value==null)return "未检测"; if(value is bool)return (bool)value?"是":"否"; var text=Convert.ToString(value);if(text=="healthy")return "完整";if(text=="missing")return "未找到";if(text=="incomplete")return "组件不完整";return text; }
@@ -194,7 +204,7 @@ public class MainWindow : Window {
             var p=Card("02   确认初始化","将更新当前 Windows 用户的 Codex 配置。执行时会请求管理员授权。");
             p.Children.Add(T(InitSummary(),14,TextBrush));
             Row(p,Button("返回修改",()=>{wizard=0;Navigate("初始化");},false),Button("确认并开始初始化",async()=>{if(Confirm("开始初始化",InitSummary()+"\n\n请先保存工作并彻底退出 Codex；检测到正在运行时会停止初始化，不会强制结束当前任务。")){wizard=2;Navigate("初始化");await Run("initialize","初始化",false);}},true));
-        } else { var p=Card("03   执行与结果",busy?"正在执行，请保留窗口。":"完整结果与备份位置见下方日志。"); p.Children.Add(log); Row(p,Button("查看全部日志",()=>Navigate("日志"),false),Button("重新设置",()=>{if(!busy){wizard=0;Navigate("初始化");}},false)); }
+        } else { var p=Card("03   执行与结果",busy?"正在执行，请保留窗口。":"完整结果与备份位置见下方日志。"); p.Children.Add(log); Row(p,LatestLogButton(),Button("查看全部日志",()=>Navigate("日志"),false),Button("重新设置",()=>{if(!busy){wizard=0;Navigate("初始化");}},false)); }
     }
     string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+options["parentEffort"]+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+options["childEffort"]:"关闭，不写入子代理规则")+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文精简规则及实现、交付规则":"跳过")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"最后执行，真实连接需重启后验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件，保留当前 CLI 模式":"跳过")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → 浏览器修复。新增步骤未完成时显示可重试项目。\n"+ModelChecks(options)+"\n基础配置及全局 AGENTS.md 将完整备份并重建；原自定义指令只保存在备份中。项目内的 AGENTS.md 不变。更新用户 PATH。初始化和 CUA 分别备份。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
@@ -219,10 +229,19 @@ public class MainWindow : Window {
         compatibility.Children.Add(T(compatibilityAdvice.Length>0?compatibilityAdvice:"session-flags 来自会话参数时，清理文件无法消除警告；请检查桌面版与 CLI 的版本兼容性。",12,MutedBrush));
         var cua=Card("CUA 组件","检查官方桌面应用中的浏览器自动化文件，仅在校验异常时修复。修复前备份原文件，不重置模型或工作区。");
         Row(cua,Button("检查 CUA",async()=>await Run("cua-check","CUA 组件",true),true),Button("检查并修复",async()=>await Run("cua-repair","CUA 修复",true),true));
-        var r=Card("恢复与回滚","初始化回滚只恢复初始化备份，不恢复 CUA 文件，也不删除已创建的工作目录。保护器回滚使用独立的运行时备份。");
-        Row(r,Button("回滚最新初始化",async()=>await Run("init-rollback","回滚最新初始化",true),false),Button("回滚保护器",async()=>await Run("guard-rollback","回滚保护器",true),false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
+        var r=Card("恢复与回滚","选择本地初始化备份或保护器 CLI 历史缓存，再点击下方回滚按钮。时间为本机备份 / 缓存时间。初始化快照不是桌面应用版本；Microsoft Store 桌面版不在此回滚。");
+        rollbackList=new ListBox{Background=B("#101620"),Foreground=TextBrush,BorderThickness=new Thickness(0),MaxHeight=280,MinHeight=70,HorizontalContentAlignment=HorizontalAlignment.Stretch,Padding=new Thickness(6),Margin=new Thickness(0,2,0,10)};
+        ScrollViewer.SetHorizontalScrollBarVisibility(rollbackList,ScrollBarVisibility.Disabled);
+        var entries=status!=null&&status.ContainsKey("rollbackEntries")?status["rollbackEntries"] as System.Collections.IEnumerable:null;
+        if(entries!=null)foreach(var value in entries){var entry=value as Dictionary<string,object>;if(entry==null)continue;bool available=entry.ContainsKey("available")&&entry["available"] is bool&&(bool)entry["available"];var row=new StackPanel{Margin=new Thickness(8,5,8,5)};row.Children.Add(T((Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"  ·  "+Core.Value(entry,"version","版本未记录"),14,TextBrush));row.Children.Add(T(Core.Value(entry,"time","时间未记录")+"  ·  "+Core.Value(entry,"detail",""),12,MutedBrush));var item=new ListBoxItem{Tag=entry,Content=row,IsEnabled=available,ToolTip=Core.Value(entry,"path",""),HorizontalContentAlignment=HorizontalAlignment.Stretch};rollbackList.Items.Add(item);if(Core.Value(entry,"id","")==selectedRollbackId&&available)rollbackList.SelectedItem=item;}
+        if(rollbackList.Items.Count==0)r.Children.Add(T(Core.Value(status,"rollbackError","").Length>0?Core.Value(status,"rollbackError",""):status==null?"正在读取可回滚备份，请刷新列表。":"暂未发现初始化备份或独立 CLI 历史缓存。",13,MutedBrush));
+        r.Children.Add(rollbackList);
+        rollbackButton=Button("回滚所选项",async()=>{var item=rollbackList.SelectedItem as ListBoxItem;var entry=item==null?null:item.Tag as Dictionary<string,object>;if(entry!=null)await Run("rollback-selected","回滚所选项",true,new Dictionary<string,object>{{"rollbackId",Core.Value(entry,"id","")}},RollbackSummary(entry));},false);rollbackButton.IsEnabled=rollbackList.SelectedItem!=null&&!busy;
+        rollbackList.SelectionChanged+=(s,e)=>{var item=rollbackList.SelectedItem as ListBoxItem;var entry=item==null?null:item.Tag as Dictionary<string,object>;selectedRollbackId=Core.Value(entry,"id","");rollbackButton.IsEnabled=entry!=null&&!busy;};
+        Row(r,rollbackButton,Button("刷新备份列表",async()=>{if(!busy){await RefreshStatusQuietly();Navigate("维护恢复");}},false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
         var proxy=Card("代理设置","开关和端口在初始化页面设置。关闭后移除 Codex 的代理配置。");proxy.Children.Add(T("当前："+ProxySummary(),13,MutedBrush));proxy.Children.Add(Button("更新代理",async()=>await Run("proxy","更新代理",true),false));
     }
+    static string RollbackSummary(Dictionary<string,object> entry){return "目标："+(Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"\n版本："+Core.Value(entry,"version","版本未记录")+"\n备份 / 缓存时间："+Core.Value(entry,"time","未记录")+"\n位置："+Core.Value(entry,"path","")+"\n\n"+(Core.Value(entry,"kind","")=="init"?"将覆盖当前配置、代理、全局规则及该备份记录的运行时 / PATH 设置；不恢复 CUA，不删除对话或已创建的工作目录。":"将切换到所选本地独立 CLI，并更改桌面应用的 CLI 覆盖路径；不会降级 Microsoft Store 桌面应用。")+"\n请先保存工作并退出 Codex；检测到仍在运行时停止，不强制结束进程。";}
     void GuideOfficialCli(){
         Navigate("维护恢复");
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(HighlightOfficialSwitch));
@@ -275,9 +294,10 @@ public class MainWindow : Window {
         if(update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version)) { p.Children.Add(T(Core.Value(update,"notes","有新版本可用。"),14,Accent)); p.Children.Add(Button("下载并更新",async()=>await InstallUpdate(),true)); }
         Card("更新如何进行","每次启动自动检查 GitHub 新版，右下角显示检查状态，发现更新时右下角出现红点入口。点击后下载并校验，退出后替换同目录、同文件名的 EXE 并重启；更新成功后自动删除旧版本。\n检查失败不影响本地功能。网络请求遵循初始化页面中的代理开关和端口。");
     }
-    void LogsPage() { subtitle.Text="中文日志默认显示；原始输出可切换查看。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",()=>Clipboard.SetText(LogToCopy()),false)); }
+    void LogsPage() { subtitle.Text="默认跟随底部最新日志；上翻暂停，回到底部恢复。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,LatestLogButton(),Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",()=>Clipboard.SetText(LogToCopy()),false)); }
+    Button LatestLogButton(){return Button("回到最新日志",()=>logViewport.Latest(),false);}
     string LogToCopy(){return log.Text.Length>0?log.Text:"尚无日志";}
-    void UpdateLogView(){log.Text=showRawLog?rawLogText:chineseLogText;log.ScrollToEnd();}
+    void UpdateLogView(){logViewport.SetText(showRawLog?rawLogText:chineseLogText);}
     string TranslateLogLine(string value){string translated;if(!localizedLines.TryGetValue(value,out translated)){translated=DesktopLocalization.TranslateLine(value);localizedLines[value]=translated;}return translated;}
     bool Confirm(string title,string message) { return MessageBox.Show(this,message+"\n\n是否继续？",title,MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes; }
     void Error(Exception ex) { var message=DesktopLocalization.ExceptionText(ex);banner.Text=message;RecordUiError(ex,true);MessageBox.Show(this,message,"操作未完成",MessageBoxButton.OK,MessageBoxImage.Error); }
@@ -306,21 +326,23 @@ public class MainWindow : Window {
             default:return "安装或修复当前用户的启动保护与登录自动维护任务。";
         }
     }
-    async Task Run(string op,string title,bool confirm) {
+    async Task Run(string op,string title,bool confirm,Dictionary<string,object> extraOptions=null,string confirmationText=null) {
         if(busy){banner.Text="请等待当前操作完成。";return;}
         var refreshStatus=false;
         try {
             var configOperation=op=="config-check"||op=="config-cleanup";var coreOperation=op=="desktop-core-check"||op=="desktop-core-repair";
             int proxy=op=="status"||configOperation||coreOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(op=="status"||coreOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            if(extraOptions!=null)foreach(var pair in extraOptions)options[pair.Key]=pair.Value;
             if(op=="browser-start-prepare" && Core.Admin)throw new InvalidOperationException("请以普通用户权限打开本工具，再使用修复并启动功能。");
-            if(confirm && !Confirm(title,Impact(op)))return;
+            if(confirm && !Confirm(title,confirmationText??Impact(op)))return;
             if(configOperation)compatibilityAdvice="";
             if(coreOperation)desktopCoreAdvice="";
             busy=true; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=true;
+            if(rollbackButton!=null)rollbackButton.IsEnabled=false;
             if(op=="initialize")initializationSummary="";
             if(op=="browser-start-prepare")browserStartTarget=null;
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
-            var id=Guid.NewGuid().ToString("N"); lastLog=Path.Combine(Core.Logs,id+".log");rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;log.Text="";
+            var id=Guid.NewGuid().ToString("N"); lastLog=Path.Combine(Core.Logs,id+".log");rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;logViewport.Reset();
             using(var process=Core.StartWorker(op,id,disk,proxy,op=="initialize"&&guard.IsChecked==true,options)) {
                 while(!process.HasExited) { await Task.Delay(300); ReadLog(); }
                 logInputComplete=true;ReadLog(); progress.IsIndeterminate=false;
@@ -344,8 +366,9 @@ public class MainWindow : Window {
             }
         } catch(System.ComponentModel.Win32Exception ex) { if(ex.NativeErrorCode==1223)banner.Text="已取消管理员授权，未开始执行。";else Error(ex); }
           catch(Exception ex) { Error(ex); }
-        finally {busy=false;progress.IsIndeterminate=false;}
+        finally {busy=false;progress.IsIndeterminate=false;if(rollbackButton!=null)rollbackButton.IsEnabled=rollbackList!=null&&rollbackList.SelectedItem!=null;}
         if(refreshStatus && !preview) await RefreshStatusQuietly();
+        if(op=="rollback-selected"&&!preview){await RefreshStatusQuietly();if(page=="维护恢复")Navigate(page);}
     }
     void ReadLog() {
         if(!File.Exists(lastLog))return;
@@ -380,6 +403,67 @@ public class MainWindow : Window {
             File.WriteAllText(lastLog,original+"@@DESKTOP_CORE@@{",new UTF8Encoding(false));ReadLog();if(chineseLogText.Contains("桌面启动检查结果无法读取"))throw new InvalidDataException("Partial streaming record was treated as failure");
             File.WriteAllText(lastLog,"[FAIL] Missing file: 中文目录\\codex.exe",new UTF8Encoding(false));logInputComplete=true;ReadLog();if(!chineseLogText.Contains("缺少文件")||!chineseLogText.Contains("中文目录\\codex.exe"))throw new InvalidDataException("Final non-newline message was omitted");
         }finally{lastLog="";rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;initializationSummary="";Directory.Delete(directory,true);UpdateLogView();}
+    }
+    void PumpLogLayout(){
+        var root=(FrameworkElement)Content;root.Measure(new Size(1120,800));root.Arrange(new Rect(0,0,1120,800));root.UpdateLayout();
+        var frame=new DispatcherFrame();
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>frame.Continue=false));Dispatcher.PushFrame(frame);root.UpdateLayout();
+    }
+    void VerifyRollbackSelection(){
+        var entries=new object[]{new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"path",@"C:\fixture\snapshot"}},new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"path",@"C:\fixture\release"}},new Dictionary<string,object>{{"id",new string('c',64)},{"kind","cli"},{"available",false}}};
+        try{
+            status=new Dictionary<string,object>{{"rollbackEntries",entries}};selectedRollbackId="";Navigate("维护恢复");
+            if(rollbackList.Items.Count!=3||rollbackButton.IsEnabled||((ListBoxItem)rollbackList.Items[2]).IsEnabled)throw new InvalidDataException("Rollback list defaults or unavailable rows failed");
+            rollbackList.SelectedIndex=0;if(!rollbackButton.IsEnabled||selectedRollbackId!=new string('a',64))throw new InvalidDataException("Rollback selection was not retained");
+            var summary=RollbackSummary((Dictionary<string,object>)entries[0]);if(!summary.Contains("2026-11-01 14:00:00")||!summary.Contains("2.2.4")||!summary.Contains("不删除对话"))throw new InvalidDataException("Rollback confirmation lacks its exact target or impact");
+            Navigate("维护恢复");if(rollbackList.SelectedIndex!=0||!rollbackButton.IsEnabled)throw new InvalidDataException("Returning to maintenance lost the rollback selection");
+            rollbackList.SelectedIndex=1;summary=RollbackSummary((Dictionary<string,object>)entries[1]);if(!summary.Contains("0.165.0")||!summary.Contains("不会降级 Microsoft Store"))throw new InvalidDataException("CLI rollback confirmation misstates its scope");
+            status=new Dictionary<string,object>();Navigate("维护恢复");if(rollbackList.Items.Count!=0||rollbackButton.IsEnabled)throw new InvalidDataException("Empty backup list enabled rollback");
+            Navigate("概览");var hero=(StackPanel)((Border)content.Children[0]).Child;var notice=hero.Children.OfType<Border>().FirstOrDefault(x=>x.Name=="DataPreservationNotice");
+            if(notice==null||notice.CornerRadius.TopLeft<=0||((SolidColorBrush)notice.Background).Color.G<=((SolidColorBrush)notice.Background).Color.R||!((StackPanel)notice.Child).Children.OfType<TextBlock>().Any(x=>x.Text=="本工具不会初始化数据与对话"&&x.Foreground==Brushes.White))throw new InvalidDataException("Overview data-preservation notice is missing or not green with white text");
+        }finally{status=null;selectedRollbackId="";}
+    }
+    void VerifyLogScrolling(){
+        try{
+            logViewport.Reset();showRawLog=false;
+            chineseLogText=String.Join("\n",Enumerable.Range(1,240).Select(i=>"中文日志 "+i+" "+new string('x',180)))+"\n";rawLogText=chineseLogText.Replace("中文日志","RAW LOG");
+            Navigate("日志");UpdateLogView();PumpLogLayout();
+            if(log.ExtentHeight<=log.ViewportHeight*3||!logViewport.Following||log.ExtentHeight-log.ViewportHeight-log.VerticalOffset>2)throw new InvalidDataException("Initial log view did not reach the latest line after layout: extent="+log.ExtentHeight+", viewport="+log.ViewportHeight+", offset="+log.VerticalOffset+", following="+logViewport.Following);
+            for(int i=0;i<8;i++){chineseLogText+="追加日志 "+i+"\n";UpdateLogView();}PumpLogLayout();
+            if(log.ExtentHeight-log.ViewportHeight-log.VerticalOffset>2)throw new InvalidDataException("Rapid log appends stopped following");
+            log.ApplyTemplate();var host=(ScrollViewer)log.Template.FindName("PART_ContentHost",log);
+            // Route wheel input through the real nested scroll viewer.
+            chineseLogText+="滚动回调尚未执行时上翻\n";UpdateLogView();
+            host.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice,Environment.TickCount,120){RoutedEvent=System.Windows.Input.Mouse.PreviewMouseWheelEvent});
+            host.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice,Environment.TickCount,120){RoutedEvent=System.Windows.Input.Mouse.MouseWheelEvent});PumpLogLayout();
+            if(logViewport.Following)throw new InvalidDataException("Mouse wheel up did not pause log following");
+            // The scrollbar thumb ultimately requests the same ScrollToVerticalOffset.
+            log.ScrollToVerticalOffset(160);log.ScrollToHorizontalOffset(90);PumpLogLayout();
+            log.Select(80,12);log.ScrollToVerticalOffset(160);log.ScrollToHorizontalOffset(90);PumpLogLayout();
+            double top=log.VerticalOffset,left=log.HorizontalOffset;int start=log.SelectionStart,length=log.SelectionLength;
+            chineseLogText+="阅读历史时追加\n";UpdateLogView();PumpLogLayout();
+            if(logViewport.Following||Math.Abs(log.VerticalOffset-top)>2||Math.Abs(log.HorizontalOffset-left)>2||log.SelectionStart!=start||log.SelectionLength!=length)throw new InvalidDataException("Append moved the paused viewport or selection");
+            // PageUp command uses the actual ScrollViewer command path used by keyboard scrolling.
+            System.Windows.Controls.Primitives.ScrollBar.PageUpCommand.Execute(null,host);PumpLogLayout();
+            top=log.VerticalOffset;if(logViewport.Following)throw new InvalidDataException("PageUp resumed following");
+            chineseLogText+="待处理滚动请求\n";UpdateLogView();Navigate("概览");PumpLogLayout();Navigate("日志");PumpLogLayout();
+            if(logViewport.Following||Math.Abs(log.VerticalOffset-top)>2||Math.Abs(log.HorizontalOffset-left)>2)throw new InvalidDataException("Returning to logs lost the reader's position");
+            var panel=(StackPanel)((Border)content.Children[0]).Child;
+            panel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).First(x=>Convert.ToString(x.Content)=="查看原始日志").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));PumpLogLayout();
+            if(logViewport.Following||Math.Abs(log.VerticalOffset-top)>2||log.Text!=rawLogText)throw new InvalidDataException("Raw log switch lost the paused position");
+            panel=(StackPanel)((Border)content.Children[0]).Child;
+            panel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).First(x=>Convert.ToString(x.Content)=="回到最新日志").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));PumpLogLayout();
+            if(!logViewport.Following||log.ExtentHeight-log.ViewportHeight-log.VerticalOffset>2)throw new InvalidDataException("Latest log button did not restore following");
+            showRawLog=false;UpdateLogView();Navigate("日志");PumpLogLayout();
+            if(!logViewport.Following||log.ExtentHeight-log.ViewportHeight-log.VerticalOffset>2)throw new InvalidDataException("Language switch did not follow the latest log");
+            log.ScrollToVerticalOffset(80);PumpLogLayout();log.ScrollToEnd();PumpLogLayout();
+            if(!logViewport.Following)throw new InvalidDataException("Manually returning to the bottom did not resume following");
+            chineseLogText+="操作完成\n";UpdateLogView();wizard=2;Navigate("初始化");PumpLogLayout();
+            var actions=((StackPanel)((Border)content.Children[0]).Child).Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>());
+            if(!actions.Any(x=>Convert.ToString(x.Content)=="回到最新日志")||!logViewport.Following||log.ExtentHeight-log.ViewportHeight-log.VerticalOffset>2)throw new InvalidDataException("Initialization result log did not share bottom following");
+            log.ScrollToVerticalOffset(100);PumpLogLayout();logViewport.Reset();chineseLogText="新操作\n";UpdateLogView();PumpLogLayout();
+            if(!logViewport.Following||log.VerticalOffset>2||log.HorizontalOffset>2)throw new InvalidDataException("New operation did not reset log following");
+        }finally{wizard=0;rawLogText="";chineseLogText="";showRawLog=false;logViewport.Reset();Navigate("日志");}
     }
     async Task RefreshStatusQuietly() {
         try {

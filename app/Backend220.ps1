@@ -77,6 +77,14 @@ function Invoke-BoundedProcess {
 }
 function Invoke-DesktopUpdate {
     param([string]$PayloadRoot)
+    try { return (Invoke-DesktopUpdateCore $PayloadRoot) }
+    catch {
+        Write-BackendLine '提示：自动更新可能因网络或商店服务暂时不可用而失败，这种情况无需担心；你可以自行在微软商店或 Codex 内手动更新。本次自动更新未完成，请同时留意组件检查和重启提示。'
+        throw
+    }
+}
+function Invoke-DesktopUpdateCore {
+    param([string]$PayloadRoot)
     $before=Assert-DesktopStopped $PayloadRoot
     Assert-DesktopReady $before
     $winget=Get-Command winget.exe -ErrorAction SilentlyContinue
@@ -86,6 +94,7 @@ function Invoke-DesktopUpdate {
     Assert-DesktopReady $after
     if($result.TimedOut){throw 'Desktop update timed out; Store may still be completing the update. Recheck before repairing dependent components.'}
     $unsigned=[long]$result.ExitCode -band 0xffffffffL
+    if($unsigned -eq 0x80072efdL){throw '无法连接微软商店更新服务（0x80072EFD / -2147012867）。请检查网络和代理，或改用微软商店、Codex 内的手动更新入口。'}
     if($unsigned -in @(3010,1641,0x8a150109L)){throw 'Desktop update requires restart or is still pending; dependent repairs were paused.'}
     if($result.ExitCode -eq 0 -and [version]$after.Version -gt [version]$before.Version){Test-DesktopCli $after $PayloadRoot;Write-BackendLine ('Desktop updated: '+$before.Version+' -> '+$after.Version);return 'updated'}
     if($unsigned -eq 0x8a15002bL -and [version]$after.Version -eq [version]$before.Version){Test-DesktopCli $after $PayloadRoot;Write-BackendLine ('Desktop already up to date: '+$after.Version);return 'latest'}

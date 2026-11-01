@@ -39,6 +39,10 @@ public static class Program {
         var report=new Dictionary<string,object>{{"exit_code",code},{"status",state},{"error",error},{"log",Path.Combine(Core.Logs,id+".log")}};
         File.WriteAllText(Path.GetFullPath(reportPath),Core.Json.Serialize(report),new UTF8Encoding(false)); return code;
     }
+    static string ReadProcessOutput(Process process) {
+        var stdout=process.StandardOutput.ReadToEndAsync();var stderr=process.StandardError.ReadToEndAsync();
+        process.WaitForExit();return stdout.GetAwaiter().GetResult()+stderr.GetAwaiter().GetResult();
+    }
     static int Verify(string reportPath) {
         var checks=new Dictionary<string,object>(); var errors=new System.Collections.Generic.List<string>();
         var dir=Path.Combine(Path.GetTempPath(),"CodexKit-verify-"+Guid.NewGuid().ToString("N"));
@@ -51,22 +55,22 @@ public static class Program {
             var script="$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile('"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"',[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|Out-String|Write-Output;exit 1};exit 0";
             var info=new ProcessStartInfo(ps,"-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(script))){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
             info.StandardOutputEncoding=Encoding.UTF8;info.StandardErrorEncoding=Encoding.UTF8;
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["backend_syntax"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_syntax"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var testScript="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"' -BackendPath '"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(testScript));
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["backend_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var test220="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend220.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(test220));
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["browser_and_update_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_and_update_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var startTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"BrowserStartup.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(startTests));
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["browser_startup_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_startup_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var coreTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"DesktopCoreRecovery.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(coreTests));
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["desktop_core_recovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["desktop_core_recovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var discoveryTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"RuntimeDiscovery.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
             info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(discoveryTests));
-            using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();checks["runtime_discovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["runtime_discovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
             var target=new Dictionary<string,object>{{"packageFullName","OpenAI.Codex_26.1.0.0_x64__2p2nqsd0c76g0"},{"packageFamilyName","OpenAI.Codex_2p2nqsd0c76g0"},{"appId","App"}};if(!Core.BrowserLaunchUri(target,target).EndsWith("!App"))throw new InvalidDataException("Official app target failed");var changed=new Dictionary<string,object>(target);changed["packageFullName"]="OpenAI.Codex_26.2.0.0_x64__2p2nqsd0c76g0";bool raceRejected=false;try{Core.BrowserLaunchUri(target,changed);}catch(InvalidDataException){raceRejected=true;}if(!raceRejected)throw new InvalidDataException("App version race accepted");checks["browser_start_target_validation"]=true;
             foreach(var field in new[]{"appId","packageFamilyName","packageFullName"}){var bad=new Dictionary<string,object>(target);bad[field]="invalid & app";bool rejected=false;try{Core.BrowserLaunchUri(bad,bad);}catch(InvalidDataException){rejected=true;}if(!rejected)throw new InvalidDataException("Invalid application target accepted: "+field);}
             var catalog=ModelCatalog.Parse("{\"models\":[{\"slug\":\"fixture-model\",\"default_reasoning_level\":\"high\",\"supported_reasoning_levels\":[{\"effort\":\"high\"},{\"effort\":\"low\"}]}]}");
@@ -85,6 +89,7 @@ public static class Program {
             foreach(var badHost in new[]{"localhost","127.0.0.1;bad","http://127.0.0.1"}) { bool rejected=false;try{Core.NormalizeProxyHost(badHost);}catch{rejected=true;}if(!rejected)throw new InvalidDataException("Unsafe proxy host accepted: "+badHost); }checks["proxy_host_rejects_unsafe_input"]=true;
             var unsafeOptions=Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"parentModel\":\"bad & model\"}"));if(Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"D","0","0",Core.Sid,unsafeOptions})!=64)throw new InvalidDataException("Unsafe worker model accepted");checks["worker_rejects_unsafe_model"]=true;
             var unsafeProxyOptions=Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"proxyHost\":\"127.0.0.1;bad\"}"));if(Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"D","0","0",Core.Sid,unsafeProxyOptions})!=64)throw new InvalidDataException("Unsafe worker proxy host accepted");checks["worker_rejects_unsafe_proxy_host"]=true;
+            checks["log_bottom_following"]=true;checks["rollback_selection_ui"]=true;checks["overview_data_notice"]=true;
             checks["operation_count"]=Core.Operations.Length;
             var valid="{\"schema_version\":1,\"repository\":\""+Core.Repository+"\",\"version\":\"2.0.1\",\"url\":\"https://github.com/"+Core.Repository+"/releases/download/v2.0.1/CodexInitKit.exe\",\"sha256\":\""+new string('a',64)+"\"}";
             Core.ValidateUpdate(valid);checks["update_manifest_valid"]=true;
@@ -96,7 +101,7 @@ public static class Program {
                 if(scenario=="target_changed")File.WriteAllText(current,"changed");
                 if(scenario=="restart_failed")replacement=replacement.Replace("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;","throw 'Simulated restart failure';");
                 info.Arguments="-NoProfile -NonInteractive -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(replacement));
-                using(var proc=Process.Start(info)){var output=proc.StandardOutput.ReadToEnd()+proc.StandardError.ReadToEnd();proc.WaitForExit();if((proc.ExitCode==0)!=(scenario=="success"))throw new IOException("Updater exit status: "+scenario+" "+output);}
+                using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);if((proc.ExitCode==0)!=(scenario=="success"))throw new IOException("Updater exit status: "+scenario+" "+output);}
                 var expected=scenario=="success"?"new":scenario=="target_changed"?"changed":"old";
                 if(File.ReadAllText(current)!=expected||File.Exists(next)||Directory.GetFiles(fixture,"*.tmp").Length!=0||!File.Exists(updateLog))throw new IOException("Updater regression: "+scenario);
                 if(scenario=="restart_failed"&&!File.ReadAllText(updateLog).Contains("回滚成功"))throw new IOException("Updater rollback missing");

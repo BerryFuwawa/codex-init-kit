@@ -12,6 +12,27 @@ namespace CodexKit {
 // remain untouched. No logs are sent to a translation service.
 public static class DesktopLocalization {
     static readonly string[,] Phrases={
+        {"Windows Package Manager","Windows 程序包管理器"},
+        {"Copyright (c) Microsoft Corporation. All rights reserved.","版权所有：微软公司。保留所有权利。"},
+        {"No applicable upgrade found.","未发现适用的更新。"},
+        {"No available upgrade found.","没有可用更新。"},
+        {"No installed package found matching input criteria.","没有找到匹配的已安装应用包。"},
+        {"No newer package versions are available from the configured sources.","当前配置的软件源中没有更新版本。"},
+        {"Failed when opening source(s); try the 'source reset' command if the problem persists.","无法打开软件源；若持续失败，可检查 winget 软件源或改用微软商店手动更新。"},
+        {"Failed when searching source:","查询软件源失败："},
+        {"Failed to update source:","更新软件源失败："},
+        {"An unexpected error occurred while executing the command:","执行更新命令时发生异常："},
+        {"A connection with the server could not be established", "无法连接服务器，请检查网络和代理"},
+        {"The server name or address could not be resolved", "无法解析服务器地址，请检查网络和 DNS"},
+        {"The `msstore` source requires that you view the following agreements before using.","使用微软商店软件源前需要接受其协议。"},
+        {"Terms of Transaction:","交易条款："},
+        {"The source requires the current machine's 2-letter geographic region to be sent to the backend service to function properly (ex. \"US\").","微软商店软件源需要向服务端发送本机的两位地区代码，例如 US。"},
+        {"Codex Full Reset + V2Ray Proxy", "Codex 配置重建与代理设置"},
+        {"GUI supplied folder management drive:","使用初始化界面选择的工作盘："},
+        {"GUI confirmation already supplied for this operation.","此操作已在初始化界面确认。"},
+        {"Folder-management drive confirmed:","文件夹管理工作盘已确认："},
+        {"Config written:","配置已写入："},
+        {"Rollback completed. Review the result above; this console will remain open.","回滚完成，请查看上方结果；此窗口会保持打开。"},
         {"Expected exactly one installed official desktop package; no cross-channel installation attempted.","未能唯一确定已安装的官方桌面版；没有安装其他渠道的版本。"},
         {"Installed package is not the supported official Store channel.","当前桌面应用并非受支持的官方 Microsoft Store 版本。"},
         {"Desktop components are incomplete or the app changed during inspection.","桌面组件不完整，或检查期间桌面应用发生变化。"},
@@ -244,6 +265,11 @@ public static class DesktopLocalization {
     public static string TranslateLine(string input,bool errorContext=false) {
         if(String.IsNullOrEmpty(input))return input??"";
         var original=input.TrimEnd('\r');var text=original;
+        if(Regex.IsMatch(original,@"(?i)0x80072efd|(?<!\d)-2147012867(?!\d)"))return "无法连接微软商店更新服务（0x80072EFD / -2147012867）。自动更新遇到网络或商店服务问题是可能出现的情况，无需担心；你可以在微软商店或 Codex 内手动更新。";
+        if(original.Trim()=="True")return "操作返回值：是（True）";
+        if(original.Trim()=="False")return "操作返回值：否（False）";
+        if(Regex.IsMatch(original,@"^\s*RESULT\s*=\s*PASS\s*$"))return "结果：通过";
+        if(Regex.IsMatch(original,@"^\s*RESULT\s*=\s*FAIL\s*$"))return "结果：失败";
         if(Regex.IsMatch(text,@"^\s*(?:#< CLIXML|<Objs\b|CategoryInfo\s*:|FullyQualifiedErrorId\s*:|At .+ line:|at\s+\S+\(|\+\s|~{3,})",RegexOptions.IgnoreCase))return "异常详细输出已保留，请查看原始日志。";
         if(text.Trim()=="Notes")return "检查提示";if(text.Trim()=="Environment")return "运行环境";
         var preserved=new List<string>();
@@ -276,6 +302,7 @@ public static class DesktopLocalization {
         text=Regex.Replace(text,@"(?i)(^|\s)(rollouts|updates|threads|reachability|websocket|mcp)\s+",m=>m.Groups[1].Value+new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"rollouts","会话记录："},{"updates","更新检查："},{"threads","会话清单："},{"reachability","网络可达性："},{"websocket","WebSocket："},{"mcp","MCP："}}[m.Groups[2].Value]);
         text=Regex.Replace(text,@"(?i)\bmodel\s+([A-Za-z0-9._/:-]+)\s+(?:is\s+)?(?:not available|not found|not supported|access denied)","模型 $1 当前不可用，请核对模型 ID 和账号权限");
         var check=MaskTechnical(text);
+        check=Regex.Replace(check,@"(?i)\bGPT\s*\d+(?:\.\d+)?\s*(?:SOL|TERRA|LUNA|ASTRA)?\s*(?:HIGH|MAX)?\b","");
         if(EnglishSentence.IsMatch(check) || ((errorContext||ErrorHint.IsMatch(original)||original.Contains("[FAIL]")||original.Contains("[ERROR]")) && Regex.IsMatch(check,@"\b[A-Za-z]{3,}\b"))) {
             bool failure=errorContext||ErrorHint.IsMatch(original)||original.Contains("【失败】")||original.Contains("[FAIL]")||original.Contains("[ERROR]")||Regex.IsMatch(original,"未完成|失败|错误|异常|不可达|无法|未能");
             var context=Regex.Match(text,@"^(?:【[^】]+】\s*)?([\u4e00-\u9fff][^：:\r\n]{0,50})[:：]");
