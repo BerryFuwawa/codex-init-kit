@@ -33,7 +33,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
 | **Codex 连不上 Chrome / 浏览器控制不可用** | 打开「浏览器连接」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
-| **Codex 桌面版打不开 / 无法加载组织设置** | 如果日志中有 `EPERM`、`rename_staging` 等特征，先检查桌面启动组件，再按需修复。[查看适用条件](docs/DesktopStartupRecovery.md) |
+| **Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
 | **Codex 启动很慢，CUA 目录反复产生临时文件** | 在「维护恢复」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
 | **刚安装 Codex，不知道怎样配置模型、代理和工作目录** | 从「初始化」选择功能，查看变更摘要，确认后一次完成。[查看初始化选项](docs/Settings.md) |
@@ -103,9 +103,9 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 先到「浏览器连接」检查组件完整性、代理端口和环境继承。如果使用代理，确认代理软件已启动，并填写它提供的 HTTP／混合端口。需要修复时先保存工作、退出 Codex；修复后重启并使用页面提供的测试指令实际读取网页。[详细步骤与恢复方法](docs/BrowserConnection.md)
 
-### Codex 桌面版打不开，这个工具能修复吗？
+### Codex 桌面版打不开或提示“无法加载组织设置”，怎么办？
 
-它能检查并处理一部分本地启动组件问题。例如日志中出现 `bundled_executable_relocation_failed`、`EPERM` 和 `rename_staging` 时，可先检查桌面启动组件。相同提示也可能由其他原因引起，检查结果和日志有助于缩小范围。[桌面启动故障处理](docs/DesktopStartupRecovery.md)
+如果当前使用桌面原生 CLI，可以先保存工作并退出 Codex，在「维护恢复」点击「切换官方独立 CLI」，然后重启 Codex 验证；组件缺失时工具会按需准备。日志中出现 `bundled_executable_relocation_failed`、`EPERM` 和 `rename_staging` 时，也可检查桌面启动组件。该提示可能有多种原因，切换 CLI 不保证解决所有情况。[桌面启动故障处理](docs/DesktopStartupRecovery.md)
 
 ### Codex 初始化会删除对话、项目或记忆吗？
 
