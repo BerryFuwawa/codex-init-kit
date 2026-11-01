@@ -141,7 +141,7 @@ enabled = true
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
-    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'high' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'high') 'Default parent and child must be GPT-6.1-SOL HIGH.'
+    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'medium' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'medium') 'Default parent and child must be GPT-6.1-SOL MEDIUM.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ($resolved.Options.antiOverDefense -and -not (Convert-BackendOptions @{antiOverDefense=$false}).antiOverDefense) 'Anti-over-defense default or explicit false was lost.'
     $antiOptionB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"antiOverDefense":false}'))
@@ -170,12 +170,25 @@ enabled = true
     Assert ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cuaAdapterBase64)).Contains('Get-BrowserManagedPatch')) 'Initialization did not use managed-patch-aware CUA recovery.'
     $generatedConfigBlock = [regex]::Match($adapterText,'(?ms)^:WRITE_CONFIG\r?\n.*?(?=^:WRITE_ENV\r?$)').Value
     Assert ($generatedConfigBlock -and $generatedConfigBlock -notmatch 'code_mode_tool_description_first|thread_context') 'Future initialization reintroduced obsolete configuration.'
+    Assert ((Convert-BackendOptions $null).memories -and -not (Convert-BackendOptions @{memories=$false}).memories) 'Memory option default or explicit false was lost.'
+    $memoryConfig=Join-Path $scratch 'memory-config.toml';$memoryWriter=Join-Path $scratch 'write-memory.cmd'
+    $memoryState=Join-Path $scratch 'memories\keep.txt';[void][IO.Directory]::CreateDirectory((Split-Path $memoryState -Parent));[IO.File]::WriteAllText($memoryState,'existing memory')
+    $memoryHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_MEMORY_HOME%`"`r`nset `"CONFIG_FILE=%CODEX_TEST_CONFIG%`"`r`nset `"DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol`"`r`nset `"DEFAULT_PARENT_REASONING_EFFORT=high`"`r`nset `"LUNA_MAX_THREADS=6`"`r`ncall :WRITE_CONFIG`r`nexit /b %errorlevel%`r`n"
+    [IO.File]::WriteAllText($memoryWriter,$memoryHeader+$generatedConfigBlock,$script:InputEncoding)
+    foreach($enabled in @('true','false','true')){
+        $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES=$enabled;CODEX_GUI_SUBAGENTS='0';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
+        $text=[IO.File]::ReadAllText($memoryConfig)
+        Assert ($written.ExitCode -eq 0 -and $text.Contains('memories = '+$enabled) -and $text.Contains('generate_memories = '+$enabled) -and $text.Contains('use_memories = '+$enabled)) 'Actual configuration did not write all three selected memory flags.'
+        Assert (([regex]::Matches($text,'(?m)^\[memories\]')).Count -eq 1 -and [IO.File]::ReadAllText($memoryState) -eq 'existing memory') 'Repeated configuration duplicated memory tables or changed existing memories.'
+    }
+    Assert ($adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_CHECKSUM_URL%"') -lt $adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_RELEASE_URL%"')) 'RTK ZIP started before its checksum list.'
+    Assert ($adapterText.Contains('GitHubDownload.ps1') -and -not $adapterText.Contains('call :VERIFY_RTK_ZIP')) 'Desktop RTK download did not use the shared validation path.'
     Assert ($adapterText.Contains('--codex-gui-action')) 'GUI init entry was not added.'
     Assert ($adapterText.Contains('GUI confirmation already supplied')) 'GUI confirmation override was not added.'
     Assert ($adapterText.Contains('@@PROGRESS@@{"step":2')) 'Stage progress marker was not added.'
     Assert ((HashFile (Join-Path $payload 'init.cmd')) -eq $originalHash) 'Payload init.cmd was modified.'
     Assert ($adapterText -notmatch '(?<!\r)\n') 'Generated batch adapter contains bare LF line endings; CALL return positions can become invalid.'
-    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')) 'GUI adapter lost the high default or custom effort override.'
+    Assert ($adapterText.Contains('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')) 'GUI adapter lost the high default or custom effort override.'
 
     # Run the real RTK integration subroutine with a fake RTK. A fresh install
     # asks for telemetry consent unless disable was executed before every init.
@@ -278,6 +291,9 @@ exit /b 0
 :FULL_INIT
 echo CALLED BASE
 set "RESULT=PASS"
+set "CUA_RESULT=NOT_RUN"
+set "FOLDER_RESULT=NOT_RUN"
+set "LUNA_PROMPT_RESULT=NOT_RUN"
 exit /b 0
 :INSTALL_FOLDER_MANAGEMENT
 echo CALLED FOLDER

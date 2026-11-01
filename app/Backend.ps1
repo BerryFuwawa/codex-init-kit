@@ -27,6 +27,9 @@ $script:DefaultOptions = [ordered]@{
     proxyHost = '127.0.0.1'
     folderManagement = $true
     antiOverDefense = $true
+    memories = $true
+    githubMirrorEnabled = $true
+    customGithubMirror = ''
     subagents = $false
     cuaRepair = $true
     browserRepair = $true
@@ -34,8 +37,8 @@ $script:DefaultOptions = [ordered]@{
     desktopUpdate = $true
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-6.1-sol'
-    parentEffort = 'high'
-    childEffort = 'high'
+    parentEffort = 'medium'
+    childEffort = 'medium'
 }
 
 function Set-BackendOutputEncoding {
@@ -124,7 +127,16 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    $normalized.githubMirrorEnabled=Convert-BackendOptionBoolean (& $get 'githubMirrorEnabled') 'githubMirrorEnabled' $true
+    $customMirror=& $get 'customGithubMirror'
+    if($null -ne $customMirror -and $customMirror -isnot [string]){throw '自定义 GitHub 镜像需为文本。'}
+    $normalized.customGithubMirror=if($null -eq $customMirror -or -not $normalized.githubMirrorEnabled){''}else{$customMirror.Trim()}
+    if($normalized.customGithubMirror){
+        $mirrorUri=$null
+        if(-not [Uri]::TryCreate($normalized.customGithubMirror,[UriKind]::Absolute,[ref]$mirrorUri) -or $mirrorUri.Scheme -ne 'https' -or $mirrorUri.UserInfo -or $mirrorUri.Query -or $mirrorUri.Fragment){throw '自定义镜像需填写 HTTPS 前缀，不能包含账号密码、查询参数或片段。'}
+        $normalized.customGithubMirror=$mirrorUri.AbsoluteUri.TrimEnd('/')+'/'
+    }
     $projectPath = & $get 'projectPath'
     if ($null -ne $projectPath -and $projectPath -isnot [string]) { throw 'Option projectPath must be a string.' }
     $normalized.projectPath = if ($null -eq $projectPath) { '' } else { $projectPath.Trim() }
@@ -463,14 +475,16 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.4')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.5')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
     $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
     $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=high"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
+    $sourceText = $sourceText.Replace('    echo [desktop]', "    echo [memories]`r`n    echo generate_memories = %CODEX_GUI_MEMORIES%`r`n    echo use_memories = %CODEX_GUI_MEMORIES%`r`n    echo.`r`n    echo [desktop]")
+    $sourceText = $sourceText.Replace('    echo [features]', "    echo [features]`r`n    echo memories = %CODEX_GUI_MEMORIES%")
     $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
     # Global AGENTS is rebuilt from scratch during the base stage. Old markers
     # must not force an unchecked feature to be enabled.
@@ -607,9 +621,33 @@ set "CONFIG_RESULT=FAIL"
         $sourceText = $sourceText.Replace($stage[1],('if /i "%'+$stage[0]+'%"=="1" '+$stage[1])+[Environment]::NewLine+('if /i "%'+$stage[0]+'%"=="0" '+$stage[2]))
     }
     $sourceText = $sourceText.Replace('echo 一键初始化完成：完整初始化、文件夹管理、CUA 检查修复和 Luna 多线程均已通过。','echo 一键初始化完成：基础配置和全局规则已重建，所选功能均已通过。')
+    $selectedResult = @'
+set "RESULT=!FULL_INIT_RESULT!"
+if not "!CONFIG_RESULT!"=="PASS" set "RESULT=FAIL"
+if not "!AGENTS_RESULT!"=="PASS" set "RESULT=FAIL"
+if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if not "!FOLDER_RESULT!"=="PASS" set "RESULT=FAIL"
+if /i "%CODEX_GUI_CUA_REPAIR%"=="1" if not "!CUA_RESULT!"=="PASS" set "RESULT=FAIL"
+if /i "%CODEX_GUI_SUBAGENTS%"=="1" if not "!LUNA_PROMPT_RESULT!"=="PASS" set "RESULT=FAIL"
+if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="0" set "FOLDER_RESULT=SKIPPED"
+if /i "%CODEX_GUI_CUA_REPAIR%"=="0" set "CUA_RESULT=SKIPPED"
+if /i "%CODEX_GUI_SUBAGENTS%"=="0" set "LUNA_PROMPT_RESULT=SKIPPED"
+'@
+    $sourceText=[regex]::Replace($sourceText,'(?m)^if "!CONFIG_RESULT!"=="PASS" if "!AGENTS_RESULT!"=="PASS" if "!FOLDER_RESULT!"=="PASS" if "!CUA_RESULT!"=="PASS" if "!LUNA_PROMPT_RESULT!"=="PASS" set "RESULT=!FULL_INIT_RESULT!"\r?$',$selectedResult.TrimEnd())
     $workRoot = Join-Path $PayloadRoot '.backend'
     [void][IO.Directory]::CreateDirectory($workRoot)
     $adapterPath = Join-Path $workRoot ('init-adapter-' + [Guid]::NewGuid().ToString('N') + '.cmd')
+    # Only the private desktop adapter changes downloads; standalone scripts
+    # retain their existing behavior. The ZIP is validated before it is used.
+    $downloadHelper=Join-Path $PayloadRoot 'GitHubDownload.ps1'
+    $downloadBlock=@"
+:DOWNLOAD_FILE
+powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$downloadHelper" -Url "%~1" -Path "%~2" -ProxyPort "%CODEX_GUI_PROXY_PORT%" -ProxyHost "%CODEX_GUI_PROXY_HOST%" -OptionsBase64 "%CODEX_GUI_NETWORK_OPTIONS%"
+exit /b %errorlevel%
+
+"@
+    $sourceText=[regex]::Replace($sourceText,'(?ms)^:DOWNLOAD_FILE\r?\n.*?(?=^:[A-Z_]+\r?$)',$downloadBlock)
+    $sourceText=[regex]::Replace($sourceText,'(?ms)(^call :DOWNLOAD_FILE "%RTK_RELEASE_URL%" "%RTK_ZIP%"\r?\nif errorlevel 1 \(.*?^\)\r?\n)(\r?\n)?(call :DOWNLOAD_FILE "%RTK_CHECKSUM_URL%" "%RTK_CHECKSUMS%"\r?\nif errorlevel 1 \(.*?^\)\r?\n)','$3$2$1')
+    $sourceText=$sourceText.Replace('call :VERIFY_RTK_ZIP','ver >nul')
     # Use the same managed-patch-aware CUA library in the GUI's original
     # five-stage script. The standalone legacy init component stays unchanged.
     if ($sourceText -match '(?m)^::CUAB64:') {
@@ -770,6 +808,9 @@ function Invoke-InitOperation {
             CODEX_GUI_PROXY_DISABLED=if ($ProxyPortValue -eq 0) { '1' } else { '0' }
             CODEX_GUI_FOLDER_MANAGEMENT=if ([bool]$resolvedOptions.folderManagement) { '1' } else { '0' }
             CODEX_GUI_SUBAGENTS=if ([bool]$resolvedOptions.subagents) { '1' } else { '0' }
+            CODEX_GUI_MEMORIES=if ([bool]$resolvedOptions.memories) { 'true' } else { 'false' }
+            CODEX_GUI_PROXY_HOST=[string]$resolvedOptions.proxyHost
+            CODEX_GUI_NETWORK_OPTIONS=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{githubMirrorEnabled=[bool]$resolvedOptions.githubMirrorEnabled;customGithubMirror=[string]$resolvedOptions.customGithubMirror}|ConvertTo-Json -Compress)))
             CODEX_GUI_CUA_REPAIR=if ([bool]$resolvedOptions.cuaRepair) { '1' } else { '0' }
             CODEX_GUI_PARENT_MODEL=[string]$resolvedOptions.parentModel; CODEX_GUI_CHILD_MODEL=[string]$resolvedOptions.childModel
             CODEX_GUI_PARENT_EFFORT=[string]$resolvedOptions.parentEffort; CODEX_GUI_CHILD_EFFORT=[string]$resolvedOptions.childEffort
@@ -781,6 +822,7 @@ function Invoke-InitOperation {
         if ($Action -eq 'proxy' -or $Action -eq 'one-click') { [void](Set-ProxyEnvironmentFile $ProxyPortValue $originalEnv $resolvedOptions.proxyHost) }
         if ($Action -eq 'one-click') {
             Set-ScopedModelSettings $resolvedOptions
+            Write-BackendLine $(if($resolvedOptions.memories){'Codex 记忆：已开启记忆生成与使用；现有记忆文件保留。'}else{'Codex 记忆：已关闭记忆生成与使用；现有记忆文件保留。'})
             Write-BackendLine $(if($resolvedOptions.antiOverDefense){'防止过度防御：已写入 HERO 中文精简规则及实现、交付规则。'}else{'防止过度防御：未勾选，已跳过规则写入。'})
         }
         if ($Action -eq 'proxy') {
@@ -855,7 +897,7 @@ function Initialize-GuardRuntime {
     $script:ErrorActionPreference='Stop'; $script:ProgressPreference='SilentlyContinue'
     $script:ToolVersion='V5.2.4'; $script:SourceCmd=$GuardPath; $script:SourceDir=Split-Path -Parent $GuardPath
     $script:InstallerUrl='https://chatgpt.com/codex/install.ps1'; $script:UpdateIntervalHours=24
-    $script:DefaultParentModelId='gpt-6.1-sol'; $script:DefaultParentReasoningEffort='high'; $script:LunaMaxThreads=6
+    $script:DefaultParentModelId='gpt-6.1-sol'; $script:DefaultParentReasoningEffort='medium'; $script:LunaMaxThreads=6
     $script:Documents=$documents; $script:InstallRoot=Join-Path $documents 'Codex启动保护管理器'
     $script:StateDir=Join-Path $script:InstallRoot 'State'; $script:StateFile=Join-Path $script:StateDir 'guard-state.json'
     $script:StartupDir=[Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)

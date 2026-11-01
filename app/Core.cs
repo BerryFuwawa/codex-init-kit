@@ -16,17 +16,18 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.4";
+    public const string Version = "2.2.5";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
+    public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","rollback-selected","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
     const string DefaultChildModel = "gpt-6.1-sol";
-    const string DefaultParentEffort = "high";
-    const string DefaultChildEffort = "high";
+    const string DefaultParentEffort = "medium";
+    const string DefaultChildEffort = "medium";
     static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
     static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
     public static string Sid { get { return WindowsIdentity.GetCurrent().User.Value; } }
@@ -44,7 +45,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -64,7 +65,7 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}
@@ -104,6 +105,13 @@ public static class Core {
         if(source==null) return normalized;
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
         normalized["antiOverDefense"]=ReadOptionBoolean(source,"antiOverDefense",true);
+        normalized["memories"]=ReadOptionBoolean(source,"memories",true);
+        normalized["githubMirrorEnabled"]=ReadOptionBoolean(source,"githubMirrorEnabled",true);
+        object customMirror;
+        if(source.TryGetValue("customGithubMirror",out customMirror)){
+            if(customMirror!=null&&!(customMirror is string))throw new ArgumentException("自定义 GitHub 镜像需为文本。");
+            normalized["customGithubMirror"]=(bool)normalized["githubMirrorEnabled"]?GitHubNetworkOptions.NormalizePrefix(customMirror as string):"";
+        }
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
@@ -203,9 +211,13 @@ public static class Core {
         return CheckUpdate(port,DefaultProxyHost);
     }
     public static Dictionary<string,object> CheckUpdate(int port,string proxyHost) {
-        var commit=ReadJson(Fetch("https://api.github.com/repos/"+Repository+"/commits/main",port,proxyHost));
-        var sha=Value(commit,"sha",""); if(!System.Text.RegularExpressions.Regex.IsMatch(sha,"^[0-9a-f]{40}$")) throw new InvalidDataException("更新提交标识无效。");
-        return ValidateUpdate(Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",port,proxyHost));
+        return CheckUpdate(port,proxyHost,GitHubNetworkOptions.Load(NetworkSettingsPath),null);
+    }
+    public static Dictionary<string,object> CheckUpdate(int port,string proxyHost,GitHubNetworkOptions settings,Action<string> writeLog) {
+        var transfer=new GitHubTransfer(settings,port,proxyHost,writeLog);
+        var commit=ReadJson(transfer.Fetch("https://api.github.com/repos/"+Repository+"/commits/main",s=>Regex.IsMatch(Value(ReadJson(s),"sha",""),"^[0-9a-f]{40}$")));
+        var sha=Value(commit,"sha","");Dictionary<string,object> manifest=null;
+        transfer.Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",s=>{manifest=ValidateUpdate(s);return true;});return manifest;
     }
     public static Dictionary<string,object> ValidateUpdate(string json) {
         var manifest=ReadJson(json);
@@ -219,19 +231,18 @@ public static class Core {
     public static Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port) {
         return DownloadUpdate(manifest,port,DefaultProxyHost);
     }
-    public static async Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port,string proxyHost) {
-        var stage=Path.Combine(Path.GetDirectoryName(Exe),".CodexInitKit-update-"+Guid.NewGuid().ToString("N")+".exe");
-        using(var client=new WebClient()) {
-            client.Headers[HttpRequestHeader.UserAgent]="CodexInitKitDesktop/"+Version;
-            client.Proxy=port>0?new WebProxy(ProxyAddress(proxyHost,port)):null;
-            try {
-                await client.DownloadFileTaskAsync(new Uri(Value(manifest,"url","")),stage);
-                if(Hash(stage)!=Value(manifest,"sha256","")) throw new InvalidDataException("下载校验失败，当前版本保持不变");
-                var bytes=File.ReadAllBytes(stage);
-                if(bytes.Length<2 || bytes[0]!=77 || bytes[1]!=90) throw new InvalidDataException("下载文件不是 Windows EXE");
-                return stage;
-            } catch { if(File.Exists(stage)) File.Delete(stage); throw; }
-        }
+    public static Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port,string proxyHost) {
+        return DownloadUpdate(manifest,port,proxyHost,GitHubNetworkOptions.Load(NetworkSettingsPath),null);
+    }
+    public static Task<string> DownloadUpdate(Dictionary<string,object> manifest,int port,string proxyHost,GitHubNetworkOptions settings,Action<string> writeLog) {
+        return Task.Run(()=>{
+            ValidateUpdate(Json.Serialize(manifest));
+            var stage=Path.Combine(Path.GetDirectoryName(Exe),".CodexInitKit-update-"+Guid.NewGuid().ToString("N")+".exe");
+            new GitHubTransfer(settings,port,proxyHost,writeLog).Download(Value(manifest,"url",""),stage,path=>{
+                if(Hash(path)!=Value(manifest,"sha256",""))throw new InvalidDataException("下载校验失败，当前版本保持不变。");
+                using(var stream=File.OpenRead(path))if(stream.ReadByte()!=77||stream.ReadByte()!=90)throw new InvalidDataException("下载文件不是 Windows EXE。");
+            });return stage;
+        });
     }
     static string PowerShellLiteral(string value) {
         if(value==null) throw new ArgumentNullException("value");

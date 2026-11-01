@@ -29,14 +29,14 @@ class DocumentationRenderer {
             type.GetField("status",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,new Dictionary<string,object>{
                 {"desktopVersion","示例"},{"desktopHealth","healthy"},{"runtimeMode","DesktopNative"},
                 {"runtimeModeDetail","使用 Codex 桌面应用自带的 CLI。"},{"currentCliPath",null},
-                {"configModel","gpt-6.1-sol"},{"configEffort","high"},{"protectionInstalled",true},
+                {"configModel","gpt-6.1-sol"},{"configEffort","medium"},{"protectionInstalled",true},
                 {"processRunning",false},{"backupPath","初始化完成后，可在此查看备份位置"},
                 {"rollbackEntries",new object[]{
                     new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"detail","备份模型：gpt-6.1-sol"}},
                     new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"detail","本地独立 CLI 缓存，执行前校验。"}}
                 }}});
-            var pages=new[]{"概览","维护恢复","浏览器连接"};
-            var files=new[]{"overview","maintenance","browser-connection"};
+            var pages=new[]{"概览","维护恢复","浏览器连接","更新"};
+            var files=new[]{"overview","maintenance","browser-connection","updates"};
             for(int i=0;i<pages.Length;i++){navigate.Invoke(window,new object[]{pages[i]});Save(window,directory,files[i],i==0?1100:i==1?1900:1200,dpi);}
             var sampleRoot=Path.Combine(Path.GetTempPath(),"CodexKit-doc-log-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(sampleRoot);
             try{
@@ -45,7 +45,7 @@ class DocumentationRenderer {
             }finally{type.GetField("lastLog",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");Directory.Delete(sampleRoot,true);}
             var adviceType=assembly.GetType("CodexKit.DiagnosticAdvice",true);var example=(string)adviceType.GetMethod("Build").Invoke(null,new object[]{new Dictionary<string,object>{{"standaloneHealthy",true},{"desktopFound",true},{"desktopHealthy",true}},1,adviceType.GetField("AsciiFixture").GetRawConstantValue()});type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,example);
             var diagnosis=(Window)type.GetMethod("CreateDiagnosticDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);var adviceView=(FrameworkElement)diagnosis.Content;adviceView.Measure(new Size(660,Double.PositiveInfinity));SaveView(adviceView,directory,"diagnosis",660,(int)Math.Ceiling(adviceView.DesiredSize.Height),dpi);diagnosis.Close();type.GetField("diagnosticAdvice",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(window,"");
-            navigate.Invoke(window,new object[]{"初始化"});type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window).GetType().GetProperty("SelectedIndex").SetValue(type.GetField("modelMode",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(window),1,null);Save(window,directory,"settings-scroll",900,dpi);Save(window,directory,"settings",1800,dpi);
+            navigate.Invoke(window,new object[]{"初始化"});Save(window,directory,"settings-scroll",900,dpi);Save(window,directory,"settings",1800,dpi);
             var completion=(Window)type.GetMethod("CreateInitializationCompletedDialog",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(window,null);
             var popup=(FrameworkElement)completion.Content;popup.Measure(new Size(520,Double.PositiveInfinity));
             SaveView(popup,directory,"completed",520,(int)Math.Ceiling(popup.DesiredSize.Height),dpi);completion.Close();

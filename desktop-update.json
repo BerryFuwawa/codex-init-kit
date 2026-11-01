@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.2.4",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.4/CodexInitKit.exe",
-  "sha256": "9b2cffd9b897bdb7b321fdf4d94f784926925ef66fac6470c2d6298a29a9516d",
-  "notes": "修复日志底部跟随；新增概览数据保留提示与历史备份选择回滚；修复无 D 盘时 CUA 检查失败，补齐中文日志和商店更新失败提示。"
+  "version": "2.2.5",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.5/CodexInitKit.exe",
+  "sha256": "1dd7445b345c824e039c1e1fa0c3eedd7846ed9c259ffb4384c502dd3f3f54be",
+  "notes": "默认 Sol 6.1，思考强度为中，直接选择模型；默认开启记忆，新增 GitHub 串行镜像，修复可选步骤与桌面更新误判，简化概览提示。"
 }

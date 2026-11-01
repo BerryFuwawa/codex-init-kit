@@ -158,7 +158,7 @@ try {
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,desktop,base,official,guard,browser') 'Initialization step order changed.'
     $calls.Clear();$desktopFails=$true;$after.Status='Ok'
     Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,desktop,base,official,guard,browser') 'Failed optional update did not continue as partial.'
-    $calls.Clear();function Invoke-DesktopUpdate {$calls.Add('desktop');throw 'restart pending'}
+    $calls.Clear();function Invoke-DesktopUpdate {$calls.Add('desktop');throw (New-DesktopUnsafeError 'restart pending')}
     Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,desktop,base,official') 'Pending desktop did not pause dependent repairs.'
     $calls.Clear();$inputData.Options.desktopUpdate=$false;$inputData.Options.officialCliUpdate=$false;$inputData.Options.browserRepair=$false;$inputData.InstallProtection=$false
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,base') 'Unchecked optional steps still executed.'

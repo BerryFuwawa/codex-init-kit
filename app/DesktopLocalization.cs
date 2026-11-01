@@ -32,6 +32,7 @@ public static class DesktopLocalization {
         {"GUI confirmation already supplied for this operation.","此操作已在初始化界面确认。"},
         {"Folder-management drive confirmed:","文件夹管理工作盘已确认："},
         {"Config written:","配置已写入："},
+        {"Access is denied","访问被拒绝，请检查文件权限（Windows 错误码 5）"},
         {"Rollback completed. Review the result above; this console will remain open.","回滚完成，请查看上方结果；此窗口会保持打开。"},
         {"Expected exactly one installed official desktop package; no cross-channel installation attempted.","未能唯一确定已安装的官方桌面版；没有安装其他渠道的版本。"},
         {"Installed package is not the supported official Store channel.","当前桌面应用并非受支持的官方 Microsoft Store 版本。"},

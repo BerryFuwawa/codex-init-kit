@@ -39,13 +39,33 @@ function Assert-DesktopStopped {
     return $package
 }
 function Test-DesktopCli {
-    param($Package,[string]$PayloadRoot)
+    param($Package,[string]$PayloadRoot,[switch]$SkipVersionProbe)
     Initialize-GuardRuntime (Assert-PayloadFile $PayloadRoot 'guard.cmd')
     $cli=Join-Path $Package.InstallLocation 'app\resources\codex.exe'
-    if(-not(Test-OpenAISignature $cli)){throw 'Updated native CLI failed its OpenAI signature check.'}
-    $probe=Invoke-BoundedProcess $cli @('--version') 30
-    if($probe.TimedOut -or $probe.ExitCode -ne 0 -or $probe.Output -notmatch 'codex[^\r\n]*\d+\.\d+'){throw 'Updated native CLI failed its version probe.'}
+    foreach($name in @('codex.exe','codex-code-mode-host.exe','codex-command-runner.exe','codex-windows-sandbox-setup.exe')){
+        $path=Join-Path $Package.InstallLocation ('app\resources\'+$name)
+        if(-not(Test-Path -LiteralPath $path -PathType Leaf) -or -not(Test-OpenAISignature $path)){throw (New-DesktopUnsafeError 'Updated native CLI failed its OpenAI signature check.')}
+    }
+    if($SkipVersionProbe){return 'not-run'}
+    try{$probe=Invoke-BoundedProcess $cli @('--version') 30}
+    catch{
+        $errorObject=$_.Exception
+        while($errorObject){
+            if(($errorObject -is [ComponentModel.Win32Exception] -and $errorObject.NativeErrorCode -eq 5) -or $errorObject -is [UnauthorizedAccessException]){
+                Write-BackendLine '内置 CLI 版本运行验证受权限限制（Windows 错误码 5：访问被拒绝）。官方包和组件签名检查通过，保留更新结果并继续后续步骤；版本运行验证未完成，可稍后重新检查。'
+                return 'unavailable'
+            }
+            $errorObject=$errorObject.InnerException
+        }
+        throw (New-DesktopUnsafeError ('内置 CLI 版本运行验证失败：'+$_.Exception.Message))
+    }
+    if($probe.TimedOut -or $probe.ExitCode -ne 0 -or $probe.Output -notmatch 'codex[^\r\n]*\d+\.\d+'){throw (New-DesktopUnsafeError 'Updated native CLI failed its version probe.')}
     Write-BackendLine ('Native CLI verified: '+$probe.Output.Trim())
+    return 'verified'
+}
+function New-DesktopUnsafeError {
+    param([string]$Message)
+    $failure=[InvalidOperationException]::new($Message);$failure.Data['DesktopUnsafe']=$true;return $failure
 }
 function Invoke-BoundedProcess {
     param([string]$FilePath,[string[]]$Arguments,[int]$TimeoutSeconds=1200,[hashtable]$Environment=@{})
@@ -65,7 +85,7 @@ function Invoke-BoundedProcess {
             if($watch.Elapsed.TotalSeconds -ge $TimeoutSeconds){$timedOut=$true;try{$process.Kill()}catch{};break}
             if([int]$watch.Elapsed.TotalSeconds % 30 -eq 0){Write-BackendLine ('Waiting for process completion ('+[int]$watch.Elapsed.TotalSeconds+'s)...')}
         }
-        if(-not $process.WaitForExit(5000)){throw 'Process did not stop; completion is still pending.'}
+        if(-not $process.WaitForExit(5000)){throw (New-DesktopUnsafeError 'Process did not stop; completion is still pending.')}
         # A Store installer may outlive winget and retain its output handles.
         # Never let those handles extend the command's deadline indefinitely.
         $output=if($stdout.Wait(5000)){$stdout.GetAwaiter().GetResult()}else{'Output pipe still open; installer completion pending.'}
@@ -79,6 +99,12 @@ function Invoke-DesktopUpdate {
     param([string]$PayloadRoot)
     try { return (Invoke-DesktopUpdateCore $PayloadRoot) }
     catch {
+        $originalFailure=$_.Exception
+        if(-not $originalFailure.Data.Contains('DesktopUnsafe')){
+            $unsafeDesktop=$false
+            try{$remaining=Get-OfficialDesktopPackage;Assert-DesktopReady $remaining;[void](Test-DesktopCli $remaining $PayloadRoot -SkipVersionProbe)}catch{$unsafeDesktop=$true}
+            $originalFailure.Data['DesktopUnsafe']=$unsafeDesktop
+        }
         Write-BackendLine '提示：自动更新可能因网络或商店服务暂时不可用而失败，这种情况无需担心；你可以自行在微软商店或 Codex 内手动更新。本次自动更新未完成，请同时留意组件检查和重启提示。'
         throw
     }
@@ -92,13 +118,13 @@ function Invoke-DesktopUpdateCore {
     $result=Invoke-BoundedProcess $winget.Source @('upgrade','--id','9PLM9XGG6VKS','--exact','--source','msstore','--silent','--accept-source-agreements','--accept-package-agreements','--disable-interactivity') 1200
     $after=Get-OfficialDesktopPackage
     Assert-DesktopReady $after
-    if($result.TimedOut){throw 'Desktop update timed out; Store may still be completing the update. Recheck before repairing dependent components.'}
+    if($result.TimedOut){throw (New-DesktopUnsafeError 'Desktop update timed out; Store may still be completing the update. Recheck before repairing dependent components.')}
     $unsigned=[long]$result.ExitCode -band 0xffffffffL
     if($unsigned -eq 0x80072efdL){throw '无法连接微软商店更新服务（0x80072EFD / -2147012867）。请检查网络和代理，或改用微软商店、Codex 内的手动更新入口。'}
-    if($unsigned -in @(3010,1641,0x8a150109L)){throw 'Desktop update requires restart or is still pending; dependent repairs were paused.'}
-    if($result.ExitCode -eq 0 -and [version]$after.Version -gt [version]$before.Version){Test-DesktopCli $after $PayloadRoot;Write-BackendLine ('Desktop updated: '+$before.Version+' -> '+$after.Version);return 'updated'}
-    if($unsigned -eq 0x8a15002bL -and [version]$after.Version -eq [version]$before.Version){Test-DesktopCli $after $PayloadRoot;Write-BackendLine ('Desktop already up to date: '+$after.Version);return 'latest'}
-    if($result.ExitCode -eq 0){throw 'winget completed but the installed version has not changed; completion is not verified. Recheck Store.'}
+    if($unsigned -in @(3010,1641,0x8a150109L)){throw (New-DesktopUnsafeError 'Desktop update requires restart or is still pending; dependent repairs were paused.')}
+    if($result.ExitCode -eq 0 -and [version]$after.Version -gt [version]$before.Version){[void](Test-DesktopCli $after $PayloadRoot);Write-BackendLine ('Desktop updated: '+$before.Version+' -> '+$after.Version);return 'updated'}
+    if($unsigned -eq 0x8a15002bL -and [version]$after.Version -eq [version]$before.Version){[void](Test-DesktopCli $after $PayloadRoot);Write-BackendLine ('当前软件源没有更新，桌面版保持现有版本：'+$after.Version);return 'latest'}
+    if($result.ExitCode -eq 0){throw (New-DesktopUnsafeError 'winget completed but the installed version has not changed; completion is not verified. Recheck Store.')}
     throw ('Desktop update failed. Exit code '+$result.ExitCode+'. Microsoft Store: ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS')
 }
 function Invoke-OfficialCliUpdate {
@@ -277,9 +303,7 @@ function Invoke-Initialize220 {
                         catch {
                             # A failed network/source lookup can still leave a usable desktop.
                             # Pending/restart/timeout is conservatively treated as unsafe.
-                            $message=$_.Exception.Message
-                            if($message -match '(?i)pending|restart|timed out|not changed|still completing'){$desktopSafe=$false}
-                            else {try {$remaining=Get-OfficialDesktopPackage;Assert-DesktopReady $remaining;Test-DesktopCli $remaining $InputData.PayloadRoot}catch{$desktopSafe=$false}}
+                            $desktopSafe=-not [bool]$_.Exception.Data['DesktopUnsafe']
                             throw
                         }
                     }
