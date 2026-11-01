@@ -10,8 +10,9 @@
 
 **[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md)
 
-当前版本 **[v2.2.5](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.5)**，[完整更新说明](docs/Release-2.2.5.md)：
+当前版本 **[v2.2.6](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.6)**，[完整更新说明](docs/Release-2.2.6.md)：
 
+- 思考强度显示中文和英文标识，例如“中（medium）”“高（high）”。
 - 日志默认跟随底部最新内容，上翻暂停；回到底部或点击“回到最新日志”恢复跟随。
 - 概览数据保留说明改为无背景的单行小字，放在“开始初始化”下方；悬停可查看配置重建与数据保留范围。
 - 初始化默认开启 Codex 记忆，可取消；修复未勾选 CUA 却被判失败的问题。
@@ -190,7 +191,7 @@ RTK 集成前会自动执行 `rtk telemetry disable` 关闭匿名统计，并为
 
 ![中文错误日志与原文切换入口](assets/screenshots/logs.png)
 
-图片来自 2.2.5 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。浏览器连接页提供检查、修复、恢复和重启后测试指引。维护恢复页分别管理两类更新并保留配置兼容清理。初始化设置图包含代理端口与 IP、九项功能选择和模型选择；子代理默认未勾选。模型设置图展示可直接更换的父模型，此时子模型及子思考强度置灰，默认父模型为 `gpt-6.1-sol / medium`。图中展开了完整内容，实际窗口可滚动。概览使用示例状态，状态以你电脑上的检测结果为准。
+图片来自 2.2.6 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。浏览器连接页提供检查、修复、恢复和重启后测试指引。维护恢复页分别管理两类更新并保留配置兼容清理。初始化设置图包含代理端口与 IP、九项功能选择和模型选择；子代理默认未勾选。模型设置图展示可直接更换的父模型，此时子模型及子思考强度置灰，默认父模型为 `gpt-6.1-sol / medium`。图中展开了完整内容，实际窗口可滚动。概览使用示例状态，状态以你电脑上的检测结果为准。
 
 ![浏览器连接检查、修复并启动、代理与分项验证](assets/screenshots/browser-connection.png)
 

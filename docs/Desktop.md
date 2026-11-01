@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.5
+# Codex Init Kit Desktop 2.2.6
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
