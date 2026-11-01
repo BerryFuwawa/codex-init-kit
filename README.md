@@ -1,236 +1,146 @@
-# Codex Init Kit
+<div align="center">
+  <img src="assets/readme-banner.png" alt="Codex Init Kit：Windows 上的 Codex 初始化、浏览器连接修复与维护恢复工具" width="100%">
+</div>
 
-「浏览器连接」页支持 [修复并启动 Codex](docs/BrowserStartup.md)：先检查当前运行时和代理，再按需备份修复并启动官方桌面应用。
+# Codex Init Kit：Windows Codex 初始化与故障修复
 
-<img src="assets/logo.svg" alt="Codex Init Kit Logo" width="96" height="96">
+**把配置、连接检查和日常维护，放进一个中文桌面工具。**
 
-这是一个给 Windows 上的 Codex 做配置和维护的小工具。你不用逐个打开脚本、找配置文件：下载一个 EXE，就可以整理工作目录、重新配置模型和代理、检查电脑操作组件，以及排查部分启动问题。
+Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、排查浏览器连接问题、检查 CUA 组件、切换官方 CLI，以及备份和恢复配置。第一次配置可以使用向导；已经在使用 Codex，也可以只运行需要的检查或单项修复。
 
-**适合这些情况：刚装好 Codex 不知道怎么配置；改过配置后想重新整理；电脑操作功能缺组件；启动使用的程序路径出了问题。** 已经正常使用的人，也可以只做检查或单项修复。
+<p align="center">
+  <a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest"><img src="https://img.shields.io/github/v/release/BerryFuwawa/codex-init-kit?label=Release&amp;style=flat-square&amp;color=6b8fd3" alt="最新发布版本"></a>
+  <img src="https://img.shields.io/badge/Windows-x64-567da6?style=flat-square" alt="Windows x64">
+  <img src="https://img.shields.io/badge/%E7%95%8C%E9%9D%A2-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-4b9381?style=flat-square" alt="简体中文界面">
+  <img src="https://img.shields.io/badge/%E9%85%8D%E7%BD%AE-%E5%A4%87%E4%BB%BD%E4%B8%8E%E6%81%A2%E5%A4%8D-6b819c?style=flat-square" alt="配置备份与恢复">
+</p>
 
-**[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [版本发布](https://github.com/BerryFuwawa/codex-init-kit/releases) · [使用说明](docs/Desktop.md)
+<p align="center">
+  <strong><a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe">⬇ 下载 Windows 桌面版</a></strong>
+  &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest">最新版本与校验文件</a>
+  &nbsp; · &nbsp; <a href="docs/Desktop.md">使用手册</a>
+  &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
+</p>
 
-当前版本 **[v2.2.8](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.8)**，[完整更新说明](docs/Release-2.2.8.md)：
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.2.8.md">v2.2.8</a></sub></p>
 
-- 初始化支持选择桌面版原生 CLI 或官方独立 CLI；默认选择桌面版原生 CLI。
-- 初始化结束后自动返回结果页，显示成功、部分完成或失败提示，保留日志阅读位置。
-- 模型设置默认读取当前全局配置及本工具的子代理规则，未设置的项目使用 `gpt-6.1-sol / medium`。
-- 思考强度显示中文和英文标识，例如“中（medium）”“高（high）”。
-- 日志默认跟随底部最新内容，上翻暂停；回到底部或点击“回到最新日志”恢复跟随。
-- 概览数据保留说明改为无背景的单行小字，放在“开始初始化”下方；悬停可查看配置重建与数据保留范围。
-- 初始化默认开启 Codex 记忆，可取消；修复未勾选 CUA 却被判失败的问题。
-- 新增默认开启的 [GitHub 自动镜像](docs/GitHubMirrors.md)，官方优先，失败后串行尝试自定义前缀和五个内置镜像。
-- 取消多余的模型模式选择，直接更换父模型和思考强度；子模型在勾选子代理后可编辑。
-- 维护恢复列出初始化快照和保护器 CLI 的版本、备份 / 缓存时间，选中并确认后回滚。
-- 修复无 D 盘时 CUA 因报告目录失败的问题；补充正常输出中文说明和微软商店连接错误解释。
-- 桌面版自动更新失败时提示可自行在微软商店或 Codex 内手动更新，保留未完成状态。
-- “防止过度防御”仍默认开启；[查看规则内容与说明](docs/AntiOverDefense.md)。
-- 父模型和子模型可保留现有选择；子代理默认关闭。
+> **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
-## 它能解决什么问题？
+---
 
-| 你遇到的情况 | 工具能帮你做什么 | 从哪里操作 |
-| --- | --- | --- |
-| Chrome 连不上，怀疑代理没有传给浏览器进程 | 检查组件、代理端口及环境继承，校验后准备可回滚的补丁 | 「浏览器连接」；[故障处理](docs/BrowserConnection.md) |
-| 桌面版打不开或提示无法加载组织设置，日志中有 `EPERM / rename_staging` | 检查当前版本的启动组件，缺失时按官方文件准备并校验 | 「维护恢复」→「桌面启动修复」；[详细说明](docs/DesktopStartupRecovery.md) |
-| 想更新官方独立 CLI 或桌面原生 CLI | 分开更新独立组件和官方桌面包，保留当前模式 | 「维护恢复」的两个更新按钮 |
-| 刚装好 Codex，不想手动配目录、模型和代理 | 按向导统一配置，并在修改前备份原来的配置 | 「初始化」 |
-| 之前试过很多设置，现在想重新配置 | 备份并重建配置，重置全局规则和初始化流程处理的旧运行路径设置，重新写入默认值 | 「初始化」；这是重置操作 |
-| 没有绑定项目的任务不知道该存在哪里，工作文件容易混在一起 | 建立对话、项目、成品、临时文件等目录，并设置无项目任务的存放位置 | 「初始化」；已有文件不会自动搬家 |
-| Codex 的电脑操作功能因为本地组件缺失或不完整而不能用 | 检查 CUA 组件，对照已安装的官方应用文件补齐或恢复，再检查一遍 | 「维护恢复」中的 CUA 检查／修复 |
-| Codex 启动很慢，CUA 目录不断产生临时文件和大量小文件读写，甚至拖慢电脑 | 检查并提前补齐当前版本需要的 CUA 组件，处理组件准备异常导致的反复复制或重试 | 「维护恢复」中的 CUA 检查／修复；适用于这类原因引起的卡顿 |
-| Codex 启动异常，怀疑内置组件或启动路径有问题 | 检查内置组件与官方备用运行程序，必要时修复备用组件；也能恢复使用桌面版自带程序 | 「维护恢复」中的启动保护、恢复原生模式 |
-| 提示找不到 Codex CLI、CLI 路径错误，或 CLI 组件缺失／损坏 | 检查启动程序及路径，必要时安装／修复官方独立 CLI，或恢复桌面版自带 CLI | 「维护恢复」中的「安装 / 修复保护」「切换桌面原生 CLI」 |
-| 想在桌面版自带 CLI 和官方独立 CLI 之间切换 | 使用对应按钮切换，切换前检查目标组件是否可用 | 「维护恢复」中的「切换桌面原生 CLI」「切换官方独立 CLI」 |
-| 换过运行程序后出问题，想退回之前能用的版本 | 检查并回滚到启动保护记录的上一可用版本 | 「维护恢复」中的运行时回滚 |
-| 本地代理端口改了，Codex 还在使用旧设置 | 按填写的端口重建代理配置 | 在「初始化」页面填写端口，再到「维护恢复」点击「更新代理」 |
-| 希望代理减少不必要的防御和反复确认 | 在全局规则中加入 HERO 中文精简版及实现、交付边界 | 「初始化」→「防止过度防御」，默认勾选 |
-| 想让 Codex 按指定规则分配子代理工作 | 按选择写入子代理的模型、数量和调用层级规则 | 「初始化」；实际可用模型取决于账号和当前环境 |
-| 不知道故障发生在哪一步 | 查看状态、运行 Doctor 诊断，并查看执行日志 | 「概览」「维护恢复」「日志」 |
-| 设置页提示旧配置被忽略或已废弃 | 检查来源，备份后仅清理确定失效的两项设置；会话参数另行排查 | 「维护恢复」→「配置兼容检查」；[处理说明](docs/ConfigCompatibility.md) |
-| 这个工具发布了新版，不想再手动找下载地址 | 启动时自动查更新，点击提示后下载、校验并替换自身 | 右下角更新提示 |
+## 遇到这些问题？
 
-**这里的 CUA 修复，检查的是电脑操作功能所用的本地浏览器自动化组件。** 这项修复针对文件缺失、不完整或与当前官方应用不一致的情况。检查通过只表示组件文件完整，不等于电脑操作功能一定能使用。
-
-### CUA 目录反复写小文件，导致启动慢或电脑卡顿
-
-有一种情况是：Codex 启动或更新后，忙着准备电脑操作组件，在下面的目录创建临时目录、复制大量小文件，却迟迟不显示窗口：
-
-```text
-%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node
-```
-
-公开故障报告记录过两种相关现象：复制受保护文件失败后，对大量文件逐个重试；或者组件始终没准备完整，每次启动又生成新的 `.staging-*` 临时目录。前者会让启动长时间等待，后者会反复准备组件。参见 [启动缓慢报告](https://github.com/openai/codex/issues/41822) 和 [组件复制失败报告](https://github.com/openai/codex/issues/42501)。
-
-**本工具的 CUA 修复就是先把当前版本需要的完整组件放到正确位置，再逐文件校验。** 对这类本地组件准备异常，可以绕开下次启动时同样的失败复制或重复准备过程。如果 Codex 和整机卡顿也来自这段大量读写，修复后可能改善。
-
-操作方法：保存工作并退出 Codex，打开本工具，到「维护恢复」先检查 CUA，发现异常后点击「检查并修复」，完成后重新启动 Codex。组件本来完整时会跳过修复；其他原因造成的卡顿需要继续排查。这个功能不修改 Codex 的官方复制代码，也不负责批量清理旧临时目录。
-
-启动保护主要处理 Codex **启动时使用哪套程序，以及这套程序是否完整**。账号登录、模型权限、服务端故障、代理软件本身连不上网等问题，需要分别排查。这个工具不会替你开通模型权限，也不会安装或启动代理服务。
-
-### CLI 找不到或报错，能怎么修？
-
-可以处理因 **CLI 路径指错、残留的启动路径设置、组件缺失或损坏** 引起的部分启动故障。你可以先运行「诊断助手」，再按情况安装／修复启动保护，或者切换使用另一套可用的 CLI。
-
-- **桌面版自带 CLI：** 随 Codex 桌面应用提供。点击「切换桌面原生 CLI」，在内置组件完整时恢复这套程序，并清除本工具设置的路径覆盖。
-- **官方独立 CLI：** 单独安装的 OpenAI 官方命令行程序。可直接点击「更新官方独立 CLI」准备组件，或点击「切换官方独立 CLI」按需准备并切换；启动保护和登录维护另外选择安装。
-
-两套都是官方程序，可以按需要来回切换，操作前请保存工作并退出 Codex。这里的切换管理 Codex 桌面应用使用的 CLI 路径；终端输入 `codex` 时提示“找不到命令”，还需要检查终端的安装和 PATH，不能直接当作同一个问题。CLI 报错如果来自登录、权限、网络或服务端，也需要另外排查。
-
-## 第一次用，怎么选？
-
-初始化页面可以选择代理、功能和模型。HTTP 代理默认开启，端口预填 `10808`，IP 留空使用 `127.0.0.1`；文件夹管理、CLI 启动保护、CUA、浏览器链接修复和两类 CLI 更新默认勾选，子代理默认不勾选。模型默认读取现有全局设置，未设置时使用 gpt-6.1-sol / medium；可直接用下拉框更换父模型和思考强度，子模型需勾选子代理后设置。
-
-**初始化会先备份，再清空重建全局 `AGENTS.md`。** 新文件包含 RTK 引用和基础规则，文件夹、防止过度防御和子代理规则只在勾选时写入。不勾选子代理时，多线程配置关闭，也不会留下旧 Luna 指令或基础规则中的并行要求。旧的全局自定义内容只保存在备份中；各项目自己的 `AGENTS.md` 不受影响。
-
-原文件在本次初始化备份的 `Backups\AGENTS.md` 中，可通过 `Rollback.cmd` 恢复。执行前确认页会提示全局重置。详见 [初始化选项](docs/Settings.md)。
-
-- **只是想检查，或者只修一个问题：** 先看「概览」，再到「维护恢复」选对应项目。
-- **想把配置重新整理一遍：** 使用「初始化」。它会备份并重建配置，已有自定义设置需要重新确认。
-- **想撤回本工具的修改：** 根据改动选择初始化回滚、运行时回滚或卸载启动保护。三者恢复的内容不同，见下面的「更新与恢复」。
-
-## 下载后怎么用？
-
-1. 下载 `CodexInitKit.exe`，放到方便访问的目录。无需另放 CMD 文件或自行编译。
-2. 双击启动，在「概览」查看当前环境。
-3. 需要初始化时，先保存工作并关闭 Codex，再进入「初始化」，选择工作盘与代理端口。
-4. 选择需要的功能、代理和模型，再查看变更摘要，确认后执行。
-5. 日常检查、修复或回滚，使用「维护恢复」；执行结果和备份位置可在「日志」查看。
-
-环境要求：**Windows x64、.NET Framework 4.8、Windows PowerShell 5.1**。修改操作按需请求管理员授权。发布 EXE 尚未签名，文件校验值见发布页的 `SHA256SUMS.txt`。
-
-> 初始化不是只做检查：它会先备份，再重建当前用户的 Codex 配置，修改代理、规则和用户 PATH，并要求事先退出相关 Codex 进程。开始前请保存工作；只想检查或修复组件时，直接使用「维护恢复」。
-
-## 初始化具体会做什么？
-
-| 功能 | 可以做什么 |
+| 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
-| 配置 | 备份原来的配置，再写入默认模型、思考强度和代理地址 |
-| 文件夹 | 创建按用途分类的目录，设置无项目任务的存放位置 |
-| 电脑操作组件 | 检查文件是否完整，需要时修复，修复前单独备份 |
-| 全局规则 | 总是写入RTK 引用和基础工作规则；仅按选择追加文件夹管理块或 Luna 子代理块 |
-| 子代理规则 | 勾选后写入子代理用什么模型、最多同时调用几个、能否继续委派 |
-| 启动保护（可选） | 检查启动组件，准备官方备用程序，并安装登录时的自动维护任务 |
+| **Codex 连不上 Chrome / 浏览器控制不可用** | 打开「浏览器连接」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
+| **Codex 桌面版打不开 / 无法加载组织设置** | 如果日志中有 `EPERM`、`rename_staging` 等特征，先检查桌面启动组件，再按需修复。[查看适用条件](docs/DesktopStartupRecovery.md) |
+| **Codex 启动很慢，CUA 目录反复产生临时文件** | 在「维护恢复」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
+| **Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
+| **刚安装 Codex，不知道怎样配置模型、代理和工作目录** | 从「初始化」选择功能，查看变更摘要，确认后一次完成。[查看初始化选项](docs/Settings.md) |
 
-桌面版提供「概览、初始化、浏览器连接、维护恢复、更新、日志」六个页面，直接下载 EXE 即可使用。
+组件检查通过或补丁准备完成，只说明对应检查或准备步骤成功。浏览器需要重启 Codex 后实际打开并读取测试页面；账号权限、服务端和代理服务本身的问题也需分别排查。本版本开发时未完成真实 Chrome 连接验收，使用后请按步骤自行验证。[查看验证边界](docs/BrowserConnection.md#本次验证边界)
 
-### 初始化顺序
+## 功能一览
 
-```text
-前置退出检查 → 更新桌面版 → 备份并重建配置、全局规则及目录、CUA
-           → 更新官方独立 CLI → 可选安装启动保护 → 应用所选 CLI → 浏览器连接修复
-```
-
-默认按上述顺序执行，取消勾选的功能会跳过对应安装步骤；全局 `AGENTS.md` 每次都从RTK 引用和基础规则重建，旧的全局自定义内容只在备份中保留。文件夹管理和 Luna 块只在对应功能勾选时追加；子代理多线程未勾选时会关闭 `multi_agent`，并移除基础规则中的 `SUBAGENTS` 段落。启用文件夹管理时，绑定校验通过后才继续；启用 CUA 时，修复失败会停止后续子代理规则安装。
-
-RTK 集成前会自动执行 `rtk telemetry disable` 关闭匿名统计，并为后台命令关闭标准输入，避免 `Enable anonymous telemetry? [y/N]` 等隐藏提示阻塞第 2/5 阶段。关闭失败会显示错误并停止初始化，详情记录在备份会话的 `rtk-telemetry.log`。
-
-### 默认设置
-
-| 设置 | 默认值 |
+| | |
 | --- | --- |
-| 工作根目录 | `<盘符>:\Codex`；优先选择可用的 `D` 盘 |
-| 父模型 | 继承当前设置；未设置时为 `gpt-6.1-sol` · `medium` |
-| 子代理 | 默认关闭；模型继承当前设置，未设置时为 `gpt-6.1-sol` · `medium` |
-| CLI 模式 | 桌面版原生 CLI；可选择官方独立 CLI |
-| 并行与深度 | 最多 6 个子代理，委派深度 1 |
-| HTTP 代理 | 默认开启，`http://127.0.0.1:10808`；可填写端口、IP 或取消勾选关闭 |
+| **🧭 中文初始化向导**<br>集中设置工作目录、HTTP 代理、模型、记忆与可选功能。修改前展示确认摘要，运行时可查看进度和日志。 | **🌐 浏览器连接检查与修复**<br>检查运行时、代理端口和环境继承；按需准备可恢复的修复，也可复制重启后的连接测试指令。 |
+| **🧩 CUA 组件维护**<br>检查电脑操作组件，对照当前官方应用文件按需修复，帮助排查缺失、损坏或反复准备组件的问题。 | **🛠️ 桌面启动与 CLI 修复**<br>检查特定启动故障，选择桌面版原生 CLI 或官方独立 CLI；两种程序均来自 OpenAI。 |
+| **🗂️ 文件夹与工作规则**<br>按需创建工作目录，设置无项目任务目录；可写入防止过度防御、子代理等全局规则。 | **↩️ 备份与回滚**<br>查看初始化备份和保护器 CLI 的可回滚版本与时间，选择目标并确认后恢复。不同恢复操作各有范围。 |
+| **📋 中文日志与诊断**<br>查看状态、运行诊断、复制当前日志；中文解释和原始输出可切换，最新日志默认在底部。 | **⬇️ 更新与下载加速**<br>检查工具更新；公开 GitHub 资源支持官方优先、自动镜像回退和自定义 HTTPS 镜像前缀。 |
 
-端口按 V2RayN 常用设置预填，也可使用 Clash 等软件提供的 HTTP／混合端口。使用软路由时，第一行填写它的代理端口，第二行填写 IP，例如 `192.168.1.1`；IP 留空使用 `127.0.0.1`。
+此外，可分别更新官方独立 CLI 与 Microsoft Store 桌面版；记忆和「防止过度防御」默认勾选，子代理多线程默认关闭。[查看全部初始化选项](docs/Settings.md)
 
-父模型、子代理模型和各自的思考强度均通过下拉框选择，不支持手动输入。内置 9 个模型，按 2026-10-30 Codex 模型元数据预设；`gpt-5.5` 为旧版兼容选项。已有设置不在列表中时仍可保留，并提示尚未验证。子代理未勾选时，子模型与子思考强度置灰且不可选；勾选子代理多线程后即可设置。「检查所选配置」核对模型与强度组合。列表随本工具版本更新，不依赖本机缓存；实际调用权限仍取决于账号。
+## 下载后，三步开始
 
-工作根目录包含 `Conversations`、`Projects`、`OUT`、`Temp`、`Shared`、`Archive`、`Config` 和 `Docs` 八个子目录。已有工作文件不会自动搬迁。
+1. **下载并启动**：下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)，双击打开。所需脚本已包含在 EXE 中。
+2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「浏览器连接」或「维护恢复」。
+3. **需要初始化时**：保存工作并退出 Codex，选择工作盘、代理和功能；在确认页核对模型及 CLI 模式后执行。默认使用桌面版原生 CLI，也可选择官方独立 CLI。
 
-## 更新与恢复
-
-**工具更新**来自本 GitHub 仓库。每次启动时，右下角显示自动检查状态；发现新版后，右下角显示带红色亮点的「检测到更新，点击更新」。点击即下载并验证 SHA-256，退出后在原目录以原文件名替换并重启；成功后自动删除旧版，只保留新版。失败时保留原可用文件。
-
-**Codex 备用运行程序更新**在「维护恢复」页面执行，更新的是启动保护管理的 OpenAI 官方 CLI，也就是备用的命令行程序。执行前应关闭 Codex。这与下载本工具新版是两件事，不会更新 Windows 商店里的 Codex 桌面应用。
-
-初始化、CUA 和启动保护分别保留备份，恢复范围如下：
-
-| 恢复操作 | 范围 |
-| --- | --- |
-| 回滚初始化 | 使用最新初始化会话已有的 `Rollback.cmd` 恢复其中记录的配置、全局规则及环境项目；不恢复 CUA，不删除创建的工作目录 |
-| CUA 备份 | 修复前保存的运行时文件，独立于初始化备份 |
-| 回滚启动保护 | 验证并恢复保护器记录的上一可用运行时 |
-| 卸载启动保护 | 移除登录自动维护并恢复相关覆盖配置，保留用户数据与官方后备文件 |
-
-桌面执行日志位于 `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs`。默认显示和保存中文日志，原始输出可单独查看；使用方法见[中文与原始日志](docs/Logs.md)。初始化备份位于 Windows 实际 Documents 目录下的 `Codex初始化备份`。详细路径和操作边界见 [桌面版说明](docs/Desktop.md)。
-
-## 界面展示
-
-界面使用深色圆角控件与滚动条，鼠标滚轮支持平滑滚动。
-
-**概览：** 查看默认模型和当前状态，从这里进入初始化。
-
-![Codex Init Kit 概览页面](assets/screenshots/overview.png)
+初始化完成后会显示实际结果。部分步骤未完成时，可查看中文日志和具体项目，再单独重试。
 
 <details>
-<summary>展开查看初始化选项：代理开关、九项功能和模型选择</summary>
+<summary><strong>使用前：备份、数据与下载校验</strong></summary>
 
-![Codex Init Kit 初始化设置完整内容预览](assets/screenshots/settings.png)
+- 初始化不会清除已有对话记录或项目文件，也不会自动搬移已有工作文件。
+- 完整初始化会备份并重建当前用户配置与全局 `AGENTS.md`。旧的全局自定义内容保存在本次备份中，不会自动写回；项目目录内的 `AGENTS.md` 不受这项全局重置影响。
+- 可在「维护恢复」选择初始化备份或保护器 CLI 版本回滚。浏览器补丁、CUA 备份和启动保护各有单独的恢复范围。[查看恢复说明](docs/Desktop.md)
+- 发布页提供 `SHA256SUMS.txt`。发布 EXE 当前未签名；请从本仓库的 [Releases](https://github.com/BerryFuwawa/codex-init-kit/releases) 获取并核对文件。
 
 </details>
 
-**维护恢复：** 检查／修复 CUA，修复启动保护，切换桌面自带或官方独立 CLI，也能诊断和回滚。
+## 界面预览
 
-启动保护栏右侧显示当前使用哪套 CLI，只显示切换到另一套的按钮。诊断助手完成后会给出检查结果和操作建议，详细日志仍可查看；不能确定原因时会明确提示继续排查。
+<table>
+  <tr>
+    <td width="50%"><strong>初始化</strong><br>按需要选择代理、功能、CLI 和模型。<br><a href="assets/screenshots/settings.png"><img src="assets/screenshots/settings-scroll.png" alt="Codex Init Kit 初始化界面，显示功能选择和模型设置"></a></td>
+    <td width="50%"><strong>浏览器连接</strong><br>检查环境，修复后再验证真实连接。<br><a href="assets/screenshots/browser-connection.png"><img src="assets/screenshots/browser-connection.png" alt="Codex 浏览器连接页面，显示代理设置、修复操作和分项验证"></a></td>
+  </tr>
+</table>
+
+<details>
+<summary><strong>查看更多页面：维护恢复、更新和日志</strong></summary>
+
+**维护恢复**：检查与修复组件、切换 CLI、诊断以及选择备份回滚。
 
 ![Codex Init Kit 维护恢复页面](assets/screenshots/maintenance.png)
 
-<details>
-<summary>查看诊断建议示例：网络、MCP 与会话索引提示</summary>
+**更新**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
 
-![诊断助手的检查结果和操作建议示例](assets/screenshots/diagnosis.png)
+![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/updates.png)
+
+**日志**：中文说明与原始输出可切换，按需复制和查看。
+
+![Codex Init Kit 中文日志页面](assets/screenshots/logs.png)
 
 </details>
 
-**更新与下载加速：** 可关闭自动镜像或填写自定义 HTTPS 镜像前缀。
+界面图片使用示例状态，实际检测结果以你的电脑为准。
 
-![GitHub 自动镜像和自定义设置](assets/screenshots/updates.png)
+## 常见问题
 
-**日志：** 中文说明保留错误码和路径，原始输出可通过按钮切换查看。下图为隔离渲染的示例。
+### Codex 连接不上 Chrome，应该从哪里开始？
 
-![中文错误日志与原文切换入口](assets/screenshots/logs.png)
+先到「浏览器连接」检查组件完整性、代理端口和环境继承。如果使用代理，确认代理软件已启动，并填写它提供的 HTTP／混合端口。需要修复时先保存工作、退出 Codex；修复后重启并使用页面提供的测试指令实际读取网页。[详细步骤与恢复方法](docs/BrowserConnection.md)
 
-图片来自 2.2.8 EXE，按 192 DPI（200% 缩放）离线渲染，点击图片可查看高清原图。初始化设置图包含代理、功能、CLI 模式和模型选择；子代理默认未勾选。模型设置图展示未设置过模型时的默认值 `gpt-6.1-sol / medium`，子模型及子思考强度置灰。图中展开了完整内容，实际窗口可滚动。概览使用示例状态，状态以你电脑上的检测结果为准。
+### Codex 桌面版打不开，这个工具能修复吗？
 
-![浏览器连接检查、修复并启动、代理与分项验证](assets/screenshots/browser-connection.png)
+它能检查并处理一部分本地启动组件问题。例如日志中出现 `bundled_executable_relocation_failed`、`EPERM` 和 `rename_staging` 时，可先检查桌面启动组件。相同提示也可能由其他原因引起，检查结果和日志有助于缩小范围。[桌面启动故障处理](docs/DesktopStartupRecovery.md)
 
-浏览器准备成功不等于 Chrome 已连接。本次开发环境的浏览器工具返回 `nodeRepl.fetch request failed`，真实 Chrome 验收未完成；使用时应退出 Codex 修复并重启后执行测试，详见[验证边界](docs/BrowserConnection.md#本次验证边界)。
+### Codex 初始化会删除对话、项目或记忆吗？
 
-## CLI 验证与源码构建
+不会清除已有对话、项目文件或已有记忆文件。完整初始化会备份并重建配置和全局 `AGENTS.md`，旧的全局自定义规则保存在备份里。如果只需要检查或单项修复，可以跳过完整初始化。[查看初始化说明](docs/Settings.md)
 
-EXE 内置无窗口验证入口，可生成 JSON 报告，无需控制桌面：
+### 必须使用代理吗？
 
-| 参数 | 用途 |
-| --- | --- |
-| `--verify <report.json>` | 检查资源、后台模拟回归、页面构建、参数与更新校验 |
-| `--status-json <report.json>` | 读取当前环境状态 |
-| `--check-update-json <report.json>` | 查询并校验 GitHub 更新清单 |
-| `--render-preview <目录>` | 在内存中渲染六页预览 PNG |
+不需要。初始化中的 HTTP 代理默认开启，可按实际情况修改 IP 和端口，也可以取消勾选。工具不会安装或启动代理软件；浏览器页使用同一套代理设置。[查看代理设置](docs/Settings.md#代理开关)
 
-命令示例和报告读取方式见 [CLI 使用说明](docs/Desktop.md#无窗口-cli-验收)。验证覆盖只读状态及模拟操作；真实配置重置、运行时切换和完整升级重启未在正在使用的 Codex 上执行。
+### 初始化默认使用什么模型和 CLI？
 
-在仓库根目录执行以下命令构建桌面版：
+父模型和子代理模型默认继承已有全局设置；未设置时使用 `gpt-6.1-sol / medium`。子代理默认关闭，模型实际可用性取决于账号和环境。CLI 默认选择桌面版原生 CLI，也可选择官方独立 CLI；确认页会显示本次选择。[查看模型和 CLI 选项](docs/Settings.md)
+
+### 下载很慢或更新失败怎么办？
+
+工具的「更新」页支持 GitHub 自动镜像和自定义 HTTPS 镜像，官方地址优先。你也可以在 [Releases 页面](https://github.com/BerryFuwawa/codex-init-kit/releases)手动下载。镜像设置不改变系统代理，也不会接管微软商店或 OpenAI 安装器内部的网络行为。[查看镜像说明](docs/GitHubMirrors.md)
+
+## 文档与反馈
+
+- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [版本更新说明](docs/Release-2.2.8.md)
+- [浏览器连接与 Chrome 验证](docs/BrowserConnection.md) · [桌面启动故障处理](docs/DesktopStartupRecovery.md) · [配置兼容检查](docs/ConfigCompatibility.md)
+- [中文与原始日志](docs/Logs.md) · [GitHub 下载加速](docs/GitHubMirrors.md) · [防止过度防御](docs/AntiOverDefense.md)
+
+遇到问题或希望补充功能，欢迎到 [Issues](https://github.com/BerryFuwawa/codex-init-kit/issues) 反馈。请描述现象、操作步骤和错误信息，并在分享日志前自行检查其中的个人路径、账号或其他敏感信息。
+
+如果这个工具帮助到了你，也欢迎分享给遇到类似问题的朋友，或给项目点一颗 Star，让更多人找到它。
+
+## 源码构建
+
+在仓库根目录执行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\Build-Desktop.ps1
 ```
 
-输出为 `build\desktop\CodexInitKit.exe`。修改共同脚本更新器后，先运行 `tools/Build.ps1` 重新嵌入脚本，再构建 EXE。准备桌面发布清单使用 `tools/Prepare-DesktopRelease.ps1`。
+输出为 `build\desktop\CodexInitKit.exe`。命令行验收、组件源码和构建说明见 [桌面版使用手册](docs/Desktop.md#构建与验证边界)与[脚本说明](docs/Scripts.md)。
 
-```text
-app/                     桌面界面、worker 与 CLI
-scripts/                 EXE 内嵌组件源码
-src/GitHubUpdate.ps1      脚本更新模块
-tools/                   构建和发布准备工具
-tests/                   脚本更新与后台回归测试
-docs/                    使用说明与版本说明
-desktop-update.json      桌面版更新清单
-update-manifest.json     脚本组件更新清单
-```
-
-第 1 步脚本使用 GBK，第 2 步使用 UTF-8，均保留 CRLF。仓库不提交用户密钥、机器配置、运行日志或备份文件。
+Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。

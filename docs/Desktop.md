@@ -40,9 +40,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.2.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.3)，更新内容见 [2.2.3 更新说明](Release-2.2.3.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.2.8](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.8)，更新内容见 [2.2.8 更新说明](Release-2.2.8.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
+正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -72,13 +72,13 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.3` |
+| 版本 | `2.2.8` |
 | 内嵌初始化组件 | `4.8.6` |
 | 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
 | 本地代理 | `http://127.0.0.1:10808` |
-| 父模型 | `gpt-6.1-terra`，`max` |
-| 子代理 | 默认关闭；启用时为 `gpt-6.1-terra`，`max`；最多 6 个，委派深度 1 |
+| 父模型 | 继承当前全局设置；未设置时为 `gpt-6.1-sol`，`medium` |
+| 子代理 | 默认关闭；模型继承现有设置，未设置时为 `gpt-6.1-sol`，`medium`；最多 6 个，委派深度 1 |
 | 桌面数据根目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop` |
 | 日志目录 | `%LOCALAPPDATA%\CodexInitKit\Desktop\Logs` |
 | 内嵌 payload | `init.cmd`、`guard.cmd`、`cua.cmd`、`Backend.ps1`、`Backend220.ps1` 及回归资源 |
