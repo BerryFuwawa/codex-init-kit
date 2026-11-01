@@ -14,7 +14,7 @@ $manifest=[ordered]@{
     version=$version
     url=('https://github.com/BerryFuwawa/codex-init-kit/releases/download/v'+$version+'/CodexInitKit.exe')
     sha256=$hash
-    notes='桌面错误日志中文化，可切换原始输出；父模型和子模型默认 GPT-6.1 Sol / high。'
+    notes='新增默认勾选的防止过度防御：将 HERO 中文精简规则与实现、自主交付边界写入全局 AGENTS.md。'
 }
 [IO.File]::WriteAllText((Join-Path $root 'desktop-update.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path (Split-Path $Executable -Parent) 'SHA256SUMS.txt'),($hash+'  CodexInitKit.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))

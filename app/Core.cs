@@ -16,7 +16,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.2";
+    public const string Version = "2.2.3";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
@@ -44,7 +44,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -64,7 +64,7 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}
@@ -103,6 +103,7 @@ public static class Core {
         var normalized=DefaultOptions();
         if(source==null) return normalized;
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
+        normalized["antiOverDefense"]=ReadOptionBoolean(source,"antiOverDefense",true);
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);

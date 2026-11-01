@@ -130,6 +130,8 @@ enabled = true
     [IO.File]::Copy($guardSource,(Join-Path $payload 'guard.cmd'))
     $cuaSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $sourceRoot 'Codex_CUA_Repair.cmd'}else{Join-Path $sourceRoot 'cua.cmd'}
     [IO.File]::Copy($cuaSource,(Join-Path $payload 'cua.cmd'))
+    $antiSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\AntiOverDefense.md'}else{Join-Path $sourceRoot 'AntiOverDefense.md'}
+    [IO.File]::Copy($antiSource,(Join-Path $payload 'AntiOverDefense.md'))
 
     # Job-file parsing accepts the GUI protocol fields and normalizes aliases.
     $jobFile = Join-Path $scratch 'job.json'
@@ -141,6 +143,9 @@ enabled = true
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
     Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'high' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'high') 'Default parent and child must be GPT-6.1-SOL HIGH.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
+    Assert ($resolved.Options.antiOverDefense -and -not (Convert-BackendOptions @{antiOverDefense=$false}).antiOverDefense) 'Anti-over-defense default or explicit false was lost.'
+    $antiOptionB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"antiOverDefense":false}'))
+    Assert (-not (Convert-BackendOptions $null $antiOptionB64).antiOverDefense) 'Encoded anti-over-defense selection was not preserved.'
     Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
     Assert ((Convert-BackendOptions @{proxyHost='192.168.1.1'}).proxyHost -eq '192.168.1.1') 'Router proxy IP was not preserved.'
     Assert ((Get-ProxyUrl 7890 '2001:db8::1') -eq 'http://[2001:db8::1]:7890') 'IPv6 proxy URL is invalid.'
@@ -358,6 +363,33 @@ exit /b 0
     Assert ($enabledRulesMatch.Success) 'Enabled-subagent adapter lost the base work-rules payload.'
     $enabledRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($enabledRulesMatch.Groups[1].Value))
     Assert ($enabledRules -match '(?m)^SUBAGENTS\r?$' -and $enabledRules.Contains('并行就并行')) 'Enabled-subagent adapter removed the SUBAGENTS rules section.'
+    $antiText=[IO.File]::ReadAllText((Join-Path $payload 'AntiOverDefense.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
+    Assert ($enabledRules.Contains($antiText.TrimEnd()) -and ([regex]::Matches($enabledRules,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count -eq 1)) 'Enabled rule payload was missing or duplicated.'
+    Assert ($antiText.Contains('cc79bd03a407eaabe5a0237274d3cdee25f79156') -and $antiText.Contains('Copyright (c) 2026 Ruofeng Yang') -and $antiText.Contains('THE SOFTWARE IS PROVIDED "AS IS"')) 'HERO source or MIT notice was omitted.'
+    Assert (([regex]::Matches($antiText,'(?m)^[1-9]\. ').Count -eq 9) -and $antiText.Contains('对的就说对。不要为了交差硬找问题。') -and -not $antiText.Contains('```')) 'Chinese short rules are incomplete or fenced.'
+    $expectedOwnRules=@'
+## 实现与防御边界
+
+- **校验**：同一信任边界内，已验证且未变化的数据不重复校验。
+- **防御范围**：不为理论上可构造、实际需求未涉及的情况添加防御。
+- **异常处理**：仅在能够恢复、补充必要上下文或转换错误边界时使用 `try/catch`。禁止吞错和伪成功。
+- **函数抽取**：抽函数须能降低理解成本、隔离职责或消除重复。不为抽象而拆分单次直线逻辑。
+
+## 自主推进与交付
+
+- **常规决策**：常规实现自行决定。
+- **完成条件**：必要检查通过即交付。
+- **提问条件**：只有同时满足以下两点时才提问：
+  1. 现有授权和合理假设仍无法解决该选择。
+  2. 该选择会实质影响需求、兼容性，或产生未授权的不可逆后果。
+'@
+    Assert ($antiText.Contains($expectedOwnRules.Replace("`r`n","`n"))) 'User-provided implementation and delivery rules changed.'
+    $antiDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{antiOverDefense=$false;subagents=$false}
+    $antiDisabledText=[IO.File]::ReadAllText($antiDisabledAdapter,$script:InputEncoding)
+    $antiDisabledRulesB64=[regex]::Match($antiDisabledText,$rulesPayloadPattern).Groups[1].Value
+    $antiDisabledRules=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($antiDisabledRulesB64))
+    Assert (-not $antiDisabledRules.Contains('ANTI OVERDEFENSE') -and -not $antiDisabledRules.Contains('实现与防御边界')) 'Unchecked anti-over-defense still wrote rules.'
+    Remove-InitAdapter $antiDisabledAdapter
 
     $featureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
         folderManagement = $false; subagents = $false; cuaRepair = $false
@@ -402,7 +434,7 @@ exit /b 0
     $mockSource = Join-Path $mockRoot 'init.cmd'
     [IO.File]::WriteAllText($mockSource,($mockLines -join [Environment]::NewLine) + [Environment]::NewLine,[Text.Encoding]::GetEncoding(936))
     $mockAdapter = New-InitAdapter $mockSource $mockRoot 'D' 10808 ([ordered]@{
-        folderManagement = $false; subagents = $true; cuaRepair = $false
+        folderManagement = $false; subagents = $true; cuaRepair = $false; antiOverDefense = $false
         parentModel = 'gpt-6.1-sol'; childModel = 'gpt-5.6-luna'; parentEffort = 'medium'; childEffort = 'max'
     })
     $mockOutput = @(& $env:ComSpec /d /c $mockAdapter --codex-gui-action proxy)
@@ -758,6 +790,37 @@ END CODEX LUNA PROMPT V1.3
     $expectedBackupRebuildText = '@' + $backupRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
     Assert ([IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8) -eq $expectedBackupRebuildText) 'FULL_INIT did not rebuild AGENTS.md after a successful backup.'
 
+    # Run the actual backup and base-rebuild labels with the adapter's selected
+    # rules. Each initialization gets a new backup session, as in production.
+    [IO.File]::WriteAllBytes($backupAgentsPath,[Convert]::FromBase64String($backupAgentsBytesB64))
+    $antiSessions=@();$antiIndex=0
+    foreach($selectedRules in @($enabledRulesMatch.Groups[1].Value,$enabledRulesMatch.Groups[1].Value,$antiDisabledRulesB64)){
+        $antiSession=Join-Path $scratch ('anti-session-'+$antiIndex);$antiSessions+= $antiSession
+        $antiBackup=Join-Path $antiSession 'Backups';[void][IO.Directory]::CreateDirectory((Join-Path $antiBackup 'rtk'))
+        $beforeAnti=[Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath))
+        $antiEnvironment=@{};foreach($key in $backupEnvironment.Keys){$antiEnvironment[$key]=$backupEnvironment[$key]}
+        $antiEnvironment.CODEX_TEST_BACKUP=$antiBackup;$antiEnvironment.CODEX_TEST_RULES_B64=$selectedRules
+        $antiResult=Invoke-ChildProcess $backupFixturePath @() $backupFixtureRoot $antiEnvironment $script:InputEncoding
+        Assert ($antiResult.ExitCode -eq 0) 'Selected anti-over-defense rules failed the actual base rebuild.'
+        Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $antiBackup 'AGENTS.md'))) -eq $beforeAnti) 'Selected-rule initialization lost the original AGENTS bytes.'
+        $actualAnti=[IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8)
+        Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count) -eq $(if($antiIndex -lt 2){1}else{0})) 'Repeated or unchecked initialization retained an incorrect number of rule blocks.'
+        if($antiIndex -lt 2){Assert ($actualAnti.Contains($antiText.TrimEnd())) 'Rebuilt AGENTS did not contain the complete anti-over-defense resource.'}
+        Assert ((HashFile $projectAgentsPath) -eq $projectAgentsHash) 'Selected-rule initialization changed project instructions.'
+        $antiIndex++
+    }
+    $rollbackSection=[regex]::Match($originalInitText,'(?ms)^:ROLLBACK_SESSION\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
+    $antiRollback=Join-Path $scratch 'anti-rollback.cmd'
+    $rollbackHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_HOME%`"`r`nset `"AGENTS_FILE=%CODEX_TEST_AGENTS%`"`r`ncall :ROLLBACK_SESSION `"%~1`"`r`nexit /b %errorlevel%`r`n"
+    [IO.File]::WriteAllText($antiRollback,$rollbackHeader+$rollbackSection+"`r`n:STOP_CODEX`r`nexit /b 0`r`n",$script:InputEncoding)
+    foreach($session in @($antiSessions[2],$antiSessions[0])){
+        $meta="RESTORE_AGENTS=1`r`nRESTORE_CONFIG=0`r`nRESTORE_ENV=0`r`nRESTORE_RTK=0`r`nRESTORE_RTK_EXE=0`r`nRESTORE_USER_PATH=0`r`nRESTORE_CLI=0`r`nRESTORE_RUNTIME=0`r`n"
+        [IO.File]::WriteAllText((Join-Path $session 'session.meta'),$meta,$script:InputEncoding)
+        $rolled=Invoke-ChildProcess $antiRollback @($session) $scratch @{CODEX_TEST_HOME=$backupFixtureRoot;CODEX_TEST_AGENTS=$backupAgentsPath} $script:InputEncoding
+        Assert ($rolled.ExitCode -eq 0 -and [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath)) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $session 'Backups\AGENTS.md')))) 'Actual rollback did not restore the selected-rule backup exactly.'
+    }
+    Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath)) -eq $backupAgentsBytesB64) 'Original global instructions were not restored.'
+
     $failureRoot = Join-Path $scratch 'backup-failure-fixture'
     [void][IO.Directory]::CreateDirectory($failureRoot)
     $failureAgentsPath = Join-Path $failureRoot 'AGENTS.md'
@@ -799,6 +862,7 @@ END CODEX LUNA PROMPT V1.3
         Assert ((HashFile $agentsPath) -eq $tailAgentsHash) 'Finalization changed the freshly rebuilt AGENTS file when subagents were off.'
         $tailConfig = [IO.File]::ReadAllText($config)
         Assert ($tailConfig -match '(?m)^model = "vendor/tail:v1"\r?$' -and $tailConfig -match '(?m)^multi_agent = false\r?$') 'Finalization did not retain the selected parent and disabled multi-agent state.'
+        Assert ((Invoke-InitOperation 'proxy' $payload $null 10808 $tailOptions) -eq 0 -and (HashFile $agentsPath) -eq $tailAgentsHash) 'Proxy-only changes rewrote the global rules.'
     } finally { Set-Item Function:Invoke-ChildProcess $realChildProcess }
 
     # Critical input failures remain non-zero and do not fall through.

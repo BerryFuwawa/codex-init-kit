@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.2
+# Codex Init Kit Desktop 2.2.3
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -33,11 +33,13 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 中文日志和错误弹窗覆盖各项桌面操作，未知外部错误会明确提示原因尚未识别。日志解释在本地完成；原始内容保留用于诊断。文件命名、复制与更新日志见[日志说明](Logs.md)。
 
+初始化的“防止过度防御”默认勾选，将 HERO 中文精简规则和实现、交付边界写入全局 `AGENTS.md`；完整内容、备份和取消行为见[防止过度防御](AntiOverDefense.md)。
+
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.2.2](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.2)，更新内容见 [2.2.2 更新说明](Release-2.2.2.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前正式版为 [Codex Init Kit v2.2.3](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.3)，更新内容见 [2.2.3 更新说明](Release-2.2.3.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
-正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
+正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
 首次使用可直接下载 EXE。已有版本可启动后检查更新，也可手动下载替换。
 
@@ -47,7 +49,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、七项可选功能（子代理默认关闭，其余默认开启），以及推荐／手动选择模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理块、Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、八项可选功能（子代理默认关闭，其余默认开启），以及推荐／手动选择模型。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理、防止过度防御和 Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
 
 确认页会明确提示这是全局重置。原 `AGENTS.md` 的完整副本位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复；项目目录中的 `AGENTS.md` 不属于重置范围。
 
@@ -67,7 +69,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.2` |
+| 版本 | `2.2.3` |
 | 内嵌初始化组件 | `4.8.6` |
 | 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |

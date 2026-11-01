@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.2.2",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.2/CodexInitKit.exe",
-    "sha256":  "87f07a240fe80b15fd2d70df39cc9691c16a6ee197eba03f79ac735d244e2fcb",
-    "notes":  "桌面错误日志中文化，可切换原始输出；父模型和子模型默认 GPT-6.1 Sol / high。"
+    "version":  "2.2.3",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.3/CodexInitKit.exe",
+    "sha256":  "9979a7ceb2fd9c5ab131f5587ba989c3a870b4711c27bb8e2cc29aac6d7f6225",
+    "notes":  "新增默认勾选的防止过度防御：将 HERO 中文精简规则与实现、自主交付边界写入全局 AGENTS.md。"
 }

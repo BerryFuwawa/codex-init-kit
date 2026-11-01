@@ -26,6 +26,7 @@ $script:OptionsWasBound = $PSBoundParameters.ContainsKey('OptionsBase64')
 $script:DefaultOptions = [ordered]@{
     proxyHost = '127.0.0.1'
     folderManagement = $true
+    antiOverDefense = $true
     subagents = $false
     cuaRepair = $true
     browserRepair = $true
@@ -123,7 +124,7 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $projectPath = & $get 'projectPath'
     if ($null -ne $projectPath -and $projectPath -isnot [string]) { throw 'Option projectPath must be a string.' }
     $normalized.projectPath = if ($null -eq $projectPath) { '' } else { $projectPath.Trim() }
@@ -355,11 +356,15 @@ function New-InitAdapter {
     $folderEnabled = [bool]$resolvedOptions.folderManagement
     $subagentsEnabled = [bool]$resolvedOptions.subagents
     $cuaEnabled = [bool]$resolvedOptions.cuaRepair
-    if (-not $subagentsEnabled) {
+    if (-not $subagentsEnabled -or $resolvedOptions.antiOverDefense) {
         $rulesMatch = [regex]::Match($sourceText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
         if (-not $rulesMatch.Success) { throw 'Base work-rules payload is missing.' }
         $rules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesMatch.Groups[1].Value))
-        $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','')
+        if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
+        if ($resolvedOptions.antiOverDefense) {
+            $antiRules = [IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'AntiOverDefense.md'),[Text.Encoding]::UTF8)
+            $rules = $rules.TrimEnd([char[]]"`r`n") + "`n`n" + $antiRules
+        }
         $replacement = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($rules))
         $sourceText = $sourceText.Replace($rulesMatch.Groups[1].Value,$replacement)
     }
@@ -695,7 +700,10 @@ function Invoke-InitOperation {
         if ($result.ExitCode -ne 0) { throw ('init.cmd failed with exit code ' + $result.ExitCode) }
         if ($result.Output -match '(?im)RESULT\s*=\s*FAIL|FAIL') { throw 'init.cmd reported a failed result.' }
         if ($Action -eq 'proxy' -or $Action -eq 'one-click') { [void](Set-ProxyEnvironmentFile $ProxyPortValue $originalEnv $resolvedOptions.proxyHost) }
-        if ($Action -eq 'one-click') { Set-ScopedModelSettings $resolvedOptions }
+        if ($Action -eq 'one-click') {
+            Set-ScopedModelSettings $resolvedOptions
+            Write-BackendLine $(if($resolvedOptions.antiOverDefense){'防止过度防御：已写入 HERO 中文精简规则及实现、交付规则。'}else{'防止过度防御：未勾选，已跳过规则写入。'})
+        }
         if ($Action -eq 'proxy') {
             $envFile = Join-Path (Get-CodexHomePath) '.env'
             if (-not (Test-Path -LiteralPath $envFile -PathType Leaf)) { throw '.env was not written by proxy operation.' }
