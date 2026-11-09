@@ -9,7 +9,7 @@ $scratch=Join-Path $env:TEMP ('CodexKit-220-tests-'+[guid]::NewGuid().ToString('
 $scratch=[IO.Path]::GetFullPath($scratch)
 [void][IO.Directory]::CreateDirectory($scratch)
 $functions=@{}
-foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command')){
+foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Get-ReadOnlyDesktopInfo','Get-ReadOnlyRuntimeModeInfo','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command','Stop-InitializationApps','Get-InitializationPermissions')){
     if(Test-Path ('Function:'+ $name)){$functions[$name]=(Get-Item ('Function:'+$name)).ScriptBlock}
 }
 try {
@@ -202,11 +202,15 @@ try {
     Assert220 ($script:appliedMode -eq 'native') 'Missing standalone component did not fall back to healthy native CLI.'
     Set-Item Function:Initialize-GuardRuntime $realGuardInitializer
     # Initialization orchestration uses only fixture actions; no installs, process stops or live updates.
-    $calls=[Collections.Generic.List[string]]::new();$desktopFails=$false;$switchFails=$false;$finalFails=$false;$baseFails=$false
-    function Assert-DesktopStopped {$calls.Add('preflight');return $before}
+    $calls=[Collections.Generic.List[string]]::new();$desktopFails=$false;$switchFails=$false;$finalFails=$false;$baseFails=$false;$script:fixtureMode='DesktopNative'
+    function Stop-InitializationApps {$calls.Add('preflight')}
+    function Get-InitializationPermissions {return $null}
+    function Assert-DesktopStopped {return $before}
+    function Get-ReadOnlyDesktopInfo {return [pscustomobject]@{InstallLocation='fixture-desktop'}}
+    function Get-ReadOnlyRuntimeModeInfo {$calls.Add('detect');return [pscustomobject]@{Mode=$script:fixtureMode;Detail='fixture unrecognized'}}
     function Invoke-DesktopUpdate {$calls.Add('desktop');if($desktopFails){throw 'network failed'}}
     function Assert-DesktopReady {}
-    function Invoke-InitOperation {param($Action,$PayloadRoot,$Drive,$Port,$Options) $calls.Add('base');if($baseFails){throw 'base failed'};return 0}
+    function Invoke-InitOperation {param($Action,$PayloadRoot,$Drive,$Port,$Options,$PermissionSnapshot) $calls.Add('base');if($baseFails){throw 'base failed'};return 0}
     function Invoke-OfficialCliUpdate {$calls.Add('official');return 0}
     function Invoke-GuardOperation {$calls.Add('guard');return 0}
     function Invoke-BrowserOperation {$calls.Add('browser');return 0}
@@ -215,12 +219,18 @@ try {
     function Set-InitializationCliMode {param($Mode,$PayloadRoot) $calls.Add('cli:'+ $Mode);if($switchFails){throw 'fixture CLI unavailable'};return $Mode}
     function Assert-InitializationCliMode {param($Mode) $calls.Add('verify:'+ $Mode);if($finalFails){throw 'fixture mode changed'};return $Mode}
     $inputData=[pscustomobject]@{PayloadRoot=$PayloadRoot;Drive='D';ProxyPort=10808;Options=(Convert-BackendOptions $null);InstallProtection=$true}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Native CLI was not applied and verified after guard.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Detected native CLI was not applied and verified after guard.'
+    $calls.Clear();$script:fixtureMode='OfficialStandalone'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:official-standalone,browser,verify:official-standalone') 'Detected standalone CLI was not retained after guard.'
+    $calls.Clear();$script:fixtureMode='Unknown';$rejected=$false
+    try{[void](Invoke-Initialize220 $inputData)}catch{$rejected=$_.Exception.Message.Contains('无法识别初始化前的 CLI 模式')}
+    Assert220 ($rejected -and ($calls -join ',') -eq 'preflight,detect') 'Unknown CLI mode did not stop before initialization changes.'
+    $script:fixtureMode='DesktopNative'
     $calls.Clear();$desktopFails=$true;$after.Status='Ok'
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Failed optional update did not continue as partial.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Failed optional update did not continue as partial.'
     $calls.Clear();function Invoke-DesktopUpdate {$calls.Add('desktop');throw (New-DesktopUnsafeError 'restart pending')}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,desktop,base,official,restore') 'Pending desktop did not pause dependent repairs and restore CLI.'
-    $calls.Clear();$inputData.Options.desktopUpdate=$false;$inputData.Options.officialCliUpdate=$false;$inputData.Options.browserRepair=$false;$inputData.InstallProtection=$false
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,restore') 'Pending desktop did not pause dependent repairs and restore CLI.'
+    $calls.Clear();$inputData.Options.desktopUpdate=$false;$inputData.Options.officialCliUpdate=$false;$inputData.Options.browserRepair=$false;$inputData.Options.cliMode='desktop-native';$inputData.InstallProtection=$false
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:desktop-native,verify:desktop-native') 'Native selection required unchecked optional steps.'
     $calls.Clear();$inputData.Options.cliMode='official-standalone'
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,verify:official-standalone') 'Standalone selection required an optional update or guard.'

@@ -23,6 +23,10 @@ $backend = if ([string]::IsNullOrWhiteSpace($testBackendPath)) {
 function Assert([bool]$Condition,[string]$Message) {
     if (-not $Condition) { throw $Message }
 }
+function Read-AdapterWorkRules([string]$Adapter) {
+    $path = Join-Path ([IO.Path]::ChangeExtension($Adapter,'.scripts')) 'work-rules.md'
+    return [IO.File]::ReadAllText($path,[Text.Encoding]::UTF8).Replace("`r`n","`n")
+}
 function HashFile([string]$Path) {
     $sha = [Security.Cryptography.SHA256]::Create()
     $stream = [IO.File]::OpenRead($Path)
@@ -132,6 +136,14 @@ enabled = true
     [IO.File]::Copy($cuaSource,(Join-Path $payload 'cua.cmd'))
     $antiSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\AntiOverDefense.md'}else{Join-Path $sourceRoot 'AntiOverDefense.md'}
     [IO.File]::Copy($antiSource,(Join-Path $payload 'AntiOverDefense.md'))
+    $journalSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\WorkJournal.md'}else{Join-Path $sourceRoot 'WorkJournal.md'}
+    [IO.File]::Copy($journalSource,(Join-Path $payload 'WorkJournal.md'))
+    $commandLineSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\CommandLineFirst.md'}else{Join-Path $sourceRoot 'CommandLineFirst.md'}
+    [IO.File]::Copy($commandLineSource,(Join-Path $payload 'CommandLineFirst.md'))
+    foreach($resource in @('ConfigCompatibility.cs','PermissionSettings.cs')){
+        $resourceSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project ('app\'+$resource)}else{Join-Path $sourceRoot $resource}
+        [IO.File]::Copy($resourceSource,(Join-Path $payload $resource))
+    }
 
     # Job-file parsing accepts the GUI protocol fields and normalizes aliases.
     $jobFile = Join-Path $scratch 'job.json'
@@ -142,10 +154,12 @@ enabled = true
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
     Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'medium' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'medium') 'Default parent and child must be GPT-6.1-SOL MEDIUM.'
-    Assert ($resolved.Options.cliMode -eq 'desktop-native' -and (Convert-BackendOptions @{cliMode='official-standalone'}).cliMode -eq 'official-standalone') 'CLI mode default or explicit selection was lost.'
+    Assert ($resolved.Options.cliMode -eq 'auto' -and (Convert-BackendOptions @{cliMode='official-standalone'}).cliMode -eq 'official-standalone') 'CLI mode default or explicit selection was lost.'
     $rejected=$false;try{Convert-BackendOptions @{cliMode='unknown'}}catch{$rejected=$true};Assert $rejected 'Invalid CLI mode accepted.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ($resolved.Options.antiOverDefense -and -not (Convert-BackendOptions @{antiOverDefense=$false}).antiOverDefense) 'Anti-over-defense default or explicit false was lost.'
+    Assert ($resolved.Options.workJournal -and -not (Convert-BackendOptions @{workJournal=$false}).workJournal) 'Work journal default or explicit false was lost.'
+    Assert ($resolved.Options.commandLineFirst -and -not (Convert-BackendOptions @{commandLineFirst=$false}).commandLineFirst) 'Command-line preference default or explicit false was lost.'
     $antiOptionB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"antiOverDefense":false}'))
     Assert (-not (Convert-BackendOptions $null $antiOptionB64).antiOverDefense) 'Encoded anti-over-defense selection was not preserved.'
     Assert ((Convert-BackendOptions @{proxyHost=''}).proxyHost -eq '127.0.0.1') 'Blank proxy IP did not use localhost.'
@@ -383,10 +397,16 @@ exit /b 0
     $rulesPayloadPattern = '(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$'
     $enabledRulesMatch = [regex]::Match($enabledFeatureText,$rulesPayloadPattern)
     Assert ($enabledRulesMatch.Success) 'Enabled-subagent adapter lost the base work-rules payload.'
-    $enabledRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($enabledRulesMatch.Groups[1].Value))
+    Assert ($enabledRulesMatch.Value.Length -lt 8191) 'Base work-rules line exceeds the Windows command-line limit.'
+    $enabledRules = Read-AdapterWorkRules $enabledFeatureAdapter
     Assert ($enabledRules -match '(?m)^SUBAGENTS\r?$' -and $enabledRules.Contains('并行就并行')) 'Enabled-subagent adapter removed the SUBAGENTS rules section.'
     $antiText=[IO.File]::ReadAllText((Join-Path $payload 'AntiOverDefense.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
     Assert ($enabledRules.Contains($antiText.TrimEnd()) -and ([regex]::Matches($enabledRules,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count -eq 1)) 'Enabled rule payload was missing or duplicated.'
+    $journalText=[IO.File]::ReadAllText((Join-Path $payload 'WorkJournal.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
+    Assert ($enabledRules.Contains($journalText.TrimEnd()) -and ([regex]::Matches($enabledRules,'<!-- BEGIN CODEX WORK JOURNAL RULES -->').Count -eq 1)) 'Enabled work journal rules were missing or duplicated.'
+    $commandLineText=[IO.File]::ReadAllText((Join-Path $payload 'CommandLineFirst.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
+    Assert ($enabledRules.Contains($commandLineText.TrimEnd())) 'Command-line preference rules were missing.'
+    Assert ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($enabledRules)).Length -gt 8191) 'The all-rules fixture no longer exercises oversized batch input.'
     Assert ($antiText.Contains('cc79bd03a407eaabe5a0237274d3cdee25f79156') -and $antiText.Contains('Copyright (c) 2026 Ruofeng Yang') -and $antiText.Contains('THE SOFTWARE IS PROVIDED "AS IS"')) 'HERO source or MIT notice was omitted.'
     Assert (([regex]::Matches($antiText,'(?m)^[1-9]\. ').Count -eq 9) -and $antiText.Contains('对的就说对。不要为了交差硬找问题。') -and -not $antiText.Contains('```')) 'Chinese short rules are incomplete or fenced.'
     $expectedOwnRules=@'
@@ -407,20 +427,21 @@ exit /b 0
 '@
     Assert ($antiText.Contains($expectedOwnRules.Replace("`r`n","`n"))) 'User-provided implementation and delivery rules changed.'
     $antiDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{antiOverDefense=$false;subagents=$false}
-    $antiDisabledText=[IO.File]::ReadAllText($antiDisabledAdapter,$script:InputEncoding)
-    $antiDisabledRulesB64=[regex]::Match($antiDisabledText,$rulesPayloadPattern).Groups[1].Value
-    $antiDisabledRules=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($antiDisabledRulesB64))
+    $antiDisabledRules=Read-AdapterWorkRules $antiDisabledAdapter
     Assert (-not $antiDisabledRules.Contains('ANTI OVERDEFENSE') -and -not $antiDisabledRules.Contains('实现与防御边界')) 'Unchecked anti-over-defense still wrote rules.'
-    Remove-InitAdapter $antiDisabledAdapter
+    $journalDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{workJournal=$false;subagents=$false}
+    $journalDisabledRules=Read-AdapterWorkRules $journalDisabledAdapter
+    Assert (-not $journalDisabledRules.Contains('<!-- BEGIN CODEX WORK JOURNAL RULES -->') -and $journalDisabledRules.Contains($commandLineText.TrimEnd())) 'Unchecked work journal affected selected rules.'
+    $commandLineDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{commandLineFirst=$false;subagents=$false}
+    $commandLineDisabledRules=Read-AdapterWorkRules $commandLineDisabledAdapter
+    Assert (-not $commandLineDisabledRules.Contains('<!-- BEGIN CODEX COMMAND LINE FIRST RULES -->') -and $commandLineDisabledRules.Contains($journalText.TrimEnd())) 'Unchecked command-line preference affected selected rules.'
 
     $featureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
         folderManagement = $false; subagents = $false; cuaRepair = $false
         parentModel = 'vendor/parent:v2'; childModel = 'org/child_1'; parentEffort = 'medium'; childEffort = 'max'
     })
     $featureText = [IO.File]::ReadAllText($featureAdapter,[Text.Encoding]::GetEncoding(936))
-    $disabledRulesMatch = [regex]::Match($featureText,$rulesPayloadPattern)
-    Assert ($disabledRulesMatch.Success) 'Disabled-subagent adapter lost the base work-rules payload.'
-    $disabledRules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($disabledRulesMatch.Groups[1].Value))
+    $disabledRules = Read-AdapterWorkRules $featureAdapter
     Assert ($disabledRules -notmatch '(?m)^SUBAGENTS\r?$' -and -not $disabledRules.Contains('并行就并行')) 'Disabled-subagent adapter still contained the SUBAGENTS rules section.'
     foreach ($requiredRulesHeader in @('<!-- BEGIN CODEX INIT WORK RULES -->','GOAL','AUTONOMY','PRIORITY','STYLE','DONE','APPROVAL','VERIFY')) {
         Assert ($disabledRules.Contains($requiredRulesHeader)) ('Disabled-subagent adapter dropped base work-rules header: ' + $requiredRulesHeader)
@@ -432,11 +453,8 @@ exit /b 0
     Assert ($featureText.Contains('echo multi_agent = false')) 'Disabled subagents did not explicitly disable the multi-agent feature.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING')) 'Selected folder management lost binding verification.'
     Assert ($featureText.Contains('CODEX_GUI_PROXY_DISABLED')) 'Proxy-disabled initialization did not clear the default endpoint.'
-    Remove-InitAdapter $enabledFeatureAdapter
-    Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($enabledFeatureAdapter,'.scripts')))) 'Enabled feature adapter wrappers were not removed.'
     Remove-InitAdapter $featureAdapter
     Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($featureAdapter,'.scripts')))) 'Disabled feature adapter wrappers were not removed.'
-    Remove-Item -LiteralPath (Join-Path $payload '.backend') -Recurse -Force -ErrorAction SilentlyContinue
 
     # Execute the patched GUI entry against a tiny mock batch implementation.
     # This verifies the non-interactive entry branch without touching Codex.
@@ -456,7 +474,7 @@ exit /b 0
     $mockSource = Join-Path $mockRoot 'init.cmd'
     [IO.File]::WriteAllText($mockSource,($mockLines -join [Environment]::NewLine) + [Environment]::NewLine,[Text.Encoding]::GetEncoding(936))
     $mockAdapter = New-InitAdapter $mockSource $mockRoot 'D' 10808 ([ordered]@{
-        folderManagement = $false; subagents = $true; cuaRepair = $false; antiOverDefense = $false
+        folderManagement = $false; subagents = $true; cuaRepair = $false; antiOverDefense = $false; workJournal = $false; commandLineFirst = $false
         parentModel = 'gpt-6.1-sol'; childModel = 'gpt-5.6-luna'; parentEffort = 'medium'; childEffort = 'max'
     })
     $mockOutput = @(& $env:ComSpec /d /c $mockAdapter --codex-gui-action proxy)
@@ -835,20 +853,36 @@ END CODEX LUNA PROMPT V1.3
     # rules. Each initialization gets a new backup session, as in production.
     [IO.File]::WriteAllBytes($backupAgentsPath,[Convert]::FromBase64String($backupAgentsBytesB64))
     $antiSessions=@();$antiIndex=0
-    foreach($selectedRules in @($enabledRulesMatch.Groups[1].Value,$enabledRulesMatch.Groups[1].Value,$antiDisabledRulesB64)){
+    $savedNotes=Join-Path (Split-Path $projectAgentsPath -Parent) '工作记录.md'
+    [IO.File]::WriteAllText($savedNotes,'existing work notes',[Text.Encoding]::UTF8)
+    foreach($selectedAdapter in @($enabledFeatureAdapter,$enabledFeatureAdapter,$antiDisabledAdapter,$journalDisabledAdapter,$commandLineDisabledAdapter)){
+        $selectedText=[IO.File]::ReadAllText($selectedAdapter,$script:InputEncoding)
+        $selectedRebuild=[regex]::Match($selectedText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
+        Assert ($selectedRebuild.Contains('-File "')) 'Adapted work-rules rebuild did not use the private PowerShell writer.'
+        $selectedFixture=$backupFixtureText.Replace([regex]::Replace($rebuildSection,'\r\n|\r|\n',"`r`n"),$selectedRebuild)
+        [IO.File]::WriteAllText($backupFixturePath,$selectedFixture,$script:InputEncoding)
         $antiSession=Join-Path $scratch ('anti-session-'+$antiIndex);$antiSessions+= $antiSession
         $antiBackup=Join-Path $antiSession 'Backups';[void][IO.Directory]::CreateDirectory((Join-Path $antiBackup 'rtk'))
         $beforeAnti=[Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath))
         $antiEnvironment=@{};foreach($key in $backupEnvironment.Keys){$antiEnvironment[$key]=$backupEnvironment[$key]}
-        $antiEnvironment.CODEX_TEST_BACKUP=$antiBackup;$antiEnvironment.CODEX_TEST_RULES_B64=$selectedRules
+        $antiEnvironment.CODEX_TEST_BACKUP=$antiBackup
         $antiResult=Invoke-ChildProcess $backupFixturePath @() $backupFixtureRoot $antiEnvironment $script:InputEncoding
-        Assert ($antiResult.ExitCode -eq 0) 'Selected anti-over-defense rules failed the actual base rebuild.'
+        Assert ($antiResult.ExitCode -eq 0) ('Selected work rules failed the actual base rebuild: ' + $antiResult.Error)
         Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $antiBackup 'AGENTS.md'))) -eq $beforeAnti) 'Selected-rule initialization lost the original AGENTS bytes.'
         $actualAnti=[IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8)
-        Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count) -eq $(if($antiIndex -lt 2){1}else{0})) 'Repeated or unchecked initialization retained an incorrect number of rule blocks.'
+        Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count) -eq $(if($antiIndex -eq 2){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of rule blocks.'
+        Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX WORK JOURNAL RULES -->').Count) -eq $(if($antiIndex -eq 3){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of work journal blocks.'
+        Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX COMMAND LINE FIRST RULES -->').Count) -eq $(if($antiIndex -eq 4){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of command-line preference blocks.'
+        if($antiIndex -ne 3){Assert ($actualAnti.Contains($journalText.TrimEnd())) 'Rebuilt AGENTS did not contain complete work journal rules.'}
+        if($antiIndex -ne 4){Assert ($actualAnti.Contains($commandLineText.TrimEnd())) 'Rebuilt AGENTS did not contain complete command-line preference rules.'}
         if($antiIndex -lt 2){Assert ($actualAnti.Contains($antiText.TrimEnd())) 'Rebuilt AGENTS did not contain the complete anti-over-defense resource.'}
         Assert ((HashFile $projectAgentsPath) -eq $projectAgentsHash) 'Selected-rule initialization changed project instructions.'
+        Assert ([IO.File]::ReadAllText($savedNotes,[Text.Encoding]::UTF8) -eq 'existing work notes') 'Initialization changed existing work notes.'
         $antiIndex++
+    }
+    foreach($selectedAdapter in @($enabledFeatureAdapter,$antiDisabledAdapter,$journalDisabledAdapter,$commandLineDisabledAdapter)){
+        Remove-InitAdapter $selectedAdapter
+        Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($selectedAdapter,'.scripts')))) 'Selected work-rules temporary files were not removed.'
     }
     $rollbackSection=[regex]::Match($originalInitText,'(?ms)^:ROLLBACK_SESSION\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
     $antiRollback=Join-Path $scratch 'anti-rollback.cmd'

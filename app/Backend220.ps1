@@ -343,8 +343,21 @@ function Set-InitializationCliMode {
 }
 function Invoke-Initialize220 {
     param($InputData)
+    Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp)
     [void](Assert-DesktopStopped $InputData.PayloadRoot -AllowOtherChannel)
     $opts=$InputData.Options
+    $permissions=if($opts.inheritPermissions){Get-InitializationPermissions $InputData.PayloadRoot}else{$null}
+    $cliMode=$opts.cliMode
+    if($cliMode -eq 'auto'){
+        $desktop=Get-ReadOnlyDesktopInfo
+        $runtime=Get-ReadOnlyRuntimeModeInfo (Get-GuardInstallRootPath) $desktop.InstallLocation
+        switch($runtime.Mode){
+            'DesktopNative' {$cliMode='desktop-native';$label='桌面版原生 CLI'}
+            'OfficialStandalone' {$cliMode='official-standalone';$label='官方独立 CLI'}
+            default {throw ('无法识别初始化前的 CLI 模式：'+$runtime.Detail+' 请在初始化界面手动选择，或先到维护恢复检查。')}
+        }
+        Write-BackendLine ('初始化前检测到：'+$label+'；本次自动沿用。')
+    }
     $cliSnapshot=Get-InitializationCliSnapshot
     $steps=[Collections.Generic.List[object]]::new()
     if($opts.desktopUpdate){$steps.Add(@{Name='更新桌面版（含原生 CLI）';Kind='desktop'})}
@@ -372,7 +385,7 @@ function Invoke-Initialize220 {
                     'base' {
                         $baseOpts=@{};foreach($key in $opts.Keys){$baseOpts[$key]=$opts[$key]}
                         if(-not $desktopSafe -and $baseOpts.cuaRepair){$baseOpts.cuaRepair=$false;$results.Add(@{name='CUA 检查与修复';state='incomplete';message='桌面更新待完成，已暂停依赖修复'})}
-                        [void](Invoke-InitOperation 'one-click' $InputData.PayloadRoot $InputData.Drive $InputData.ProxyPort $baseOpts)
+                        [void](Invoke-InitOperation 'one-click' $InputData.PayloadRoot $InputData.Drive $InputData.ProxyPort $baseOpts -PermissionSnapshot $permissions)
                         $basePassed=$true
                     }
                     'official' {[void](Invoke-OfficialCliUpdate $InputData.PayloadRoot)}
@@ -380,7 +393,7 @@ function Invoke-Initialize220 {
                     'cli' {
                         if(-not $basePassed){throw '基础初始化未完成，未切换 CLI。'}
                         if(-not $desktopSafe){throw '桌面更新尚未完成，已暂停切换 CLI。'}
-                        $selected=Set-InitializationCliMode $opts.cliMode $InputData.PayloadRoot
+                        $selected=Set-InitializationCliMode $cliMode $InputData.PayloadRoot
                         $cliApplied=$true
                     }
                     'browser' {if(-not $desktopSafe){throw 'Desktop update pending; browser repair paused.'};if((Invoke-BrowserOperation 'repair' $InputData.PayloadRoot $InputData.ProxyPort $opts) -ne 0){throw '浏览器修复未完成，可在浏览器连接页单独重试。'}}
@@ -397,7 +410,7 @@ function Invoke-Initialize220 {
             }
         }
         if($cliApplied){
-            try{$actual=Assert-InitializationCliMode $opts.cliMode;Write-BackendLine ('最终 CLI 模式：'+$actual)}
+            try{$actual=Assert-InitializationCliMode $cliMode;Write-BackendLine ('最终 CLI 模式：'+$actual)}
             catch{
                 $cliResult.state='incomplete';$cliResult.message='最终 CLI 模式核验失败：'+$_.Exception.Message
                 try{Restore-InitializationCliSnapshot $cliSnapshot $InputData.PayloadRoot;$cliResult.message+='；已恢复初始化前的 CLI 路径设置。'}catch{$cliResult.message+='；恢复原 CLI 设置失败：'+$_.Exception.Message}

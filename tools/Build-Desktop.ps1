@@ -21,6 +21,10 @@ $argsList+="/resource:$guard,Payload.guard.cmd"
 $argsList+="/resource:$(Join-Path $scriptRoot 'Codex_CUA_Repair.cmd'),Payload.cua.cmd"
 $argsList+="/resource:$(Join-Path $root 'app\Backend.ps1'),Payload.Backend.ps1"
 $argsList+="/resource:$(Join-Path $root 'app\ConfigCompatibility.cs'),Payload.ConfigCompatibility.cs"
+$argsList+="/resource:$(Join-Path $root 'app\PermissionSettings.cs'),Payload.PermissionSettings.cs"
+$argsList+="/resource:$(Join-Path $root 'app\InitializationPreflight.ps1'),Payload.InitializationPreflight.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\InitializationPreflight.Tests.ps1'),Payload.InitializationPreflight.Tests.ps1"
+$argsList+="/resource:$(Join-Path $root 'tests\PermissionAdapter.Tests.ps1'),Payload.PermissionAdapter.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopBackend.Tests.ps1'),Payload.Backend.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'app\Backend220.ps1'),Payload.Backend220.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\Backend220.Tests.ps1'),Payload.Backend220.Tests.ps1"
@@ -30,6 +34,8 @@ $argsList+="/resource:$(Join-Path $root 'app\DesktopCoreRecovery.ps1'),Payload.D
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopCoreRecovery.Tests.ps1'),Payload.DesktopCoreRecovery.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\RuntimeDiscovery.Tests.ps1'),Payload.RuntimeDiscovery.Tests.ps1"
 $argsList+="/resource:$(Join-Path $root 'app\AntiOverDefense.md'),Payload.AntiOverDefense.md"
+$argsList+="/resource:$(Join-Path $root 'app\WorkJournal.md'),Payload.WorkJournal.md"
+$argsList+="/resource:$(Join-Path $root 'app\CommandLineFirst.md'),Payload.CommandLineFirst.md"
 $argsList+="/resource:$(Join-Path $root 'app\GitHubTransport.cs'),Payload.GitHubTransport.cs"
 $argsList+="/resource:$(Join-Path $root 'app\GitHubDownload.ps1'),Payload.GitHubDownload.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopUpdate225.Tests.ps1'),Payload.DesktopUpdate225.Tests.ps1"
@@ -37,6 +43,7 @@ $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' |
 $argsList+=(Join-Path $root 'tests\DesktopLocalization.Tests.cs')
 $argsList+=(Join-Path $root 'tests\GitHubTransport.Tests.cs')
 $argsList+=(Join-Path $root 'tests\CurrentModelSettings.Tests.cs')
+$argsList+=(Join-Path $root 'tests\PermissionSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }

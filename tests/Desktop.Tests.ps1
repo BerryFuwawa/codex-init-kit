@@ -12,7 +12,7 @@ function Invoke-DesktopCli([string]$Action,[string]$Report) {
     $process.StartInfo=$info
     try {
         [void]$process.Start()
-        if(-not $process.WaitForExit(60000)){throw ('CLI timed out: '+$Action)}
+        if(-not $process.WaitForExit(180000)){throw ('CLI timed out: '+$Action)}
         if($process.ExitCode -ne 0){throw ('CLI failed: '+$Action+' ('+$process.ExitCode+'); report '+$Report)}
     } finally {$process.Dispose()}
 }

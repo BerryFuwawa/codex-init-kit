@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
-  "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.2.8",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.8/CodexInitKit.exe",
-  "sha256": "82a955816f88ebf513791b62982e626e3044cdc206f12053d3705cda68e43986",
-  "notes": "初始化可选择原生或官方独立 CLI，结束后自动返回结果页并显示清晰提示。"
+    "schema_version":  1,
+    "repository":  "BerryFuwawa/codex-init-kit",
+    "version":  "2.2.9",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.9/CodexInitKit.exe",
+    "sha256":  "f24f6903eb7704cb50b4f05b2e94be946cfe40c40608272d9633baadd9d5e21c",
+    "notes":  "新增按需 Markdown 笔记、命令行优先和全局权限继承，默认沿用当前 CLI；初始化前可确认关闭 ChatGPT／Codex。"
 }

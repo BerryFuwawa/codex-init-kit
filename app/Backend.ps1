@@ -27,6 +27,10 @@ $script:DefaultOptions = [ordered]@{
     proxyHost = '127.0.0.1'
     folderManagement = $true
     antiOverDefense = $true
+    workJournal = $true
+    commandLineFirst = $true
+    inheritPermissions = $true
+    allowCloseRunningApp = $false
     memories = $true
     githubMirrorEnabled = $true
     customGithubMirror = ''
@@ -35,7 +39,7 @@ $script:DefaultOptions = [ordered]@{
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
-    cliMode = 'desktop-native'
+    cliMode = 'auto'
     parentModel = 'gpt-6.1-sol'
     childModel = 'gpt-6.1-sol'
     parentEffort = 'medium'
@@ -128,10 +132,11 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','inheritPermissions','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $cliMode=& $get 'cliMode'
     if($null -eq $cliMode){$cliMode=$script:DefaultOptions.cliMode}
-    if($cliMode -isnot [string] -or $cliMode -cnotin @('desktop-native','official-standalone')){throw '请选择有效的 CLI 模式。'}
+    if($cliMode -isnot [string] -or $cliMode -cnotin @('auto','desktop-native','official-standalone')){throw '请选择有效的 CLI 模式。'}
     $normalized.cliMode=$cliMode
     $normalized.githubMirrorEnabled=Convert-BackendOptionBoolean (& $get 'githubMirrorEnabled') 'githubMirrorEnabled' $true
     $customMirror=& $get 'customGithubMirror'
@@ -355,7 +360,7 @@ function Emit-ChildText {
     foreach ($line in ($Text -split "\r?\n")) { if ($line.Length -gt 0) { Write-BackendLine $line } }
 }
 function Set-InitConsoleProtocol {
-    param([Parameter(Mandatory=$true)][string]$SourceText,[Parameter(Mandatory=$true)][string]$ScriptDirectory)
+    param([Parameter(Mandatory=$true)][string]$SourceText,[Parameter(Mandatory=$true)][string]$ScriptDirectory,[string]$WorkRules)
     [void][IO.Directory]::CreateDirectory($ScriptDirectory)
     # Keep the GBK batch source and every nested PowerShell writer on the same
     # byte protocol. Embedded scripts still read/write their data files as UTF-8.
@@ -372,12 +377,19 @@ function Set-InitConsoleProtocol {
         $SourceText = $SourceText.Remove($match.Index,$match.Length).Insert($match.Index,($chunks -join "`r`n") + "`r`n")
     }
     $prefix = "`$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(936); `$OutputEncoding=[Console]::OutputEncoding;`n"
+    $rulesReader = '[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:CODEX_INIT_RULES_B64))'
+    $rulesFileReader = '[IO.File]::ReadAllText((Join-Path $PSScriptRoot ''work-rules.md''),[Text.Encoding]::UTF8)'
+    $rulesWriter = @{Found=$false}
     $evaluator = [Text.RegularExpressions.MatchEvaluator]{
         param($match)
         $flags = $match.Groups[1].Value
         if ($flags -notmatch '(?i)-InputFormat\s+Text') { $flags += '-InputFormat Text ' }
         if ($flags -notmatch '(?i)-OutputFormat\s+Text') { $flags += '-OutputFormat Text ' }
         $code = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($match.Groups[2].Value))
+        if ($WorkRules -and $code.Contains($rulesReader)) {
+            $code = $code.Replace($rulesReader,$rulesFileReader)
+            $rulesWriter.Found = $true
+        }
         # EncodedCommand serializes the information stream to CLIXML on
         # redirected stderr even with OutputFormat Text. A BOM-marked script
         # file uses ordinary text streams and avoids cmd.exe's 8191-byte limit.
@@ -386,6 +398,10 @@ function Set-InitConsoleProtocol {
         return $flags + '-File "' + $path + '"'
     }
     $SourceText = [regex]::Replace($SourceText,'(?i)(powershell\.exe\s+[^\r\n]*?)-EncodedCommand\s+([A-Za-z0-9+/=]+)',$evaluator)
+    if ($WorkRules) {
+        if (-not $rulesWriter.Found) { throw '未找到桌面初始化的规则读取步骤，请重新构建桌面工具。' }
+        [IO.File]::WriteAllText((Join-Path $ScriptDirectory 'work-rules.md'),$WorkRules,$script:Utf8NoBom)
+    }
     return $SourceText.Replace('chcp 65001 >nul','chcp 936 >nul')
 }
 function Invoke-ChildProcess {
@@ -441,7 +457,7 @@ function New-InitAdapter {
     param(
         [Parameter(Mandatory=$true)][string]$SourcePath,[Parameter(Mandatory=$true)][string]$PayloadRoot,
         [AllowNull()][string]$DriveLetter,[Parameter(Mandatory=$true)][int]$ProxyPortValue,
-        [AllowNull()][object]$Options
+        [AllowNull()][object]$Options,[AllowNull()][object]$PermissionSnapshot
     )
     $rawSource = [IO.File]::ReadAllBytes($SourcePath)
     $sourceText = $script:InputEncoding.GetString($rawSource)
@@ -451,17 +467,23 @@ function New-InitAdapter {
     $folderEnabled = [bool]$resolvedOptions.folderManagement
     $subagentsEnabled = [bool]$resolvedOptions.subagents
     $cuaEnabled = [bool]$resolvedOptions.cuaRepair
-    if (-not $subagentsEnabled -or $resolvedOptions.antiOverDefense) {
+    $rules = ''
+    if (-not $subagentsEnabled -or $resolvedOptions.antiOverDefense -or $resolvedOptions.workJournal -or $resolvedOptions.commandLineFirst) {
         $rulesMatch = [regex]::Match($sourceText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
         if (-not $rulesMatch.Success) { throw 'Base work-rules payload is missing.' }
         $rules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesMatch.Groups[1].Value))
         if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
-        if ($resolvedOptions.antiOverDefense) {
-            $antiRules = [IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'AntiOverDefense.md'),[Text.Encoding]::UTF8)
-            $rules = $rules.TrimEnd([char[]]"`r`n") + "`n`n" + $antiRules
+        $optionalRules = [ordered]@{
+            antiOverDefense = 'AntiOverDefense.md'
+            workJournal = 'WorkJournal.md'
+            commandLineFirst = 'CommandLineFirst.md'
         }
-        $replacement = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($rules))
-        $sourceText = $sourceText.Replace($rulesMatch.Groups[1].Value,$replacement)
+        foreach ($name in $optionalRules.Keys) {
+            if ($resolvedOptions[$name]) {
+                $section = [IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot $optionalRules[$name]),[Text.Encoding]::UTF8)
+                $rules = $rules.TrimEnd([char[]]"`r`n") + "`n`n" + $section
+            }
+        }
     }
     $proxyDisabled = ($ProxyPortValue -eq 0)
     $defaultProxyPort = if ($proxyDisabled) { '0' } else { '10808' }
@@ -480,7 +502,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.8')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.9')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -675,7 +697,29 @@ exit /b %errorlevel%
         $sourceText=[regex]::Replace($sourceText,'(?ms)^:STOP_CODEX\r?\n.*?(?=^:[A-Z_]+\r?$)',[Text.RegularExpressions.MatchEvaluator]{param($m) $stopBlock})
         if($sourceText -match '(?i)taskkill\s+/f'){throw 'Unrecognized process termination in init adapter; stopped.'}
     }
-    $sourceText = Set-InitConsoleProtocol $sourceText ([IO.Path]::ChangeExtension($adapterPath,'.scripts'))
+    $scriptDirectory=[IO.Path]::ChangeExtension($adapterPath,'.scripts')
+    $sourceText = Set-InitConsoleProtocol $sourceText $scriptDirectory -WorkRules $rules
+    if($resolvedOptions.inheritPermissions -and $null -ne $PermissionSnapshot){
+        $snapshotPath=Join-Path $scriptDirectory 'permissions.toml'
+        [IO.File]::WriteAllText($snapshotPath,$PermissionSnapshot.Payload,$script:Utf8NoBom)
+        $permissionWriter=Join-Path $scriptDirectory 'permissions.ps1'
+        $writer=@'
+$ErrorActionPreference='Stop'
+Add-Type -Path @('__COMPATIBILITY__','__PERMISSIONS__')
+$saved=[CodexKit.PermissionSettings]::Parse([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'permissions.toml'),[Text.Encoding]::UTF8))
+$path=$env:CONFIG_FILE
+$updated=$saved.Apply([IO.File]::ReadAllText($path,[Text.Encoding]::UTF8))
+[IO.File]::WriteAllText($path,$updated,[Text.UTF8Encoding]::new($false))
+Write-Output ('操作权限继承：'+$saved.Summary)
+'@
+        $writer=$writer.Replace('__COMPATIBILITY__',(Assert-PayloadFile $PayloadRoot 'ConfigCompatibility.cs').Replace("'","''")).Replace('__PERMISSIONS__',(Assert-PayloadFile $PayloadRoot 'PermissionSettings.cs').Replace("'","''"))
+        [IO.File]::WriteAllText($permissionWriter,$writer,[Text.UTF8Encoding]::new($true))
+        $marker=') > "%CONFIG_FILE%"'
+        if(-not $sourceText.Contains($marker)){throw '未找到配置写入步骤，权限继承未执行。'}
+        $command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$permissionWriter+'"'
+        $sourceText=$sourceText.Replace($marker,$marker+"`r`n"+$command+"`r`nif errorlevel 1 exit /b 1")
+        $sourceText=$sourceText.Replace('call :WRITE_CONFIG','call :WRITE_CONFIG'+"`r`nif errorlevel 1 (set `"RESULT=FAIL`" & exit /b 1)")
+    }
     # cmd.exe stores byte offsets when CALL enters a label. Mixed LF/CRLF
     # introduced by PowerShell here-strings can corrupt the return position.
     $sourceText = [regex]::Replace($sourceText, '\r\n|\r|\n', "`r`n")
@@ -796,16 +840,17 @@ function Set-ScopedModelSettings {
 }
 function Invoke-InitOperation {
     param([Parameter(Mandatory=$true)][string]$Action,[Parameter(Mandatory=$true)][string]$PayloadRoot,
-          [string]$DriveLetter,[int]$ProxyPortValue=10808,[AllowNull()][object]$Options)
+          [string]$DriveLetter,[int]$ProxyPortValue=10808,[AllowNull()][object]$Options,[AllowNull()][object]$PermissionSnapshot)
     $init = Assert-PayloadFile $PayloadRoot 'init.cmd'
     $drive = $null
     if ($Action -eq 'one-click') { $drive = Normalize-DriveLetter $DriveLetter }
     $resolvedOptions = Convert-BackendOptions $Options
+    if($Action -eq 'one-click' -and $resolvedOptions.inheritPermissions -and $null -eq $PermissionSnapshot){$PermissionSnapshot=Get-InitializationPermissions $PayloadRoot}
     $envFile = Join-Path (Get-CodexHomePath) '.env'
     $originalEnv = Read-Utf8FileSafe $envFile
     $adapter = $null
     try {
-        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue $resolvedOptions
+        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue $resolvedOptions -PermissionSnapshot $PermissionSnapshot
         if ($Action -eq 'one-click') {
             if ([bool]$resolvedOptions.folderManagement) { Write-BackendProgress 1 5 'Confirm folder-management drive' }
             else { Write-BackendProgress 1 5 'Skip folder-management drive confirmation' }
@@ -1146,9 +1191,7 @@ function Get-ReadOnlyStatus {
     }
 }
 function Initialize-ConfigCompatibility {
-    if (-not ('CodexKit.ConfigCompatibility' -as [type])) {
-        Add-Type -Path (Join-Path $PSScriptRoot 'ConfigCompatibility.cs') -ErrorAction Stop
-    }
+    Import-PermissionSettings $PSScriptRoot
 }
 function Invoke-ConfigCompatibility {
     param([switch]$Clean,[string]$ProjectPath)
@@ -1172,9 +1215,10 @@ function Invoke-BackendMain {
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -notin @('status','config-check','config-cleanup')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
+        if ($input.Operation -notin @('status','initialize-preflight','config-check','config-cleanup')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
+            'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot $input.Options)|ConvertTo-Json -Compress -Depth 8)); return 0 }
             'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }
             'config-cleanup' { return (Invoke-ConfigCompatibility -Clean -ProjectPath $input.Options.projectPath) }
             'initialize' { return (Invoke-Initialize220 $input) }
@@ -1209,6 +1253,7 @@ function Invoke-BackendMain {
     }
 }
 . (Join-Path $PSScriptRoot 'Backend220.ps1')
+. (Join-Path $PSScriptRoot 'InitializationPreflight.ps1')
 . (Join-Path $PSScriptRoot 'DesktopCoreRecovery.ps1')
 
 # Dot-sourcing exposes helpers for adapter tests without starting a worker.

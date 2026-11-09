@@ -14,7 +14,7 @@ $manifest=[ordered]@{
     version=$version
     url=('https://github.com/BerryFuwawa/codex-init-kit/releases/download/v'+$version+'/CodexInitKit.exe')
     sha256=$hash
-    notes='新增默认勾选的防止过度防御：将 HERO 中文精简规则与实现、自主交付边界写入全局 AGENTS.md。'
+    notes='新增按需 Markdown 笔记、命令行优先和全局权限继承，默认沿用当前 CLI；初始化前可确认关闭 ChatGPT／Codex。'
 }
 [IO.File]::WriteAllText((Join-Path $root 'desktop-update.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path (Split-Path $Executable -Parent) 'SHA256SUMS.txt'),($hash+'  CodexInitKit.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))

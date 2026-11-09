@@ -44,7 +44,7 @@ public static class ConfigCompatibility {
         }
     }
     static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
-    static string[] KeyParts(string text) {
+    internal static string[] KeyParts(string text) {
         var parts=new List<string>();int i=0;
         while(i<text.Length) {
             while(i<text.Length&&Char.IsWhiteSpace(text[i]))i++;
@@ -76,7 +76,7 @@ public static class ConfigCompatibility {
         }
         return parts.ToArray();
     }
-    static int EqualSign(string line) {
+    internal static int EqualSign(string line) {
         char quote='\0';bool escape=false;
         for(int i=0;i<line.Length;i++) {
             char c=line[i];
@@ -85,7 +85,7 @@ public static class ConfigCompatibility {
         }
         return -1;
     }
-    static string[] TableParts(string line) {
+    internal static string[] TableParts(string line) {
         if(line.StartsWith("[["))return null;
         char quote='\0';bool escape=false;
         for(int i=1;i<line.Length;i++){
@@ -105,13 +105,13 @@ public static class ConfigCompatibility {
         if(path.SequenceEqual(new[]{"features","guardianv2","thread_context"}))return "features.guardianv2.thread_context";
         return null;
     }
-    static bool Advance(string line,ref char multi,ref int depth) {
+    internal static bool Advance(string line,ref char multi,ref int depth) {
         char quote='\0';bool escape=false;
         for(int i=0;i<line.Length;i++) {
             char c=line[i];bool triple=i+2<line.Length&&line[i+1]==c&&line[i+2]==c;
             if(multi!='\0') {
                 if(c=='\\'&&multi=='"'){i++;continue;}
-                if(c==multi&&triple){multi='\0';i+=2;}continue;
+                if(c==multi&&triple){int end=i+3;while(end<line.Length&&line[end]==c)end++;multi='\0';i=end-1;}continue;
             }
             if(quote!='\0') {if(escape){escape=false;continue;}if(c=='\\'&&quote=='"'){escape=true;continue;}if(c==quote)quote='\0';continue;}
             if(c=='#')break;

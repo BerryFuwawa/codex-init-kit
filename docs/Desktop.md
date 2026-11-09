@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.8
+# Codex Init Kit Desktop 2.2.9
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -40,7 +40,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-当前正式版为 [Codex Init Kit v2.2.8](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.8)，更新内容见 [2.2.8 更新说明](Release-2.2.8.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
+当前公开版本为 [Codex Init Kit v2.2.9](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.9)。改进见 [v2.2.9 更新说明](Release-2.2.9.md)。下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) 即可启动，无需旁置 CMD 或自行编译。环境要求为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1；EXE 尚未做代码签名。
 
 正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
@@ -52,7 +52,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 页面
 
-「初始化」支持代理开关（默认开启，端口 `10808`）、九项可选功能（子代理默认关闭，其余默认开启），以及直接选择模型与思考强度。每次完整初始化都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理、防止过度防御和 Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
+「初始化」支持代理开关（默认开启，端口 `10808`）、十二项可选功能（子代理默认关闭，其余默认开启），以及直接选择模型与思考强度。每次完整初始化默认继承已有全局操作权限，都会先完整备份全局 `CODEX_HOME\AGENTS.md`，再用RTK 引用和基础工作规则重建；文件夹管理、防止过度防御、按需笔记与文档管理、优先使用命令行和 Luna 子代理块只在对应选项勾选时追加。子代理多线程未勾选时会将 `multi_agent` 设为 `false`，并且不写入 Luna 块或基础规则中的 `SUBAGENTS` 段落。旧的全局自定义内容只保存在本次会话备份中，项目目录中的 `AGENTS.md` 不受影响。基础配置仍会备份并重建。第一行填写代理端口，第二行填写 IP，留空使用 "127.0.0.1"。初始化全部成功后会弹出完成提示，点击「确认」关闭。概览会分别显示当前 CLI 模式和启动保护安装状态；模式依据当前启动配置判断，异常覆盖不会直接归类为官方独立 CLI。各选项的作用和填写方法见 [初始化选项](Settings.md)。
 
 确认页会明确提示这是全局重置。原 `AGENTS.md` 的完整副本位于本次初始化会话的 `Backups\AGENTS.md`，由该会话已有的 `Rollback.cmd` 恢复；项目目录中的 `AGENTS.md` 不属于重置范围。
 
@@ -66,13 +66,13 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 | 更新 | 查看版本、点击下载和重启 | 检查 GitHub、下载并校验新 EXE、退出后替换并重启 |
 | 日志 | 默认查看中文说明，按需切换原始输出 | 切换中文／原文、打开日志目录、复制当前日志 |
 
-初始化向导第二步会展示实际工作盘、代理端口、模型和启动保护选择，并在执行前弹出确认；确认内容会说明全局 `CODEX_HOME\AGENTS.md` 将完整备份并重建，旧的全局自定义内容只保留在备份中。修改操作在独立 worker 中运行，页面关闭会被阻止到当前操作结束；管理员授权取消时不会开始执行。
+初始化确认页展示工作盘、代理、模型、CLI 类型、权限继承与功能选择，并说明全局 `CODEX_HOME\AGENTS.md` 将完整备份并重建。点击开始后先检查应用进程；检测到 ChatGPT／Codex 正在运行时，可选择“关闭并继续”或“取消”。关闭会中断当前任务，请先保存工作。修改操作在独立 worker 中运行，关闭工具窗口会被阻止到当前操作结束；管理员授权取消时不会开始执行。
 
 ## 默认值与文件位置
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.8` |
+| 版本 | `2.2.9` |
 | 内嵌初始化组件 | `4.8.6` |
 | 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |
@@ -89,7 +89,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 概览仅在确认当前使用桌面原生 CLI 时显示红色切换引导，状态未知和独立 CLI 模式时隐藏。点击只跳转到维护恢复，滚动定位并柔和闪动切换按钮三次；关闭系统动画时静态高亮。实际点击切换按钮会先检查并按需准备官方独立 CLI。
 
-初始化顺序为：前置退出检查 → 更新桌面版 → 原有配置、目录及 CUA 流程 → 更新独立 CLI → 可选安装保护 → 应用所选 CLI → 浏览器修复。初始化默认选择桌面版原生 CLI；也可选择官方独立 CLI，缺少组件时会按需准备。切换失败时尝试恢复初始化前的用户 CLI 路径设置，并显示实际结果。桌面包更新待完成或需重启时暂停依赖修复和 CLI 切换。
+初始化顺序为：前置退出检查及 CLI 复核 → 更新桌面版 → 原有配置、目录及 CUA 流程 → 更新独立 CLI → 可选安装保护 → 应用所选 CLI → 浏览器修复。初始化默认沿用检测到的桌面原生或官方独立 CLI。手动选择优先，确认页标明选择来源。自动检测无法识别时，请手动选择后再继续。独立组件缺少时会按需准备。切换失败时尝试恢复初始化前的用户 CLI 路径设置，并显示实际结果。桌面包更新待完成或需重启时暂停依赖修复和 CLI 切换。
 
 初始化时可以访问其他页面。完成、部分完成或失败后会自动返回初始化结果页，并显示结果提示；查看完提示后可以切换菜单、阅读日志或重新设置。
 
@@ -164,7 +164,7 @@ Get-Content -Raw $updateReport | ConvertFrom-Json
 
 需要管理员权限的脚本提取到 ProgramData 下使用随机名称和受保护 ACL 的工作目录；仅 Administrators 与 SYSTEM 可读写，执行后清理。普通只读 worker 在 LocalAppData 下执行。日志单独保留。
 
-- 初始化会真实备份并重置当前用户 Codex 配置，开始前必须退出 Codex，检测到进程仍在运行时停止操作，写入 `.env`、全局 `CODEX_HOME\AGENTS.md`、工作目录和用户 PATH。全局规则会从RTK 引用和基础规则重建，只追加本次勾选的文件夹管理、子代理和防止过度防御规则块；旧全局自定义内容只在本次会话 `Backups\AGENTS.md` 中保留，项目目录内的 `AGENTS.md` 不变。开始前保存工作并关闭 Codex。
+- 初始化会备份并重建当前用户 Codex 配置，默认继承已有全局操作权限。开始前保存工作，检测到 ChatGPT／Codex 仍在运行时可确认由工具关闭后继续。初始化写入 `.env`、全局 `CODEX_HOME\AGENTS.md`、工作目录和用户 PATH。全局规则由 RTK 引用、基础工作规则及本次勾选的规则组合生成。原全局自定义内容保存在本次会话的 `Backups\AGENTS.md` 中，供回滚恢复。已有笔记、文档、索引与项目内 `AGENTS.md` 会保留。
 - 初始化回滚只恢复最近一次初始化备份；它不恢复 CUA 运行时备份，也不删除初始化期间已创建的标准工作目录。
 - CUA 修复保留自己的运行时备份。启动保护的安装、更新、切换、回滚和卸载使用保护器自己的状态与备份，不等同于初始化回滚。
 - 更新器只替换当前桌面 EXE，成功后删除旧版；更新清单或下载校验失败时不改动当前版本。脚本独立更新器仍按各自规则保留脚本备份。

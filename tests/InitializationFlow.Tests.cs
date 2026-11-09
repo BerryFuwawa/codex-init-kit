@@ -138,6 +138,92 @@ public static class InitializationFlowTests {
             Assert(presented&&!(bool)Field(window,"busy")&&!File.Exists(logPath),"Authorization cancellation was not reported safely");
         }finally{Set(window,"busy",false);window.Close();SynchronizationContext.SetSynchronizationContext(prior);}
     }
+    static void VerifyCliDetectionFromStatus(){
+        var window=new MainWindow(true){WindowStartupLocation=WindowStartupLocation.Manual,Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
+        var root=Path.Combine(Path.GetTempPath(),"CodexKit-cli-status-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);var path=Path.Combine(root,"status.log");
+        try{
+            Set(window,"lastLog",path);Set(window,"logInputComplete",true);Navigate(window,"初始化");
+            File.WriteAllText(path,"@@STATUS@@{\"runtimeMode\":\"OfficialStandalone\"}\r\n",new UTF8Encoding(false));Call(window,"ReadLog");
+            var native=(RadioButton)Field(window,"cliNative");var standalone=(RadioButton)Field(window,"cliStandalone");
+            Assert(standalone.IsChecked==true&&native.IsChecked!=true&&Convert.ToString(((Dictionary<string,object>)Call(window,"Options"))["cliMode"])=="auto","Status output did not select the existing standalone CLI");
+            native.IsChecked=true;File.WriteAllText(path,"@@STATUS@@{\"runtimeMode\":\"DesktopNative\"}\r\n",new UTF8Encoding(false));Call(window,"ReadLog");
+            File.WriteAllText(path,"@@STATUS@@{\"runtimeMode\":\"OfficialStandalone\"}\r\n",new UTF8Encoding(false));Call(window,"ReadLog");
+            Assert(native.IsChecked==true&&Convert.ToString(((Dictionary<string,object>)Call(window,"Options"))["cliMode"])=="desktop-native","A late status result replaced the manual CLI choice");
+            File.WriteAllText(path,"@@STATUS@@{\"runtimeMode\":\"Unknown\"}\r\n",new UTF8Encoding(false));Call(window,"ReadLog");Call(window,"ResetCliChoice");
+            Assert(native.IsChecked!=true&&standalone.IsChecked!=true,"Unknown CLI mode selected a default");
+            bool blocked=false;try{Call(window,"RequireCliChoice");}catch(TargetInvocationException ex){blocked=ex.InnerException is InvalidOperationException;}
+            Assert(blocked,"Unknown CLI mode allowed initialization to proceed automatically");
+        }finally{Set(window,"busy",false);window.Close();Directory.Delete(root,true);}
+    }
+    static void Pump(Task task) {
+        var watch=Stopwatch.StartNew();
+        while(!task.IsCompleted){
+            if(watch.Elapsed.TotalSeconds>15)throw new TimeoutException("Preflight UI did not complete");
+            var frame=new DispatcherFrame();Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background,new Action(()=>frame.Continue=false));Dispatcher.PushFrame(frame);Thread.Sleep(10);
+        }
+        task.GetAwaiter().GetResult();
+    }
+    static bool? AppCloseDialog(Window dialog,bool accept) {
+        dialog.WindowStartupLocation=WindowStartupLocation.Manual;dialog.Left=-20000;dialog.Top=-20000;dialog.Opacity=0;
+        Exception error=null;
+        dialog.Loaded+=(s,e)=>dialog.Dispatcher.BeginInvoke(new Action(()=>{
+            try {
+                var panel=(StackPanel)dialog.Content;var buttons=panel.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+                var cancel=buttons.Single(b=>Convert.ToString(b.Content)=="取消");
+                Assert(cancel.IsDefault&&cancel.IsCancel,"Application closure did not default to cancellation");
+                Assert(panel.Children.OfType<TextBlock>().Any(t=>t.Text.Contains("请先保存工作")&&t.ActualHeight>0),"Application closure did not show the interruption warning");
+                Click(accept?buttons.Single(b=>Convert.ToString(b.Content)=="关闭并继续"):cancel);
+            }catch(Exception ex){error=ex;dialog.Close();}
+        }));
+        var result=dialog.ShowDialog();if(error!=null)throw error;return result;
+    }
+    internal static IEnumerable<T> Descendants<T>(DependencyObject root) where T:DependencyObject {
+        foreach(var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>()){
+            var match=child as T;if(match!=null)yield return match;
+            foreach(var nested in Descendants<T>(child))yield return nested;
+        }
+    }
+    static void VerifyInitializationGroups() {
+        var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
+        try {
+            Navigate(window,"初始化");window.UpdateLayout();
+            var content=(StackPanel)Field(window,"content");var features=(StackPanel)((Border)content.Children[1]).Child;
+            var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
+            foreach(var title in new[]{"工作与规则","权限与记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
+            var choices=Descendants<CheckBox>(features).ToArray();
+            Assert(choices.Length==12&&choices.Distinct().Count()==12&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
+            var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
+            Assert(journal.IsChecked==false&&(bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"],"Grouping or navigation reset feature choices");
+            foreach(var width in new[]{1000.0,1120.0}){window.Width=width;window.UpdateLayout();Assert(choices.All(c=>c.ActualWidth>0&&c.ActualHeight>0),"Grouped feature control was hidden at supported window width");}
+        }finally{window.Close();}
+    }
+    static void VerifyPreflight(bool running,bool accept,bool fail) {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
+        var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
+        var root=Path.Combine(Path.GetTempPath(),"CodexKit-preflight-ui-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+        try {
+            var permission=(CheckBox)Field(window,"inheritPermissions");Assert(permission.IsChecked==true,"Permission inheritance was not enabled by default");
+            permission.IsChecked=false;Assert(!(bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"]&&Convert.ToString(Call(window,"InitSummary")).Contains("未启用，使用初始化模板"),"Unchecked permissions were inherited");permission.IsChecked=true;
+            var response=new TaskCompletionSource<Dictionary<string,object>>();int checks=0,dialogs=0,workers=0;
+            window.InitializationPreflight=()=>{checks++;return response.Task;};
+            window.PresentAppCloseDialog=dialog=>{dialogs++;return AppCloseDialog(dialog,accept);};
+            window.OperationLogPath=id=>Path.Combine(root,"init.log");
+            window.StartOperation=(op,id,drive,port,guard,options)=>{
+                Assert(op=="initialize"&&(bool)options["allowCloseRunningApp"]==(running&&accept),"One-time close authorization was missing or persisted incorrectly");workers++;
+                return Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"),"/d /c exit 0"){UseShellExecute=false,CreateNoWindow=true});
+            };
+            Set(window,"wizard",1);Navigate(window,"初始化");
+            var task=(Task)Call(window,"BeginInitialization");Pump((Task)Call(window,"BeginInitialization"));
+            Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");Navigate(window,"概览");
+            if(fail)response.SetException(new InvalidDataException("fixture permission read failure"));
+            else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123}}}:new object[0]}});
+            Pump(task);
+            bool started=!fail&&(!running||accept);
+            Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");
+            Assert(!(bool)Field(window,"busy")&&Convert.ToString(Field(window,"page"))=="初始化"&&(int)Field(window,"wizard")== (started?2:1),"Preflight did not restore the correct initialization page");
+            Assert((bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"]&&!((Dictionary<string,object>)Call(window,"Options")).ContainsKey("allowCloseRunningApp"),"Preflight changed checkbox state or kept closure consent");
+        }finally{Set(window,"busy",false);window.Close();Directory.Delete(root,true);SynchronizationContext.SetSynchronizationContext(previous);}
+    }
     public static void Run(){
         OverviewDuringInitialization();ReturnAfterInitialization();
         VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","基础配置和所选功能已完成");
@@ -145,7 +231,9 @@ public static class InitializationFlowTests {
         VerifyOutcome(2,"更新","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
         VerifyOutcome(1,"维护恢复",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
-        VerifyReadingPosition();VerifyAuthorizationCancellation();
+        VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
+        VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
+        VerifyInitializationGroups();
     }
 }
 }

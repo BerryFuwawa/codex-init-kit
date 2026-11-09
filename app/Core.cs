@@ -16,12 +16,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.8";
+    public const string Version = "2.2.9";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize","proxy","init-rollback","rollback-selected","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -45,7 +45,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","PermissionSettings.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","PermissionAdapter.Tests.ps1","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -53,7 +53,7 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
+    public static bool NeedsAdmin(string operation) { return operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
 
     public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
         const string family="OpenAI.Codex_2p2nqsd0c76g0";
@@ -65,10 +65,10 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"inheritPermissions",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
-            {"proxyHost", DefaultProxyHost}, {"cliMode","desktop-native"}
+            {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
         };
     }
     static bool ReadOptionBoolean(Dictionary<string,object> source,string key,bool fallback) {
@@ -105,6 +105,10 @@ public static class Core {
         if(source==null) return normalized;
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
         normalized["antiOverDefense"]=ReadOptionBoolean(source,"antiOverDefense",true);
+        normalized["workJournal"]=ReadOptionBoolean(source,"workJournal",true);
+        normalized["commandLineFirst"]=ReadOptionBoolean(source,"commandLineFirst",true);
+        normalized["inheritPermissions"]=ReadOptionBoolean(source,"inheritPermissions",true);
+        normalized["allowCloseRunningApp"]=ReadOptionBoolean(source,"allowCloseRunningApp",false);
         normalized["memories"]=ReadOptionBoolean(source,"memories",true);
         normalized["githubMirrorEnabled"]=ReadOptionBoolean(source,"githubMirrorEnabled",true);
         object customMirror;
@@ -115,8 +119,8 @@ public static class Core {
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
-        var cliMode=ReadOptionString(source,"cliMode","desktop-native");
-        if(cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
+        var cliMode=ReadOptionString(source,"cliMode","auto");
+        if(cliMode!="auto"&&cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
         normalized["cliMode"]=cliMode;
         normalized["parentModel"]=ReadOptionString(source,"parentModel",DefaultParentModel);
         normalized["childModel"]=ReadOptionString(source,"childModel",DefaultChildModel);

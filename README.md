@@ -22,7 +22,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.2.8.md">v2.2.8</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.9.md">v2.2.9</a></sub></p>
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
@@ -40,6 +40,9 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **🛡️ Codex 防御性太强，总是重复校验、添加不必要的保护？** | 初始化时勾选默认开启的「防止过度防御」，将 HERO 精简规则和防御边界写入全局 `AGENTS.md`。[查看规则说明](docs/AntiOverDefense.md) |
 | **🗂️ Codex 的对话工作文件、项目和交付物总是乱放？** | 初始化时勾选默认开启的「文件夹管理」，创建按用途分类的目录，约定无项目任务的存放位置；已有文件不会自动搬移。[查看初始化选项](docs/Settings.md#可选功能) |
 | **💬 Codex 总是啰嗦、反复确认，不按你的要求推进？** | 初始化写入基础工作规则；勾选「防止过度防御」后还会加入自主推进与交付规则，引导它明确目标、简洁沟通，在常规决策中继续工作。[查看规则说明](docs/AntiOverDefense.md) |
+| **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
+| **⌨️ 能用命令完成，却经常要你配合点界面？** | v2.2.9 的「优先使用命令行」引导 Codex 在授权范围内用 CLI 或 PowerShell 直接执行并核验。[查看初始化选项](docs/Settings.md#优先使用命令行) |
+| **🔐 初始化后还想沿用原来的操作权限？** | 默认勾选「操作权限继承」，保留全局审批、沙箱、文件与网络权限。[查看权限继承](docs/Settings.md#操作权限继承) |
 
 组件检查通过或补丁准备完成，只说明对应检查或准备步骤成功。浏览器需要重启 Codex 后实际打开并读取测试页面；账号权限、服务端和代理服务本身的问题也需分别排查。本版本开发时未完成真实 Chrome 连接验收，使用后请按步骤自行验证。[查看验证边界](docs/BrowserConnection.md#本次验证边界)
 
@@ -60,7 +63,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 1. **下载并启动**：下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)，双击打开。所需脚本已包含在 EXE 中。
 2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「浏览器连接」或「维护恢复」。
-3. **需要初始化时**：保存工作并退出 Codex，选择工作盘、代理和功能；在确认页核对模型及 CLI 模式后执行。默认使用桌面版原生 CLI，也可选择官方独立 CLI。
+3. **需要初始化时**：保存工作并退出 Codex，选择工作盘、代理和功能，在确认页核对模型及 CLI 模式后执行。v2.2.9 默认沿用检测到的 CLI 类型，也可手动选择。
 
 初始化完成后会显示实际结果。部分步骤未完成时，可查看中文日志和具体项目，再单独重试。
 
@@ -122,7 +125,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ### 初始化默认使用什么模型和 CLI？
 
-父模型和子代理模型默认继承已有全局设置；未设置时使用 `gpt-6.1-sol / medium`。子代理默认关闭，模型实际可用性取决于账号和环境。CLI 默认选择桌面版原生 CLI，也可选择官方独立 CLI；确认页会显示本次选择。[查看模型和 CLI 选项](docs/Settings.md)
+父模型和子代理模型默认继承已有全局设置，未设置时使用 `gpt-6.1-sol / medium`。子代理默认关闭，模型实际可用性取决于账号和环境。v2.2.9 默认沿用检测到的桌面原生或官方独立 CLI，确认页会显示选择来源。[查看模型和 CLI 选项](docs/Settings.md)
 
 ### 下载很慢或更新失败怎么办？
 
@@ -130,7 +133,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ## 文档与反馈
 
-- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [版本更新说明](docs/Release-2.2.8.md)
+- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.9 更新说明](docs/Release-2.2.9.md)
 - [浏览器连接与 Chrome 验证](docs/BrowserConnection.md) · [桌面启动故障处理](docs/DesktopStartupRecovery.md) · [配置兼容检查](docs/ConfigCompatibility.md)
 - [中文与原始日志](docs/Logs.md) · [GitHub 下载加速](docs/GitHubMirrors.md) · [防止过度防御](docs/AntiOverDefense.md)
 
