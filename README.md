@@ -22,7 +22,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.10.md">v2.2.10</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.11.md">v2.2.11</a></sub></p>
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
@@ -42,7 +42,6 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **💬 Codex 总是啰嗦、反复确认，不按你的要求推进？** | 初始化写入基础工作规则；勾选「防止过度防御」后还会加入自主推进与交付规则，引导它明确目标、简洁沟通，在常规决策中继续工作。[查看规则说明](docs/AntiOverDefense.md) |
 | **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
 | **⌨️ 能用命令完成，却经常要你配合点界面？** | v2.2.9 的「优先使用命令行」引导 Codex 在授权范围内用 CLI 或 PowerShell 直接执行并核验。[查看初始化选项](docs/Settings.md#优先使用命令行) |
-| **🔐 初始化后还想沿用原来的操作权限？** | 默认勾选「操作权限继承」，保留全局审批、沙箱、文件与网络权限。[查看权限继承](docs/Settings.md#操作权限继承) |
 
 组件检查通过或补丁准备完成，只说明对应检查或准备步骤成功。浏览器需要重启 Codex 后实际打开并读取测试页面；账号权限、服务端和代理服务本身的问题也需分别排查。本版本开发时未完成真实 Chrome 连接验收，使用后请按步骤自行验证。[查看验证边界](docs/BrowserConnection.md#本次验证边界)
 
@@ -133,7 +132,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ## 文档与反馈
 
-- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.10 更新说明](docs/Release-2.2.10.md) · [v2.2.9 更新说明](docs/Release-2.2.9.md)
+- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.11 更新说明](docs/Release-2.2.11.md) · [v2.2.10 更新说明](docs/Release-2.2.10.md)
 - [浏览器连接与 Chrome 验证](docs/BrowserConnection.md) · [桌面启动故障处理](docs/DesktopStartupRecovery.md) · [配置兼容检查](docs/ConfigCompatibility.md)
 - [中文与原始日志](docs/Logs.md) · [GitHub 下载加速](docs/GitHubMirrors.md) · [防止过度防御](docs/AntiOverDefense.md)
 

@@ -140,7 +140,7 @@ enabled = true
     [IO.File]::Copy($journalSource,(Join-Path $payload 'WorkJournal.md'))
     $commandLineSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\CommandLineFirst.md'}else{Join-Path $sourceRoot 'CommandLineFirst.md'}
     [IO.File]::Copy($commandLineSource,(Join-Path $payload 'CommandLineFirst.md'))
-    foreach($resource in @('ConfigCompatibility.cs','PermissionSettings.cs','RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
+    foreach($resource in @('ConfigCompatibility.cs','RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
         $resourceSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project ('app\'+$resource)}else{Join-Path $sourceRoot $resource}
         [IO.File]::Copy($resourceSource,(Join-Path $payload $resource))
     }
@@ -906,6 +906,31 @@ END CODEX LUNA PROMPT V1.3
         Assert ([IO.File]::ReadAllText($savedNotes,[Text.Encoding]::UTF8) -eq 'existing work notes') 'Initialization changed existing work notes.'
         $antiIndex++
     }
+    $rtkDocumentCheck=[regex]::Match($enabledFeatureText,'(?ms)^set "RTK_DOC_RESULT=FAIL"\r?\n(?=if exist "%RTK_FILE%" if exist "%AGENTS_FILE%").*?(?=^rem Optional rules)').Value
+    Assert ($rtkDocumentCheck.Length -gt 0) 'Final initialization RTK document check was not found.'
+    $rtkDocumentFixture=Join-Path $scratch 'rtk-document-check.cmd'
+    $rtkDocumentCommands=@(
+        '@echo off','chcp 936 >nul','setlocal EnableDelayedExpansion',
+        'set "AGENTS_FILE=%CODEX_TEST_AGENTS%"','set "RTK_FILE=%CODEX_TEST_RTK%"',
+        $rtkDocumentCheck,'if "!RTK_DOC_RESULT!"=="PASS" exit /b 0','exit /b 1'
+    ) -join "`r`n"
+    [IO.File]::WriteAllText($rtkDocumentFixture,[regex]::Replace($rtkDocumentCommands,'\r\n|\r|\n',"`r`n"),$script:InputEncoding)
+    $docAgentsPath=Join-Path $scratch 'rtk-document-agents.md'
+    $docEnvironment=@{CODEX_TEST_AGENTS=$docAgentsPath;CODEX_TEST_RTK=$backupRtkPath}
+    foreach($fixture in @(
+        @{Name='rebuilt inline rules';Text=$actualAnti;Expected=0},
+        @{Name='Windows line endings';Text=$actualAnti.Replace("`n","`r`n");Expected=0},
+        @{Name='old external reference';Text='@'+$backupRtkPath;Expected=1},
+        @{Name='truncated inline rules';Text="# RTK`n`n"+$baselineRules;Expected=1}
+    )){
+        [IO.File]::WriteAllText($docAgentsPath,$fixture.Text,$script:Utf8NoBom)
+        $checked=Invoke-ChildProcess $rtkDocumentFixture @() $scratch $docEnvironment $script:InputEncoding
+        Assert ($checked.ExitCode -eq $fixture.Expected) ('Final RTK document validation failed for '+$fixture.Name+': '+$checked.Output+' '+$checked.Error)
+        if($fixture.Expected -ne 0){Assert ($checked.Output.Contains('RTK 文档校验失败')) 'RTK document validation hid the failed check.'}
+    }
+    [IO.File]::WriteAllText($docAgentsPath,$actualAnti,$script:Utf8NoBom)
+    $docEnvironment.CODEX_TEST_RTK=Join-Path $scratch 'missing-rtk.md'
+    Assert ((Invoke-ChildProcess $rtkDocumentFixture @() $scratch $docEnvironment $script:InputEncoding).ExitCode -eq 1) 'Final RTK document validation accepted missing RTK.md.'
     foreach($selectedAdapter in @($enabledFeatureAdapter,$antiDisabledAdapter,$journalDisabledAdapter,$commandLineDisabledAdapter)){
         Remove-InitAdapter $selectedAdapter
         Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($selectedAdapter,'.scripts')))) 'Selected work-rules temporary files were not removed.'

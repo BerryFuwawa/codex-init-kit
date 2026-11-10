@@ -189,11 +189,11 @@ public static class InitializationFlowTests {
             Navigate(window,"初始化");window.UpdateLayout();
             var content=(StackPanel)Field(window,"content");var features=(StackPanel)((Border)content.Children[1]).Child;
             var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
-            foreach(var title in new[]{"工作与规则","权限与记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
+            foreach(var title in new[]{"工作与规则","记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
             var choices=Descendants<CheckBox>(features).ToArray();
-            Assert(choices.Length==12&&choices.Distinct().Count()==12&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.Length==11&&choices.Distinct().Count()==11&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
             var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
-            Assert(journal.IsChecked==false&&(bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"],"Grouping or navigation reset feature choices");
+            Assert(journal.IsChecked==false&&(bool)((Dictionary<string,object>)Call(window,"Options"))["memories"],"Grouping or navigation reset feature choices");
             foreach(var width in new[]{1000.0,1120.0}){window.Width=width;window.UpdateLayout();Assert(choices.All(c=>c.ActualWidth>0&&c.ActualHeight>0),"Grouped feature control was hidden at supported window width");}
         }finally{window.Close();}
     }
@@ -202,8 +202,7 @@ public static class InitializationFlowTests {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
         var root=Path.Combine(Path.GetTempPath(),"CodexKit-preflight-ui-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try {
-            var permission=(CheckBox)Field(window,"inheritPermissions");Assert(permission.IsChecked==true,"Permission inheritance was not enabled by default");
-            permission.IsChecked=false;Assert(!(bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"]&&Convert.ToString(Call(window,"InitSummary")).Contains("未启用，使用初始化模板"),"Unchecked permissions were inherited");permission.IsChecked=true;
+            Assert(Convert.ToString(Call(window,"InitSummary")).Contains("审批与沙箱使用 Codex 默认设置"),"Confirmation did not explain the default permissions");
             var response=new TaskCompletionSource<Dictionary<string,object>>();int checks=0,dialogs=0,workers=0;
             window.InitializationPreflight=()=>{checks++;return response.Task;};
             window.PresentAppCloseDialog=dialog=>{dialogs++;return AppCloseDialog(dialog,accept);};
@@ -222,7 +221,7 @@ public static class InitializationFlowTests {
             bool started=!fail&&(!running||accept);
             Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");
             Assert(!(bool)Field(window,"busy")&&Convert.ToString(Field(window,"page"))=="初始化"&&(int)Field(window,"wizard")== (started?2:1),"Preflight did not restore the correct initialization page");
-            Assert((bool)((Dictionary<string,object>)Call(window,"Options"))["inheritPermissions"]&&!((Dictionary<string,object>)Call(window,"Options")).ContainsKey("allowCloseRunningApp"),"Preflight changed checkbox state or kept closure consent");
+            Assert(!((Dictionary<string,object>)Call(window,"Options")).ContainsKey("allowCloseRunningApp"),"Preflight kept closure consent");
         }finally{Set(window,"busy",false);window.Close();Directory.Delete(root,true);SynchronizationContext.SetSynchronizationContext(previous);}
     }
     public static void Run(){

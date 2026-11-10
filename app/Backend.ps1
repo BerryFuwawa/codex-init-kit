@@ -29,7 +29,6 @@ $script:DefaultOptions = [ordered]@{
     antiOverDefense = $true
     workJournal = $true
     commandLineFirst = $true
-    inheritPermissions = $true
     allowCloseRunningApp = $false
     memories = $true
     githubMirrorEnabled = $true
@@ -132,7 +131,7 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','inheritPermissions','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $approvedProcesses=& $get 'closeApprovedProcesses'
     if($null -ne $approvedProcesses){
@@ -607,7 +606,7 @@ function New-InitAdapter {
     param(
         [Parameter(Mandatory=$true)][string]$SourcePath,[Parameter(Mandatory=$true)][string]$PayloadRoot,
         [AllowNull()][string]$DriveLetter,[Parameter(Mandatory=$true)][int]$ProxyPortValue,
-        [AllowNull()][object]$Options,[AllowNull()][object]$PermissionSnapshot
+        [AllowNull()][object]$Options
     )
     $rawSource = [IO.File]::ReadAllBytes($SourcePath)
     $sourceText = $script:InputEncoding.GetString($rawSource)
@@ -623,8 +622,8 @@ function New-InitAdapter {
     if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
     $headings=[ordered]@{GOAL='目标';AUTONOMY='自主推进';PRIORITY='指令优先级';STYLE='表达风格';DONE='完成条件';APPROVAL='授权';VERIFY='验证';SUBAGENTS='子代理'}
     foreach($key in $headings.Keys){$rules=[regex]::Replace($rules,('(?m)^'+$key+'(?=\r?$)'),$headings[$key])}
-    $rtkRules=[IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'RtkRules.md'),[Text.Encoding]::UTF8)
-    $rules=$rtkRules.Replace("`r`n","`n").TrimEnd()+"`n`n"+$rules
+    $rtkRules=[IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'RtkRules.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n").TrimEnd()
+    $rules=$rtkRules+"`n`n"+$rules
     $optionalRules = [ordered]@{
         antiOverDefense = 'AntiOverDefense.md'
         workJournal = 'WorkJournal.md'
@@ -653,7 +652,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.10')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.11')
     $sourceText = $sourceText.Replace('Configured Codex workspace root: !EXPECTED_CODEX_ROOT!','!EXPECTED_CODEX_ROOT!')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
@@ -829,6 +828,31 @@ exit /b %errorlevel%
     $sourceText=[regex]::Replace($sourceText,'(?ms)^:DOWNLOAD_FILE\r?\n.*?(?=^:[A-Z_]+\r?$)',$downloadBlock)
     $sourceText=[regex]::Replace($sourceText,'(?ms)(^call :DOWNLOAD_FILE "%RTK_RELEASE_URL%" "%RTK_ZIP%"\r?\nif errorlevel 1 \(.*?^\)\r?\n)(\r?\n)?(call :DOWNLOAD_FILE "%RTK_CHECKSUM_URL%" "%RTK_CHECKSUMS%"\r?\nif errorlevel 1 \(.*?^\)\r?\n)','$3$2$1')
     $sourceText=$sourceText.Replace('call :VERIFY_RTK_ZIP','ver >nul')
+    # The desktop writer embeds RTK instructions before this final check.
+    # Keep the standalone script's reference-based verification intact.
+    if($sourceText -match '(?m)^:VERIFY_FULL\r?$'){
+        $rtkDocumentPattern='(?ms)^set "RTK_DOC_RESULT=FAIL"\r?\n(?=if exist "%RTK_FILE%" if exist "%AGENTS_FILE%").*?(?=^rem Optional rules)'
+        if($sourceText -notmatch $rtkDocumentPattern){throw '找不到初始化末尾的 RTK 文档校验。'}
+        $check=@'
+$expected=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__RTK_RULES__'))
+$text=[IO.File]::ReadAllText($env:CODEX_INIT_AGENTS_FILE,[Text.Encoding]::UTF8).Replace("`r`n","`n")
+if($text.StartsWith($expected+"`n`n",[StringComparison]::Ordinal)){exit 0}
+exit 1
+'@
+        $check=$check.Replace('__RTK_RULES__',[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($rtkRules)))
+        $encodedCheck=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($check))
+        $rtkDocumentBlock=@"
+set "RTK_DOC_RESULT=FAIL"
+if exist "%RTK_FILE%" if exist "%AGENTS_FILE%" (
+    set "CODEX_INIT_AGENTS_FILE=%AGENTS_FILE%"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCheck
+    if not errorlevel 1 set "RTK_DOC_RESULT=PASS"
+    set "CODEX_INIT_AGENTS_FILE="
+)
+if not "!RTK_DOC_RESULT!"=="PASS" echo RTK 文档校验失败：RTK.md 不存在或 AGENTS.md 中的内联规则不完整。
+"@
+        $sourceText=[regex]::Replace($sourceText,$rtkDocumentPattern,[Text.RegularExpressions.MatchEvaluator]{param($m) $rtkDocumentBlock+"`r`n"})
+    }
     # Use the same managed-patch-aware CUA library in the GUI's original
     # five-stage script. The standalone legacy init component stays unchanged.
     if ($sourceText -match '(?m)^::CUAB64:') {
@@ -884,27 +908,6 @@ if exist "%SESSION_DIR%\Backups\hero-license-managed.txt" (
 )
 '@
     $sourceText=$sourceText.Replace('if "!RESTORE_RTK!"=="1" (',$restoreLicense.TrimEnd()+"`r`n"+'if "!RESTORE_RTK!"=="1" (')
-    if($resolvedOptions.inheritPermissions -and $null -ne $PermissionSnapshot){
-        $snapshotPath=Join-Path $scriptDirectory 'permissions.toml'
-        [IO.File]::WriteAllText($snapshotPath,$PermissionSnapshot.Payload,$script:Utf8NoBom)
-        $permissionWriter=Join-Path $scriptDirectory 'permissions.ps1'
-        $writer=@'
-$ErrorActionPreference='Stop'
-Add-Type -Path @('__COMPATIBILITY__','__PERMISSIONS__')
-$saved=[CodexKit.PermissionSettings]::Parse([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'permissions.toml'),[Text.Encoding]::UTF8))
-$path=$env:CONFIG_FILE
-$updated=$saved.Apply([IO.File]::ReadAllText($path,[Text.Encoding]::UTF8))
-[IO.File]::WriteAllText($path,$updated,[Text.UTF8Encoding]::new($false))
-Write-Output ('操作权限继承：'+$saved.Summary)
-'@
-        $writer=$writer.Replace('__COMPATIBILITY__',(Assert-PayloadFile $PayloadRoot 'ConfigCompatibility.cs').Replace("'","''")).Replace('__PERMISSIONS__',(Assert-PayloadFile $PayloadRoot 'PermissionSettings.cs').Replace("'","''"))
-        [IO.File]::WriteAllText($permissionWriter,$writer,[Text.UTF8Encoding]::new($true))
-        $marker=') > "%CONFIG_FILE%"'
-        if(-not $sourceText.Contains($marker)){throw '未找到配置写入步骤，权限继承未执行。'}
-        $command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$permissionWriter+'"'
-        $sourceText=$sourceText.Replace($marker,$marker+"`r`n"+$command+"`r`nif errorlevel 1 exit /b 1")
-        $sourceText=$sourceText.Replace('call :WRITE_CONFIG','call :WRITE_CONFIG'+"`r`nif errorlevel 1 (set `"RESULT=FAIL`" & exit /b 1)")
-    }
     # cmd.exe stores byte offsets when CALL enters a label. Mixed LF/CRLF
     # introduced by PowerShell here-strings can corrupt the return position.
     $sourceText = [regex]::Replace($sourceText, '\r\n|\r|\n', "`r`n")
@@ -1025,17 +1028,16 @@ function Set-ScopedModelSettings {
 }
 function Invoke-InitOperation {
     param([Parameter(Mandatory=$true)][string]$Action,[Parameter(Mandatory=$true)][string]$PayloadRoot,
-          [string]$DriveLetter,[int]$ProxyPortValue=10808,[AllowNull()][object]$Options,[AllowNull()][object]$PermissionSnapshot)
+          [string]$DriveLetter,[int]$ProxyPortValue=10808,[AllowNull()][object]$Options)
     $init = Assert-PayloadFile $PayloadRoot 'init.cmd'
     $drive = $null
     if ($Action -eq 'one-click') { $drive = Normalize-DriveLetter $DriveLetter }
     $resolvedOptions = Convert-BackendOptions $Options
-    if($Action -eq 'one-click' -and $resolvedOptions.inheritPermissions -and $null -eq $PermissionSnapshot){$PermissionSnapshot=Get-InitializationPermissions $PayloadRoot}
     $envFile = Join-Path (Get-CodexHomePath) '.env'
     $originalEnv = Read-Utf8FileSafe $envFile
     $adapter = $null
     try {
-        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue $resolvedOptions -PermissionSnapshot $PermissionSnapshot
+        $adapter = New-InitAdapter $init $PayloadRoot $drive $ProxyPortValue $resolvedOptions
         if ($Action -eq 'one-click') {
             if ([bool]$resolvedOptions.folderManagement) { Write-BackendProgress 1 5 'Confirm folder-management drive' }
             else { Write-BackendProgress 1 5 'Skip folder-management drive confirmation' }
@@ -1380,7 +1382,7 @@ function Get-ReadOnlyStatus {
     }
 }
 function Initialize-ConfigCompatibility {
-    Import-PermissionSettings $PSScriptRoot
+    if(-not ('CodexKit.ConfigCompatibility' -as [type])){Add-Type -Path (Join-Path $PSScriptRoot 'ConfigCompatibility.cs')}
 }
 function Invoke-ConfigCompatibility {
     param([switch]$Clean,[string]$ProjectPath)
@@ -1407,7 +1409,7 @@ function Invoke-BackendMain {
         if ($input.Operation -notin @('status','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
-            'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot $input.Options)|ConvertTo-Json -Compress -Depth 8)); return 0 }
+            'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot)|ConvertTo-Json -Compress -Depth 8)); return 0 }
             'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }
             'config-cleanup' { return (Invoke-ConfigCompatibility -Clean -ProjectPath $input.Options.projectPath) }
             'initialize' { return (Invoke-Initialize220 $input) }

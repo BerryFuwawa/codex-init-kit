@@ -345,7 +345,6 @@ function Invoke-Initialize220 {
     param($InputData)
     Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp) ([string]$InputData.Options.closeApprovedProcesses)
     $opts=$InputData.Options
-    $permissions=if($opts.inheritPermissions){Get-InitializationPermissions $InputData.PayloadRoot}else{$null}
     $cliMode=$opts.cliMode
     if($cliMode -eq 'auto'){
         $desktop=Get-ReadOnlyDesktopInfo
@@ -384,7 +383,7 @@ function Invoke-Initialize220 {
                     'base' {
                         $baseOpts=@{};foreach($key in $opts.Keys){$baseOpts[$key]=$opts[$key]}
                         if(-not $desktopSafe -and $baseOpts.cuaRepair){$baseOpts.cuaRepair=$false;$results.Add(@{name='CUA 检查与修复';state='incomplete';message='桌面更新待完成，已暂停依赖修复'})}
-                        [void](Invoke-InitOperation 'one-click' $InputData.PayloadRoot $InputData.Drive $InputData.ProxyPort $baseOpts -PermissionSnapshot $permissions)
+                        [void](Invoke-InitOperation 'one-click' $InputData.PayloadRoot $InputData.Drive $InputData.ProxyPort $baseOpts)
                         $basePassed=$true
                     }
                     'official' {[void](Invoke-OfficialCliUpdate $InputData.PayloadRoot)}

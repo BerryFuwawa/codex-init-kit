@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.2.10",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.10/CodexInitKit.exe",
-    "sha256":  "974f196b42f903eca6df018705588338c25fefecc6dea8263a30d36716352587",
-    "notes":  "修复初始化关闭误报与更新备份残留，新增打开回滚目录和批量清理，更新 GitHub 镜像与中文全局规则。"
+    "version":  "2.2.11",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.11/CodexInitKit.exe",
+    "sha256":  "485c6e274b8ae435b161d2047b517429f8ab8ac0b41e5a76423715052bb3edd9",
+    "notes":  "修复桌面初始化的内联 RTK 规则校验。移除操作权限继承，完整初始化使用 Codex 默认权限并保留原配置备份。"
 }

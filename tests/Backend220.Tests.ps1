@@ -9,7 +9,7 @@ $scratch=Join-Path $env:TEMP ('CodexKit-220-tests-'+[guid]::NewGuid().ToString('
 $scratch=[IO.Path]::GetFullPath($scratch)
 [void][IO.Directory]::CreateDirectory($scratch)
 $functions=@{}
-foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Get-ReadOnlyDesktopInfo','Get-ReadOnlyRuntimeModeInfo','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command','Stop-InitializationApps','Get-InitializationPermissions')){
+foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Get-ReadOnlyDesktopInfo','Get-ReadOnlyRuntimeModeInfo','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command','Stop-InitializationApps')){
     if(Test-Path ('Function:'+ $name)){$functions[$name]=(Get-Item ('Function:'+$name)).ScriptBlock}
 }
 try {
@@ -204,13 +204,12 @@ try {
     # Initialization orchestration uses only fixture actions; no installs, process stops or live updates.
     $calls=[Collections.Generic.List[string]]::new();$desktopFails=$false;$switchFails=$false;$finalFails=$false;$baseFails=$false;$script:fixtureMode='DesktopNative'
     function Stop-InitializationApps {$calls.Add('preflight')}
-    function Get-InitializationPermissions {return $null}
     function Assert-DesktopStopped {return $before}
     function Get-ReadOnlyDesktopInfo {return [pscustomobject]@{InstallLocation='fixture-desktop'}}
     function Get-ReadOnlyRuntimeModeInfo {$calls.Add('detect');return [pscustomobject]@{Mode=$script:fixtureMode;Detail='fixture unrecognized'}}
     function Invoke-DesktopUpdate {$calls.Add('desktop');if($desktopFails){throw 'network failed'}}
     function Assert-DesktopReady {}
-    function Invoke-InitOperation {param($Action,$PayloadRoot,$Drive,$Port,$Options,$PermissionSnapshot) $calls.Add('base');if($baseFails){throw 'base failed'};return 0}
+    function Invoke-InitOperation {param($Action,$PayloadRoot,$Drive,$Port,$Options) $calls.Add('base');if($baseFails){throw 'base failed'};return 0}
     function Invoke-OfficialCliUpdate {$calls.Add('official');return 0}
     function Invoke-GuardOperation {$calls.Add('guard');return 0}
     function Invoke-BrowserOperation {$calls.Add('browser');return 0}

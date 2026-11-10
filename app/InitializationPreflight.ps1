@@ -1,15 +1,4 @@
-﻿# Initialization-only permission preservation and explicitly approved app exit.
-function Import-PermissionSettings {
-    param([string]$PayloadRoot)
-    if(-not ('CodexKit.PermissionSettings' -as [type])){
-        Add-Type -Path @((Join-Path $PayloadRoot 'ConfigCompatibility.cs'),(Join-Path $PayloadRoot 'PermissionSettings.cs'))
-    }
-}
-function Get-InitializationPermissions {
-    param([string]$PayloadRoot)
-    Import-PermissionSettings $PayloadRoot
-    return [CodexKit.PermissionSettings]::Load((Get-CodexHomePath))
-}
+﻿# Initialization preflight and explicitly approved app exit.
 function Select-InitializationProcesses {
     param([object[]]$Processes,[string]$InstallLocation,[string[]]$RuntimeRoots,[string]$OwnerSid,[int]$SessionId,[object[]]$Tracked=@())
     $roots=@($InstallLocation)+@($RuntimeRoots)|Where-Object {$_}|ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\')+'\' }
@@ -170,10 +159,9 @@ function Stop-InitializationApps {
             throw ("等待退出超过 10 秒：$targets。初始化未开始，请手动退出后重试。")
         }
     }
-    Write-BackendLine 'ChatGPT／Codex 已退出，正在重新读取初始化配置。'
+    Write-BackendLine 'ChatGPT／Codex 已退出，继续初始化。'
 }
 function Get-InitializationPreflight {
-    param([string]$PayloadRoot,$Options)
-    $permissions=if($Options.inheritPermissions){Get-InitializationPermissions $PayloadRoot}else{$null}
-    return @{processes=@(Get-InitializationProcesses $PayloadRoot);permissionSummary=if($permissions){$permissions.Summary}else{'未启用权限继承。'};permissionSource=Join-Path (Get-CodexHomePath) 'config.toml'}
+    param([string]$PayloadRoot)
+    return @{processes=@(Get-InitializationProcesses $PayloadRoot)}
 }
