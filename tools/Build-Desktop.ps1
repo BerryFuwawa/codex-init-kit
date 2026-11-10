@@ -36,6 +36,9 @@ $argsList+="/resource:$(Join-Path $root 'tests\RuntimeDiscovery.Tests.ps1'),Payl
 $argsList+="/resource:$(Join-Path $root 'app\AntiOverDefense.md'),Payload.AntiOverDefense.md"
 $argsList+="/resource:$(Join-Path $root 'app\WorkJournal.md'),Payload.WorkJournal.md"
 $argsList+="/resource:$(Join-Path $root 'app\CommandLineFirst.md'),Payload.CommandLineFirst.md"
+foreach($name in @('RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
+    $argsList+="/resource:$(Join-Path $root ('app\'+$name)),Payload.$name"
+}
 $argsList+="/resource:$(Join-Path $root 'app\GitHubTransport.cs'),Payload.GitHubTransport.cs"
 $argsList+="/resource:$(Join-Path $root 'app\GitHubDownload.ps1'),Payload.GitHubDownload.ps1"
 $argsList+="/resource:$(Join-Path $root 'tests\DesktopUpdate225.Tests.ps1'),Payload.DesktopUpdate225.Tests.ps1"

@@ -22,7 +22,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.9.md">v2.2.9</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.10.md">v2.2.10</a></sub></p>
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
@@ -37,7 +37,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「维护恢复」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
 | **🚀 刚安装 Codex，不知道怎样配置模型、代理和工作目录** | 从「初始化」选择功能，查看变更摘要，确认后一次完成。[查看初始化选项](docs/Settings.md) |
-| **🛡️ Codex 防御性太强，总是重复校验、添加不必要的保护？** | 初始化时勾选默认开启的「防止过度防御」，将 HERO 精简规则和防御边界写入全局 `AGENTS.md`。[查看规则说明](docs/AntiOverDefense.md) |
+| **🛡️ Codex 防御性太强，总是重复校验、添加不必要的保护？** | 初始化时勾选默认开启的「防止过度防御」，将 HERO 中文完整规则和防御边界写入全局 `AGENTS.md`。[查看规则说明](docs/AntiOverDefense.md) |
 | **🗂️ Codex 的对话工作文件、项目和交付物总是乱放？** | 初始化时勾选默认开启的「文件夹管理」，创建按用途分类的目录，约定无项目任务的存放位置；已有文件不会自动搬移。[查看初始化选项](docs/Settings.md#可选功能) |
 | **💬 Codex 总是啰嗦、反复确认，不按你的要求推进？** | 初始化写入基础工作规则；勾选「防止过度防御」后还会加入自主推进与交付规则，引导它明确目标、简洁沟通，在常规决策中继续工作。[查看规则说明](docs/AntiOverDefense.md) |
 | **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
@@ -129,11 +129,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ### 下载很慢或更新失败怎么办？
 
-工具的「更新」页支持 GitHub 自动镜像和自定义 HTTPS 镜像，官方地址优先。你也可以在 [Releases 页面](https://github.com/BerryFuwawa/codex-init-kit/releases)手动下载。镜像设置不改变系统代理，也不会接管微软商店或 OpenAI 安装器内部的网络行为。[查看镜像说明](docs/GitHubMirrors.md)
+工具的「更新」页支持 GitHub 自动镜像和自定义 HTTPS 镜像。按官方、自定义、内置十个镜像的顺序尝试，内置镜像并行测速。你也可以在 [Releases 页面](https://github.com/BerryFuwawa/codex-init-kit/releases)手动下载。镜像设置不改变系统代理，也不会接管微软商店或 OpenAI 安装器内部的网络行为。[查看镜像说明](docs/GitHubMirrors.md)
 
 ## 文档与反馈
 
-- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.9 更新说明](docs/Release-2.2.9.md)
+- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.10 更新说明](docs/Release-2.2.10.md) · [v2.2.9 更新说明](docs/Release-2.2.9.md)
 - [浏览器连接与 Chrome 验证](docs/BrowserConnection.md) · [桌面启动故障处理](docs/DesktopStartupRecovery.md) · [配置兼容检查](docs/ConfigCompatibility.md)
 - [中文与原始日志](docs/Logs.md) · [GitHub 下载加速](docs/GitHubMirrors.md) · [防止过度防御](docs/AntiOverDefense.md)
 

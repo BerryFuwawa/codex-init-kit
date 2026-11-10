@@ -210,13 +210,14 @@ public static class InitializationFlowTests {
             window.OperationLogPath=id=>Path.Combine(root,"init.log");
             window.StartOperation=(op,id,drive,port,guard,options)=>{
                 Assert(op=="initialize"&&(bool)options["allowCloseRunningApp"]==(running&&accept),"One-time close authorization was missing or persisted incorrectly");workers++;
+                Assert(running&&accept?Core.Value(options,"closeApprovedProcesses","")=="123:639298120645079230":!options.ContainsKey("closeApprovedProcesses"),"Close approval did not name the detected process instance");
                 return Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"),"/d /c exit 0"){UseShellExecute=false,CreateNoWindow=true});
             };
             Set(window,"wizard",1);Navigate(window,"初始化");
             var task=(Task)Call(window,"BeginInitialization");Pump((Task)Call(window,"BeginInitialization"));
             Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");Navigate(window,"概览");
             if(fail)response.SetException(new InvalidDataException("fixture permission read failure"));
-            else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123}}}:new object[0]}});
+            else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
             Pump(task);
             bool started=!fail&&(!running||accept);
             Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");

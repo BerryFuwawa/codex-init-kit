@@ -15,6 +15,12 @@ function Invoke-GuiGitHubDownload {
     $settings=[CodexKit.GitHubNetworkOptions]::new()
     if($OptionsBase64){$value=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($OptionsBase64))|ConvertFrom-Json;$settings.githubMirrorEnabled=$value.githubMirrorEnabled;$settings.customGithubMirror=$value.customGithubMirror}
     $transfer=[CodexKit.GitHubTransfer]::new($settings,$ProxyPort,$ProxyHost,[Action[string]]{param($line)[Console]::Out.WriteLine($line)})
+    if($Url -match '/checksums\.txt$'){
+        $validateText=[Func[string,bool]]{param($text);[void](Get-RtkChecksum $text);return $true}
+        $text=$transfer.Fetch($Url,$validateText)
+        [IO.File]::WriteAllText($Path,$text,[Text.UTF8Encoding]::new($false))
+        return
+    }
     $expected=''
     if($Url -match '/rtk-x86_64-pc-windows-msvc\.zip$'){
         $checksums=Join-Path (Split-Path $Path -Parent) 'checksums.txt'
@@ -26,7 +32,7 @@ function Invoke-GuiGitHubDownload {
             $sha=[Security.Cryptography.SHA256]::Create();$stream=[IO.File]::OpenRead($candidate)
             try{$actual=[BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose();$sha.Dispose()}
             if($actual -ne $expected){throw [IO.InvalidDataException]::new('RTK ZIP SHA-256 不一致，切换下载通道。')}
-        }elseif($Url -match '/checksums\.txt$'){[void](Get-RtkChecksum ([IO.File]::ReadAllText($candidate)))}
+        }
     }
     $transfer.Download($Url,$Path,$validate)
 }

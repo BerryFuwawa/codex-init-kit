@@ -343,8 +343,7 @@ function Set-InitializationCliMode {
 }
 function Invoke-Initialize220 {
     param($InputData)
-    Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp)
-    [void](Assert-DesktopStopped $InputData.PayloadRoot -AllowOtherChannel)
+    Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp) ([string]$InputData.Options.closeApprovedProcesses)
     $opts=$InputData.Options
     $permissions=if($opts.inheritPermissions){Get-InitializationPermissions $InputData.PayloadRoot}else{$null}
     $cliMode=$opts.cliMode

@@ -24,7 +24,7 @@ public class MainWindow : Window {
     readonly TextBox log=new TextBox();
     readonly LogViewport logViewport;
     ListBox rollbackList;
-    Button rollbackButton;
+    Button rollbackButton,rollbackFolderButton,rollbackDeleteButton;
     string selectedRollbackId="";
     readonly ProgressBar progress=new ProgressBar();
     readonly List<Button> navigation=new List<Button>();
@@ -84,7 +84,7 @@ public class MainWindow : Window {
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="维护恢复"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
         var newDefaults=Options();foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate","antiOverDefense","workJournal","commandLineFirst"})if(!(bool)newDefaults[key])throw new InvalidOperationException("New default disabled: "+key);
-        antiOverDefense.IsChecked=false;if((bool)Options()["antiOverDefense"]||!InitSummary().Contains("防止过度防御：跳过"))throw new InvalidOperationException("Anti-over-defense selection or confirmation was not preserved");antiOverDefense.IsChecked=true;if(!InitSummary().Contains("HERO 中文精简规则"))throw new InvalidOperationException("Anti-over-defense confirmation was missing");
+        antiOverDefense.IsChecked=false;if((bool)Options()["antiOverDefense"]||!InitSummary().Contains("防止过度防御：跳过"))throw new InvalidOperationException("Anti-over-defense selection or confirmation was not preserved");antiOverDefense.IsChecked=true;if(!InitSummary().Contains("HERO 中文完整规则"))throw new InvalidOperationException("Anti-over-defense confirmation was missing");
         workJournal.IsChecked=false;if((bool)Options()["workJournal"]||!InitSummary().Contains("按需笔记与文档管理：跳过"))throw new InvalidOperationException("Work journal selection or confirmation was not preserved");workJournal.IsChecked=true;
         commandLineFirst.IsChecked=false;
         if((bool)Options()["commandLineFirst"]||!(bool)Options()["workJournal"]||!InitSummary().Contains("优先使用命令行：跳过"))
@@ -100,6 +100,11 @@ public class MainWindow : Window {
         memories.IsChecked=false;if((bool)Options()["memories"]||!InitSummary().Contains("关闭，保留已有记忆文件"))throw new InvalidDataException("Memory selection was not preserved");memories.IsChecked=true;
         if(!githubMirrors.IsChecked.Value||NetworkOptions().customGithubMirror.Length!=0)throw new InvalidDataException("GitHub mirror defaults changed");
         githubCustomMirror.Text="invalid mirror";githubMirrors.IsChecked=false;if(NetworkOptions().customGithubMirror.Length!=0||githubCustomMirror.IsEnabled)throw new InvalidDataException("Disabled mirrors validated an ignored prefix");githubCustomMirror.Text="";githubMirrors.IsChecked=true;
+        Navigate("更新");
+        var mirrorNotes=((StackPanel)((Border)content.Children[1]).Child).Children.OfType<TextBlock>().ToArray();
+        if(!mirrorNotes.Any(note=>note.Text=="顺序：官方 → 自定义 → 内置 10 个镜像")||
+           !mirrorNotes.Any(note=>note.FontSize==12&&note.Text=="内置站点："+GitHubTransfer.BuiltInMirrorNames)||
+           GitHubTransfer.BuiltInMirrorNames.Split('、').Length!=10)throw new InvalidDataException("GitHub mirror order or built-in site note is missing");
         parentEffort.ItemTemplate.Seal();var effortLabel=(TextBlock)parentEffort.ItemTemplate.LoadContent();effortLabel.DataContext="medium";effortLabel.Measure(new Size(200,40));effortLabel.Arrange(new Rect(0,0,200,40));effortLabel.UpdateLayout();effortLabel.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();if(effortLabel.Text!="中（medium）"||Convert.ToString(Options()["parentEffort"])!="medium"||!InitSummary().Contains("gpt-6.1-sol / 中（medium）"))throw new InvalidDataException("Effort labels changed the underlying config value");
         foreach(var effort in new[]{"none","minimal","low","medium","high","xhigh","max","ultra"})if(!EffortLabels.Display(effort).EndsWith("（"+effort+"）"))throw new InvalidDataException("Effort label did not include its original identifier: "+effort);
         VerifyChineseLogs();
@@ -159,11 +164,11 @@ public class MainWindow : Window {
         cliNative.Content="桌面版原生 CLI";cliStandalone.Content="官方独立 CLI";foreach(var choice in new[]{cliNative,cliStandalone}){choice.GroupName="InitializationCliMode";choice.Style=(Style)Resources["KitCliChoice"];choice.Checked+=(s,e)=>{if(!applyingCliDetection){cliChoiceManual=true;UpdateCliDetectionHint();}};choice.Click+=(s,e)=>{cliChoiceManual=true;UpdateCliDetectionHint();};}
         cliDetectionHint.FontSize=12;cliDetectionHint.Foreground=MutedBrush;cliDetectionHint.TextWrapping=TextWrapping.Wrap;cliDetectionHint.Margin=new Thickness(0,4,0,8);
         if(preview)ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});else UpdateCliDetectionHint();
-        antiOverDefense.ToolTip="在全局 AGENTS.md 中写入 HERO 中文精简规则，以及实现、防御和自主交付规则。";
+        antiOverDefense.ToolTip="在全局 AGENTS.md 中写入 HERO 中文完整规则，以及实现、防御和自主交付规则。";
         workJournal.ToolTip="按需维护 Markdown 笔记、文档和索引，记录可复用的排查经验。";
         commandLineFirst.ToolTip="有可行命令时优先使用专用 CLI 或 PowerShell，由 Codex 直接执行并核验。";
         memories.ToolTip="初始化时开启本地 Codex 记忆生成与使用；取消后关闭，但不删除已有记忆文件。";
-        githubMirrors.Content="自动使用 GitHub 镜像（官方优先，失败后串行切换）";githubMirrors.Style=(Style)Resources["KitCheck"];
+        githubMirrors.Content="自动使用 GitHub 镜像";githubMirrors.Style=(Style)Resources["KitCheck"];
         githubCustomMirror.Style=(Style)Resources["KitInput"];githubCustomMirror.ToolTip="可选 HTTPS 镜像前缀，例如 https://example.com/proxy/";
         var network=new GitHubNetworkOptions();if(!preview)try{network=GitHubNetworkOptions.Load(Core.NetworkSettingsPath);}catch(Exception ex){networkSettingsError="下载设置未能读取，请重新保存："+ex.Message;}
         githubMirrors.IsChecked=network.githubMirrorEnabled;githubCustomMirror.Text=network.customGithubMirror;githubCustomMirror.IsEnabled=network.githubMirrorEnabled;
@@ -306,7 +311,7 @@ public class MainWindow : Window {
             },true));
         } else { var p=Card("03   执行与结果",busy?"正在执行，请保留窗口。":"完整结果与备份位置见下方日志。"); p.Children.Add(log); Row(p,LatestLogButton(),Button("查看全部日志",()=>Navigate("日志"),false),Button("重新设置",()=>{if(!busy){ResetCliChoice();wizard=0;Navigate("初始化");}},false)); }
     }
-    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+EffortLabels.Display(Convert.ToString(options["parentEffort"]))+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])):"关闭，不写入子代理规则；保留模型设置 "+options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])))+"\n初始化后使用的 CLI："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文精简规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\n操作权限继承："+PermissionSummary()+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方优先，失败串行尝试自定义及五个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"最后执行，真实连接需重启后验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器修复。未完成项目可单独重试。\n"+ModelChecks(options)+"\n基础配置及全局 AGENTS.md 将完整备份并重建；原自定义指令只保存在备份中。项目内的 AGENTS.md 不变。更新用户 PATH。初始化和 CUA 分别备份。";}
+    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+EffortLabels.Display(Convert.ToString(options["parentEffort"]))+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])):"关闭，不写入子代理规则；保留模型设置 "+options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])))+"\n初始化后使用的 CLI："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\n操作权限继承："+PermissionSummary()+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"最后执行，真实连接需重启后验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器修复。未完成项目可单独重试。\n"+ModelChecks(options)+"\n基础配置及全局 AGENTS.md 将完整备份并重建；原自定义指令只保存在备份中。项目内的 AGENTS.md 不变。更新用户 PATH。初始化和 CUA 分别备份。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
@@ -347,7 +352,14 @@ public class MainWindow : Window {
             var report=InitializationPreflight==null?await ReadInitializationPreflight(options):await InitializationPreflight();
             object value;if(!report.TryGetValue("processes",out value)||!(value is System.Collections.IList))throw new InvalidDataException("初始化进程检查结果无效，请重试。");
             int count=((System.Collections.IList)value).Count;
-            if(count>0){var dialog=CreateAppCloseDialog(count);allowClose=(PresentAppCloseDialog==null?dialog.ShowDialog():PresentAppCloseDialog(dialog))==true;}
+            if(count>0){
+                var dialog=CreateAppCloseDialog(count);
+                allowClose=(PresentAppCloseDialog==null?dialog.ShowDialog():PresentAppCloseDialog(dialog))==true;
+                if(allowClose){
+                    var entries=((System.Collections.IList)value).Cast<Dictionary<string,object>>();
+                    options["closeApprovedProcesses"]=String.Join(",",entries.Select(entry=>Core.Value(entry,"Id","")+":"+Core.Value(entry,"Started","")));
+                }
+            }
             proceed=count==0||allowClose;
             if(!proceed)banner.Text="已取消本次初始化，配置尚未修改。";
         } catch(Exception ex){if(preview){banner.Text=DesktopLocalization.ExceptionText(ex);}else Error(ex);}
@@ -376,17 +388,55 @@ public class MainWindow : Window {
         compatibility.Children.Add(T(compatibilityAdvice.Length>0?compatibilityAdvice:"session-flags 来自会话参数时，清理文件无法消除警告；请检查桌面版与 CLI 的版本兼容性。",12,MutedBrush));
         var cua=Card("CUA 组件","检查官方桌面应用中的浏览器自动化文件，仅在校验异常时修复。修复前备份原文件，不重置模型或工作区。");
         Row(cua,Button("检查 CUA",async()=>await Run("cua-check","CUA 组件",true),true),Button("检查并修复",async()=>await Run("cua-repair","CUA 修复",true),true));
-        var r=Card("恢复与回滚","选择本地初始化备份或保护器 CLI 历史缓存，再点击下方回滚按钮。时间为本机备份 / 缓存时间。初始化快照不是桌面应用版本；Microsoft Store 桌面版不在此回滚。");
+        var r=Card("恢复与回滚","选择本地初始化备份或保护器 CLI 历史缓存，可以打开所在文件夹或回滚。时间为本机备份 / 缓存时间。此处的回滚范围为初始化配置与保护器 CLI。");
         rollbackList=new ListBox{Background=B("#101620"),Foreground=TextBrush,BorderThickness=new Thickness(0),MaxHeight=280,MinHeight=70,HorizontalContentAlignment=HorizontalAlignment.Stretch,Padding=new Thickness(6),Margin=new Thickness(0,2,0,10)};
         ScrollViewer.SetHorizontalScrollBarVisibility(rollbackList,ScrollBarVisibility.Disabled);
         var entries=status!=null&&status.ContainsKey("rollbackEntries")?status["rollbackEntries"] as System.Collections.IEnumerable:null;
-        if(entries!=null)foreach(var value in entries){var entry=value as Dictionary<string,object>;if(entry==null)continue;bool available=entry.ContainsKey("available")&&entry["available"] is bool&&(bool)entry["available"];var row=new StackPanel{Margin=new Thickness(8,5,8,5)};row.Children.Add(T((Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"  ·  "+Core.Value(entry,"version","版本未记录"),14,TextBrush));row.Children.Add(T(Core.Value(entry,"time","时间未记录")+"  ·  "+Core.Value(entry,"detail",""),12,MutedBrush));var item=new ListBoxItem{Tag=entry,Content=row,IsEnabled=available,ToolTip=Core.Value(entry,"path",""),HorizontalContentAlignment=HorizontalAlignment.Stretch};rollbackList.Items.Add(item);if(Core.Value(entry,"id","")==selectedRollbackId&&available)rollbackList.SelectedItem=item;}
+        if(entries!=null)foreach(var value in entries){var entry=value as Dictionary<string,object>;if(entry==null)continue;var row=new StackPanel{Margin=new Thickness(8,5,8,5)};row.Children.Add(T((Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"  ·  "+Core.Value(entry,"version","版本未记录"),14,CanRollback(entry)?TextBrush:MutedBrush));row.Children.Add(T(Core.Value(entry,"time","时间未记录")+"  ·  "+Core.Value(entry,"detail",""),12,MutedBrush));var item=new ListBoxItem{Tag=entry,Content=row,ToolTip=Core.Value(entry,"path",""),HorizontalContentAlignment=HorizontalAlignment.Stretch};rollbackList.Items.Add(item);if(Core.Value(entry,"id","")==selectedRollbackId)rollbackList.SelectedItem=item;}
         if(rollbackList.Items.Count==0)r.Children.Add(T(Core.Value(status,"rollbackError","").Length>0?Core.Value(status,"rollbackError",""):status==null?"正在读取可回滚备份，请刷新列表。":"暂未发现初始化备份或独立 CLI 历史缓存。",13,MutedBrush));
         r.Children.Add(rollbackList);
-        rollbackButton=Button("回滚所选项",async()=>{var item=rollbackList.SelectedItem as ListBoxItem;var entry=item==null?null:item.Tag as Dictionary<string,object>;if(entry!=null)await Run("rollback-selected","回滚所选项",true,new Dictionary<string,object>{{"rollbackId",Core.Value(entry,"id","")}},RollbackSummary(entry));},false);rollbackButton.IsEnabled=rollbackList.SelectedItem!=null&&!busy;
-        rollbackList.SelectionChanged+=(s,e)=>{var item=rollbackList.SelectedItem as ListBoxItem;var entry=item==null?null:item.Tag as Dictionary<string,object>;selectedRollbackId=Core.Value(entry,"id","");rollbackButton.IsEnabled=entry!=null&&!busy;};
-        Row(r,rollbackButton,Button("刷新备份列表",async()=>{if(!busy){await RefreshStatusQuietly();Navigate("维护恢复");}},false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
+        rollbackButton=Button("回滚所选项",async()=>{var entry=SelectedRollbackEntry();if(CanRollback(entry))await Run("rollback-selected","回滚所选项",true,new Dictionary<string,object>{{"rollbackId",Core.Value(entry,"id","")}},RollbackSummary(entry));},false);
+        rollbackFolderButton=Button("打开所在文件夹",()=>OpenSelectedRollbackFolder(Open),false);
+        rollbackDeleteButton=Button("删除所有回滚",async()=>{
+            var id=Core.Value(status,"rollbackDeleteId","");
+            if(id.Length==0)return;
+            var count=Core.Value(status,"rollbackDeleteCount","0");
+            await Run("rollback-delete-all","删除所有回滚",true,new Dictionary<string,object>{{"rollbackId",id}},
+                "将永久删除当前列表中 "+count+" 项可清理的初始化备份或独立 CLI 历史缓存。保留当前及被引用的 CLI、当前配置、对话和项目文件。删除后无法从这些备份回滚。涉及 CLI 缓存时请先退出 Codex。");
+        },false);
+        rollbackList.SelectionChanged+=(s,e)=>{selectedRollbackId=Core.Value(SelectedRollbackEntry(),"id","");UpdateRollbackActions();};
+        UpdateRollbackActions();
+        Row(r,rollbackButton,rollbackFolderButton,Button("刷新备份列表",async()=>{if(!busy){await RefreshStatusQuietly();Navigate("维护恢复");}},false),rollbackDeleteButton,Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));
         var proxy=Card("代理设置","开关和端口在初始化页面设置。关闭后移除 Codex 的代理配置。");proxy.Children.Add(T("当前："+ProxySummary(),13,MutedBrush));proxy.Children.Add(Button("更新代理",async()=>await Run("proxy","更新代理",true),false));
+    }
+    Dictionary<string,object> SelectedRollbackEntry(){
+        var item=rollbackList==null?null:rollbackList.SelectedItem as ListBoxItem;
+        return item==null?null:item.Tag as Dictionary<string,object>;
+    }
+    static bool CanRollback(Dictionary<string,object> entry){
+        object available;
+        return entry!=null&&entry.TryGetValue("available",out available)&&available is bool&&(bool)available;
+    }
+    void UpdateRollbackActions(){
+        var entry=SelectedRollbackEntry();
+        if(rollbackButton!=null)rollbackButton.IsEnabled=!busy&&CanRollback(entry);
+        if(rollbackFolderButton!=null){
+            var canOpen=Core.Value(entry,"path","").Length>0;
+            rollbackFolderButton.IsEnabled=canOpen;
+            rollbackFolderButton.Background=B(canOpen?"#293348":"#383838");
+            rollbackFolderButton.Foreground=canOpen?TextBrush:B("#A6A6A6");
+        }
+        if(rollbackDeleteButton!=null){
+            var canDelete=!busy&&Core.Value(status,"rollbackDeleteId","").Length>0;
+            rollbackDeleteButton.IsEnabled=canDelete;
+            rollbackDeleteButton.Background=B(canDelete?"#963E4A":"#383838");
+            rollbackDeleteButton.Foreground=canDelete?TextBrush:B("#A6A6A6");
+        }
+    }
+    void OpenSelectedRollbackFolder(Action<string> open){
+        var path=Core.Value(SelectedRollbackEntry(),"path","");
+        if(!Directory.Exists(path)){banner.Text="所选备份文件夹已移动或删除，请刷新备份列表。";return;}
+        open(path);
     }
     static string RollbackSummary(Dictionary<string,object> entry){return "目标："+(Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"\n版本："+Core.Value(entry,"version","版本未记录")+"\n备份 / 缓存时间："+Core.Value(entry,"time","未记录")+"\n位置："+Core.Value(entry,"path","")+"\n\n"+(Core.Value(entry,"kind","")=="init"?"将覆盖当前配置、代理、全局规则及该备份记录的运行时 / PATH 设置；不恢复 CUA，不删除对话或已创建的工作目录。":"将切换到所选本地独立 CLI，并更改桌面应用的 CLI 覆盖路径；不会降级 Microsoft Store 桌面应用。")+"\n请先保存工作并退出 Codex；检测到仍在运行时停止，不强制结束进程。";}
     void GuideOfficialCli(){
@@ -439,9 +489,10 @@ public class MainWindow : Window {
         var p=Card("当前版本  v"+Core.Version,update==null?"尚未获得更新清单。应用启动时会自动检查，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知"));
         Row(p,Button("检查更新",async()=>await CheckUpdates(false),true),Button("打开版本发布页 ↗",()=>Open("https://github.com/"+Core.Repository+"/releases"),false));
         if(update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version)) { p.Children.Add(T(Core.Value(update,"notes","有新版本可用。"),14,Accent)); p.Children.Add(Button("下载并更新",async()=>await InstallUpdate(),true)); }
-        var networkCard=Card("GitHub 下载加速","官方地址优先，失败后依次尝试自定义前缀及五个内置镜像；保持当前 HTTP 代理设置。仅用于公开 GitHub 资源，现有校验继续执行。");
+        var networkCard=Card("GitHub 下载加速","自定义镜像留空时跳过。内置镜像并行测速，优先使用最快的有效站点。请求沿用当前 HTTP 代理设置。");
         networkCard.Children.Add(githubMirrors);networkCard.Children.Add(T("自定义镜像前缀（可选，HTTPS）",12,MutedBrush));networkCard.Children.Add(githubCustomMirror);
-        networkCard.Children.Add(T("顺序：官方 → 自定义（如填写）→ ghfast.top → gh-proxy.com → ghproxy.net → gh.llkk.cc → ghproxy.homeboyc.cn。",12,MutedBrush));
+        networkCard.Children.Add(T("顺序：官方 → 自定义 → 内置 10 个镜像",12,MutedBrush));
+        networkCard.Children.Add(T("内置站点："+GitHubTransfer.BuiltInMirrorNames,12,MutedBrush));
         Row(networkCard,Button("保存下载设置",()=>{try{NetworkOptions().Save(Core.NetworkSettingsPath);networkSettingsError="";banner.Text="GitHub 下载设置已保存";}catch(Exception ex){Error(ex);}},true));
         if(networkSettingsError.Length>0)networkCard.Children.Add(T(networkSettingsError,12,MutedBrush));
         githubLogView.Text=githubLogText;networkCard.Children.Add(githubLogView);
@@ -485,7 +536,8 @@ public class MainWindow : Window {
         if(initialize)initializationSummary="";
         try {
             var configOperation=op=="config-check"||op=="config-cleanup";var coreOperation=op=="desktop-core-check"||op=="desktop-core-repair";
-            int proxy=op=="status"||configOperation||coreOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(op=="status"||coreOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            var localOperation=op=="status"||op=="rollback-delete-all"||coreOperation;
+            int proxy=localOperation||configOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?Options():(localOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
             if(extraOptions!=null)foreach(var pair in extraOptions)options[pair.Key]=pair.Value;
             if(op=="browser-start-prepare" && Core.Admin)throw new InvalidOperationException("请以普通用户权限打开本工具，再使用修复并启动功能。");
             if(confirm && !Confirm(title,confirmationText??Impact(op)))return;
@@ -494,7 +546,7 @@ public class MainWindow : Window {
             if(initialize)initBrowserRepair=Convert.ToBoolean(options["browserRepair"]);
             busy=true; activeOperation=op; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=true;
             if(initialize&&page=="初始化"&&wizard==2)Navigate("初始化");
-            if(rollbackButton!=null)rollbackButton.IsEnabled=false;
+            UpdateRollbackActions();
             if(op=="browser-start-prepare")browserStartTarget=null;
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
             var id=Guid.NewGuid().ToString("N"); lastLog=OperationLogPath(id);rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;logViewport.Reset();
@@ -527,10 +579,10 @@ public class MainWindow : Window {
             if(initialize){initError=DesktopLocalization.ExceptionText(ex);banner.Text="初始化未完成 · 请查看日志";RecordUiError(ex,false);showInitializationResult=true;}
             else Error(ex);
         }
-        finally {busy=false;activeOperation="";progress.IsIndeterminate=false;if(op=="status"&&status==null){cliDetectionComplete=true;UpdateCliDetectionHint();}if(rollbackButton!=null)rollbackButton.IsEnabled=rollbackList!=null&&rollbackList.SelectedItem!=null;}
+        finally {busy=false;activeOperation="";progress.IsIndeterminate=false;if(op=="status"&&status==null){cliDetectionComplete=true;UpdateCliDetectionHint();}UpdateRollbackActions();}
         if(showInitializationResult){wizard=2;Navigate("初始化");ShowInitializationResult(initExitCode,initError,initCancelled,initBrowserRepair);}
         if(refreshStatus && !preview) await RefreshStatusQuietly();
-        if(op=="rollback-selected"&&!preview){await RefreshStatusQuietly();if(page=="维护恢复")Navigate(page);}
+        if((op=="rollback-selected"||op=="rollback-delete-all")&&!preview){await RefreshStatusQuietly();if(page=="维护恢复")Navigate(page);}
     }
     void ReadLog() {
         if(!File.Exists(lastLog))return;
@@ -572,15 +624,22 @@ public class MainWindow : Window {
         Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,new Action(()=>frame.Continue=false));Dispatcher.PushFrame(frame);root.UpdateLayout();
     }
     void VerifyRollbackSelection(){
-        var entries=new object[]{new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"path",@"C:\fixture\snapshot"}},new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"path",@"C:\fixture\release"}},new Dictionary<string,object>{{"id",new string('c',64)},{"kind","cli"},{"available",false}}};
+        var folder=Directory.CreateDirectory(Path.Combine(Path.GetTempPath(),"CodexKit-rollback-"+Guid.NewGuid().ToString("N"))).FullName;
+        var entries=new object[]{new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"path",folder}},new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"path",Path.Combine(folder,"missing")}},new Dictionary<string,object>{{"id",new string('c',64)},{"kind","cli"},{"available",false},{"path",folder}}};
         try{
-            status=new Dictionary<string,object>{{"rollbackEntries",entries}};selectedRollbackId="";Navigate("维护恢复");
-            if(rollbackList.Items.Count!=3||rollbackButton.IsEnabled||((ListBoxItem)rollbackList.Items[2]).IsEnabled)throw new InvalidDataException("Rollback list defaults or unavailable rows failed");
-            rollbackList.SelectedIndex=0;if(!rollbackButton.IsEnabled||selectedRollbackId!=new string('a',64))throw new InvalidDataException("Rollback selection was not retained");
+            status=new Dictionary<string,object>{{"rollbackEntries",entries},{"rollbackDeleteId",new string('a',64)},{"rollbackDeleteCount",3}};selectedRollbackId="";Navigate("维护恢复");
+            if(rollbackList.Items.Count!=3||rollbackButton.IsEnabled||rollbackFolderButton.IsEnabled||!rollbackDeleteButton.IsEnabled||
+               ((SolidColorBrush)rollbackFolderButton.Background).Color!=Color.FromRgb(56,56,56))throw new InvalidDataException("Rollback actions did not reflect the empty selection");
+            rollbackList.SelectedIndex=0;if(!rollbackButton.IsEnabled||!rollbackFolderButton.IsEnabled||selectedRollbackId!=new string('a',64)||
+               ((SolidColorBrush)rollbackFolderButton.Background).Color==Color.FromRgb(56,56,56))throw new InvalidDataException("Rollback selection was not retained");
+            string opened=null;OpenSelectedRollbackFolder(path=>opened=path);if(opened!=folder)throw new InvalidDataException("Open backup folder did not resolve the selected path");
             var summary=RollbackSummary((Dictionary<string,object>)entries[0]);if(!summary.Contains("2026-11-01 14:00:00")||!summary.Contains("2.2.4")||!summary.Contains("不删除对话"))throw new InvalidDataException("Rollback confirmation lacks its exact target or impact");
             Navigate("维护恢复");if(rollbackList.SelectedIndex!=0||!rollbackButton.IsEnabled)throw new InvalidDataException("Returning to maintenance lost the rollback selection");
             rollbackList.SelectedIndex=1;summary=RollbackSummary((Dictionary<string,object>)entries[1]);if(!summary.Contains("0.165.0")||!summary.Contains("不会降级 Microsoft Store"))throw new InvalidDataException("CLI rollback confirmation misstates its scope");
-            status=new Dictionary<string,object>();Navigate("维护恢复");if(rollbackList.Items.Count!=0||rollbackButton.IsEnabled)throw new InvalidDataException("Empty backup list enabled rollback");
+            OpenSelectedRollbackFolder(path=>{throw new InvalidDataException("Missing backup directory was opened");});
+            if(!banner.Text.Contains("请刷新备份列表"))throw new InvalidDataException("Missing backup folder was not reported");
+            rollbackList.SelectedIndex=2;if(rollbackButton.IsEnabled||!rollbackFolderButton.IsEnabled)throw new InvalidDataException("Incomplete backup could not be inspected independently of rollback");
+            status=new Dictionary<string,object>();Navigate("维护恢复");if(rollbackList.Items.Count!=0||rollbackButton.IsEnabled||rollbackFolderButton.IsEnabled||rollbackDeleteButton.IsEnabled)throw new InvalidDataException("Empty backup list enabled actions");
             foreach(var mode in new[]{"DesktopNative","OfficialStandalone"})foreach(int width in new[]{940,1120}){
                 status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");var root=(FrameworkElement)Content;root.Measure(new Size(width,720));root.Arrange(new Rect(0,0,width,720));root.UpdateLayout();
                 var hero=(StackPanel)((Border)content.Children[0]).Child;var notice=hero.Children.OfType<TextBlock>().FirstOrDefault(x=>x.Name=="DataPreservationNotice");var label=notice;var actions=hero.Children.OfType<Grid>().First();var start=actions.Children.OfType<Button>().First();
@@ -588,7 +647,7 @@ public class MainWindow : Window {
                 if(notice.ActualWidth>=hero.ActualWidth||notice.ActualHeight>20||notice.ActualWidth<label.DesiredSize.Width-label.Margin.Left-label.Margin.Right-1||label.ActualHeight<label.DesiredSize.Height-label.Margin.Top-label.Margin.Bottom-1)throw new InvalidDataException("Overview notice stretched or clipped at width "+width);
                 if(Math.Abs(notice.TranslatePoint(new Point(),hero).X-start.TranslatePoint(new Point(),hero).X)>1||notice.TranslatePoint(new Point(),hero).Y<actions.TranslatePoint(new Point(0,actions.ActualHeight),hero).Y+7)throw new InvalidDataException("Overview notice is not below and left-aligned with initialization");
             }
-        }finally{status=null;selectedRollbackId="";}
+        }finally{status=null;selectedRollbackId="";Directory.Delete(folder);}
     }
     void VerifyLogScrolling(){
         try{

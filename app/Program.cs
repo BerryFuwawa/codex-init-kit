@@ -25,6 +25,7 @@ public static class Program {
             finally { if(Directory.Exists(dir)) Directory.Delete(dir,true); }
         }
         if(args.Length>0 && args[0]!="--preview")return 64;
+        if(args.Length==0)Core.CleanupCompletedUpdates(Core.Exe);
         var app=new Application();
         app.DispatcherUnhandledException+=(s,e)=>{var message=DesktopLocalization.ExceptionText(e.Exception);try{var path=Path.Combine(Core.Logs,"ui-"+Guid.NewGuid().ToString("N")+".log");File.WriteAllText(path,e.Exception.ToString(),new UTF8Encoding(false));DesktopLocalization.SaveChineseLog(path,message);}catch{}MessageBox.Show(message,"Codex Init Kit",MessageBoxButton.OK,MessageBoxImage.Error); e.Handled=true;};
         var window=new MainWindow(args.Contains("--preview"));
@@ -53,7 +54,7 @@ public static class Program {
             PermissionSettingsTests.Run(dir);checks["permission_settings"]=true;
             CurrentModelSettingsTests.Run(dir);checks["current_model_settings"]=true;
             var logo=Brand.Logo();if(logo.PixelWidth!=512||logo.PixelHeight!=512)throw new InvalidDataException("Invalid logo resource");checks["logo_resource"]=true;
-            foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs","PermissionSettings.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","PermissionAdapter.Tests.ps1","Backend220.ps1","Backend.Tests.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
+            foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs","PermissionSettings.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","PermissionAdapter.Tests.ps1","Backend220.ps1","Backend.Tests.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","RtkRules.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
             var ps=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe");
             var script="$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile('"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"',[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|Out-String|Write-Output;exit 1};exit 0";
             var info=new ProcessStartInfo(ps,"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(script))){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
@@ -104,18 +105,29 @@ public static class Program {
             var valid="{\"schema_version\":1,\"repository\":\""+Core.Repository+"\",\"version\":\"2.0.1\",\"url\":\"https://github.com/"+Core.Repository+"/releases/download/v2.0.1/CodexInitKit.exe\",\"sha256\":\""+new string('a',64)+"\"}";
             Core.ValidateUpdate(valid);checks["update_manifest_valid"]=true;
             foreach(var bad in new[]{valid.Replace(Core.Repository,"other/repo"),valid.Replace("https://github.com/","http://github.com/"),valid.Replace(new string('a',64),"bad")}) { bool rejected=false;try{Core.ValidateUpdate(bad);}catch{rejected=true;}if(!rejected)throw new InvalidDataException("Unsafe update manifest accepted"); }checks["update_manifest_rejects_unsafe"]=true;
-            foreach(var scenario in new[]{"success","stage_changed","target_changed","restart_failed"}) {
+            foreach(var scenario in new[]{"success","stage_changed","target_changed","restart_failed","cleanup_locked","recovery_retained"}) {
                 var fixture=Path.Combine(dir,scenario);Directory.CreateDirectory(fixture);var current=Path.Combine(fixture,"app.exe");var next=Path.Combine(fixture,"next.exe");var updateLog=Path.Combine(fixture,"update.log");File.WriteAllText(current,"old");File.WriteAllText(next,"new");
                 var replacement=Core.BuildUpdateScript(next,current,0,updateLog,scenario=="restart_failed");
+                bool success=scenario=="success"||scenario=="cleanup_locked";
                 if(scenario=="stage_changed")File.WriteAllText(next,"corrupt");
                 if(scenario=="target_changed")File.WriteAllText(current,"changed");
                 if(scenario=="restart_failed")replacement=replacement.Replace("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;","throw 'Simulated restart failure';");
+                if(scenario=="cleanup_locked")replacement=replacement.Replace("Remove-UpdateFile $backup","throw [UnauthorizedAccessException]::new('模拟备份文件被占用')");
+                if(scenario=="recovery_retained")replacement=replacement.Replace("$replaced=$true;","$replaced=$true;[IO.File]::WriteAllText($target,'changed');");
                 info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(replacement));
-                using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);if((proc.ExitCode==0)!=(scenario=="success"))throw new IOException("Updater exit status: "+scenario+" "+output);}
-                var expected=scenario=="success"?"new":scenario=="target_changed"?"changed":"old";
+                using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);if((proc.ExitCode==0)!=success)throw new IOException("Updater exit status: "+scenario+" "+output);}
+                var expected=success?"new":scenario=="target_changed"||scenario=="recovery_retained"?"changed":"old";
                 if(File.ReadAllText(current)!=expected||File.Exists(next)||Directory.GetFiles(fixture,"*.tmp").Length!=0||!File.Exists(updateLog))throw new IOException("Updater regression: "+scenario);
                 if(scenario=="restart_failed"&&!File.ReadAllText(updateLog).Contains("回滚成功"))throw new IOException("Updater rollback missing");
-                var chineseUpdateLog=DesktopLocalization.ChineseLogPath(updateLog);if(!File.Exists(chineseUpdateLog)||!File.ReadAllText(chineseUpdateLog,Encoding.UTF8).Contains(scenario=="success"?"成功":"失败"))throw new IOException("Chinese updater log missing: "+scenario);
+                var workRoot=Core.UpdateWorkRoot(current);
+                if(scenario=="cleanup_locked"||scenario=="recovery_retained"){
+                    var transaction=Directory.GetDirectories(workRoot).Single();
+                    var backup=Path.Combine(transaction,"previous.tmp");
+                    if(File.ReadAllText(backup)!="old"||!File.ReadAllText(updateLog).Contains("[cleanup]"))throw new IOException("Update cleanup or recovery was not reported");
+                    Core.CleanupCompletedUpdates(current);
+                    if(scenario=="cleanup_locked"?Directory.Exists(workRoot):!File.Exists(backup))throw new IOException("Startup cleanup did not respect recovery state");
+                }else if(Directory.Exists(workRoot))throw new IOException("Completed updater left a temporary directory");
+                var chineseUpdateLog=DesktopLocalization.ChineseLogPath(updateLog);if(!File.Exists(chineseUpdateLog)||!File.ReadAllText(chineseUpdateLog,Encoding.UTF8).Contains(success?"成功":"失败"))throw new IOException("Chinese updater log missing: "+scenario);
                 checks["updater_"+scenario]=true;
             }
         }catch(Exception ex){errors.Add(ex.ToString());}

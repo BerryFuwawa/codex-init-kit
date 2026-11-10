@@ -134,6 +134,11 @@ function Convert-BackendOptions {
     }
     foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','inheritPermissions','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
+    $approvedProcesses=& $get 'closeApprovedProcesses'
+    if($null -ne $approvedProcesses){
+        if($approvedProcesses -isnot [string] -or $approvedProcesses -cnotmatch '\A[0-9]+:[0-9]+(?:,[0-9]+:[0-9]+)*\z'){throw '本次关闭的进程标识无效，请重新确认。'}
+        $normalized.closeApprovedProcesses=$approvedProcesses
+    }
     $cliMode=& $get 'cliMode'
     if($null -eq $cliMode){$cliMode=$script:DefaultOptions.cliMode}
     if($cliMode -isnot [string] -or $cliMode -cnotin @('auto','desktop-native','official-standalone')){throw '请选择有效的 CLI 模式。'}
@@ -202,14 +207,56 @@ function New-RollbackEntryId {
     param([string]$Kind,[IO.DirectoryInfo]$Directory,[string]$Marker)
     $bytes = [Text.Encoding]::UTF8.GetBytes($Kind+'|'+$Directory.FullName.ToUpperInvariant()+'|'+$Directory.CreationTimeUtc.Ticks)
     if (Test-Path -LiteralPath $Marker -PathType Leaf) { $bytes += [IO.File]::ReadAllBytes($Marker) }
+    return (Get-RollbackHash $bytes)
+}
+function Get-RollbackHash {
+    param([byte[]]$Bytes)
     $sha = [Security.Cryptography.SHA256]::Create()
-    try { return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
+    try { return [BitConverter]::ToString($sha.ComputeHash($Bytes)).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() }
+}
+function Get-RollbackCliReferences {
+    param([string]$StandaloneRoot)
+    $current=Get-ChildItem -LiteralPath $StandaloneRoot -Directory -Force -ErrorAction Stop | Where-Object Name -eq 'current'
+    if($current -and ($current.Attributes -band [IO.FileAttributes]::ReparsePoint)){
+        if(-not $current.Target){throw '无法确认独立 CLI 当前版本链接。'}
+        foreach($target in $current.Target){
+            if(-not [IO.Path]::IsPathRooted($target)){$target=Join-Path $StandaloneRoot $target}
+            [IO.Path]::GetFullPath($target)
+        }
+    }
+    $statePath=Join-Path (Get-GuardInstallRootPath) 'State\guard-state.json'
+    if(Test-Path -LiteralPath $statePath -PathType Leaf){
+        $state=[IO.File]::ReadAllText($statePath,[Text.Encoding]::UTF8)|ConvertFrom-Json -ErrorAction Stop
+        foreach($name in @('ActiveCliPath','OriginalCliPath')){
+            $path=Get-ObjectPropertyValue $state $name
+            if($path){[IO.Path]::GetFullPath($path)}
+        }
+    }
+    foreach($scope in @('Process','User','Machine')){
+        foreach($name in @('CODEX_CLI_PATH','CODEX_CODE_MODE_HOST_PATH')){
+            $path=[Environment]::GetEnvironmentVariable($name,$scope)
+            if($path){[IO.Path]::GetFullPath($path)}
+        }
+    }
+}
+function Test-RollbackCliReference {
+    param([string]$Directory,[string[]]$References)
+    $prefix=$Directory.TrimEnd('\')+'\'
+    foreach($path in $References){
+        if($path.TrimEnd('\') -ieq $Directory -or $path.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){return $true}
+    }
+    return $false
 }
 function Get-RollbackEntries {
     $entries = [Collections.Generic.List[object]]::new()
     foreach ($kind in @('init','cli')) {
         $root = if ($kind -eq 'init') { Get-BackupRootPath } else { Join-Path (Get-CodexHomePath) 'packages\standalone\releases' }
         if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+        $unknownCli=$false;$cliReferences=@()
+        if($kind -eq 'cli'){
+            try{$cliReferences=@(Get-RollbackCliReferences (Split-Path $root -Parent))}
+            catch{$unknownCli=$true}
+        }
         foreach ($directory in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction Stop)) {
             if (($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
             if ($kind -eq 'init' -and $directory.Name -notmatch '^Codex_Full_Reset_[A-Za-z0-9_.-]+$') { continue }
@@ -238,10 +285,69 @@ function Get-RollbackEntries {
                 }
                 $detail='本地独立 CLI 缓存，执行前检查官方签名、完整性和实际版本。'
             }
-            $entries.Add([ordered]@{id=New-RollbackEntryId $kind $directory $marker;kind=$kind;version=$version;time=$timestamp.ToString('yyyy-MM-dd HH:mm:ss');path=$directory.FullName;available=[bool]$available;detail=$(if($available){$detail}else{'备份或组件不完整，无法回滚。'})})
+            if([IO.File]::Exists((Join-Path $directory.FullName '.rollback-cleanup-pending'))){
+                $available=$false;$detail='上次删除未完成，可再次清理。'
+            }elseif(-not $available){$detail='备份或组件不完整，无法回滚。'}
+            $protected=$kind -eq 'cli' -and ($unknownCli -or (Test-RollbackCliReference $directory.FullName $cliReferences))
+            if($protected){$detail+=if($unknownCli){' 当前 CLI 引用无法确认，清理时保留。'}else{' 当前或受保护的 CLI，清理时保留。'}}
+            $entries.Add([ordered]@{id=New-RollbackEntryId $kind $directory $marker;kind=$kind;version=$version;time=$timestamp.ToString('yyyy-MM-dd HH:mm:ss');path=$directory.FullName;available=[bool]$available;protected=[bool]$protected;detail=$detail})
         }
     }
     return @($entries | Sort-Object { $_.time } -Descending)
+}
+function Get-RollbackDeletionPlan {
+    param([object[]]$Entries)
+    $targets=@($Entries|Where-Object {-not $_.protected})
+    $id=if($targets.Count){Get-RollbackHash ([Text.Encoding]::UTF8.GetBytes(($targets.id|Sort-Object) -join ','))}else{''}
+    return @{entries=$targets;id=$id}
+}
+function Remove-RollbackDirectory {
+    param([IO.DirectoryInfo]$Directory,[string]$PendingMarker)
+    foreach($item in $Directory.GetFileSystemInfos()){
+        if($item.FullName -ieq $PendingMarker){continue}
+        if($item -is [IO.DirectoryInfo] -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){
+            Remove-RollbackDirectory $item
+        }else{
+            # Delete a directory link itself, without entering the target.
+            $item.Delete()
+        }
+    }
+    if($PendingMarker){[IO.File]::Delete($PendingMarker)}
+    $Directory.Delete()
+}
+function Remove-RollbackEntries {
+    param([string]$PayloadRoot,[string]$Id)
+    $plan=Get-RollbackDeletionPlan @(Get-RollbackEntries)
+    if(-not $plan.id -or $plan.id -cne $Id){throw '可删除的备份列表已变化，请刷新后重新确认。'}
+    if(@($plan.entries|Where-Object kind -eq 'cli').Count){Assert-InitializationAppsStopped $PayloadRoot}
+    $failed=0;$deleted=0
+    foreach($entry in $plan.entries){
+        try{
+            $root=if($entry.kind -eq 'init'){Get-BackupRootPath}else{Join-Path (Get-CodexHomePath) 'packages\standalone\releases'}
+            $root=(Get-Item -LiteralPath $root -Force -ErrorAction Stop)
+            $target=(Get-Item -LiteralPath $entry.path -Force -ErrorAction Stop)
+            if(!$target.PSIsContainer -or $target.Parent.FullName -ine $root.FullName -or
+                (($root.Attributes -bor $target.Attributes) -band [IO.FileAttributes]::ReparsePoint)){
+                throw '目录不在已确认的备份范围内。'
+            }
+            $marker=Join-Path $target.FullName $(if($entry.kind -eq 'init'){'session.meta'}else{'codex-package.json'})
+            if((New-RollbackEntryId $entry.kind $target $marker) -cne $entry.id){throw '备份已变化，请刷新列表。'}
+            if($entry.kind -eq 'cli' -and (Test-RollbackCliReference $target.FullName @(Get-RollbackCliReferences $root.Parent.FullName))){
+                throw '该 CLI 缓存已被引用，保留。'
+            }
+            $pendingMarker=Join-Path $target.FullName '.rollback-cleanup-pending'
+            if(-not [IO.File]::Exists($pendingMarker)){[IO.File]::Open($pendingMarker,[IO.FileMode]::CreateNew).Dispose()}
+            Remove-RollbackDirectory $target $pendingMarker
+            $deleted++
+            Write-BackendLine ('已删除回滚项：'+$target.FullName)
+        }catch{
+            $failed++
+            Write-BackendLine ('未能删除回滚项：'+$entry.path+'。'+$_.Exception.Message)
+        }
+    }
+    Write-BackendLine ('回滚清理：已删除 '+$deleted+' 项，未完成 '+$failed+' 项。')
+    if($failed){return 1}
+    return 0
 }
 function Resolve-SelectedRollback {
     param([string]$Id)
@@ -360,7 +466,7 @@ function Emit-ChildText {
     foreach ($line in ($Text -split "\r?\n")) { if ($line.Length -gt 0) { Write-BackendLine $line } }
 }
 function Set-InitConsoleProtocol {
-    param([Parameter(Mandatory=$true)][string]$SourceText,[Parameter(Mandatory=$true)][string]$ScriptDirectory,[string]$WorkRules)
+    param([string]$SourceText,[string]$ScriptDirectory,[string]$WorkRules,[string]$PayloadRoot)
     [void][IO.Directory]::CreateDirectory($ScriptDirectory)
     # Keep the GBK batch source and every nested PowerShell writer on the same
     # byte protocol. Embedded scripts still read/write their data files as UTF-8.
@@ -371,6 +477,31 @@ function Set-InitConsoleProtocol {
         $parts = [regex]::Matches($match.Value, '(?m)^::' + $tag + ':([^\r\n]+)')
         $encoded = ($parts | ForEach-Object { $_.Groups[1].Value }) -join ''
         $code = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+        if($tag -eq 'PMB64' -and $PayloadRoot){
+            $assertions=[ordered]@{
+                'This restriction applies only to independent-task APIs.'='上述限制只适用于创建独立任务的接口。'
+                'the parent should proactively identify opportunities for in-task parallelism'='主任务应主动识别任务内可并行的工作'
+                'two or more genuinely independent subtasks'='两个或更多确实独立的子任务'
+                'largest number of useful, non-overlapping subagents supported by the task, up to 6.'='充分使用任务可支持的子代理，最多 6 个。'
+                'The parent may use any available main model'='主任务可使用任何可用的主模型'
+                'waiting for all required child results'='等待所有必要的子代理结果'
+                'performing final verification'='执行最终验证'
+                'Configured Codex workspace root: {0}:\Codex'='Codex 工作区根目录：{0}:\Codex'
+                'At the beginning of each task, proactively classify the work,'='开始任务时，主动判断工作类型'
+                'Do not broadly reorganize historical files automatically.'='历史文件的整理需要明确授权。'
+                'User-specified paths, repositories, and project locations take priority.'='优先使用用户指定的路径、仓库和项目位置。'
+                'Before finalizing a task, verify that active work and final outputs are'='交付前，确认进行中的工作和最终产物都放在对应目录'
+            }
+            foreach($old in $assertions.Keys){$code=$code.Replace($old,$assertions[$old])}
+            foreach($template in @{prompt='SubagentRules.md';folderPromptTemplate='FolderRules.md'}.GetEnumerator()){
+                $assignment='$'+$template.Key+" = @'"
+                $pattern='(?ms)^'+[regex]::Escape($assignment)+"\r?\n.*?^'@(?=\r?$)"
+                if($code -notmatch $pattern){throw ('找不到桌面提示词模板：'+$template.Key)}
+                $body=[IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot $template.Value),[Text.Encoding]::UTF8).TrimEnd()
+                $replacement=$assignment+"`n"+$body+"`n'@"
+                $code=[regex]::Replace($code,$pattern,[Text.RegularExpressions.MatchEvaluator]{param($m) $replacement})
+            }
+        }
         $code = [regex]::Replace($code,'(?m)^([ \t]*)\[Console\]::OutputEncoding\s*=[^\r\n]*', '$1[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(936)')
         $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($code))
         $chunks = for ($i = 0; $i -lt $encoded.Length; $i += 180) { '::' + $tag + ':' + $encoded.Substring($i,[Math]::Min(180,$encoded.Length-$i)) }
@@ -379,7 +510,20 @@ function Set-InitConsoleProtocol {
     $prefix = "`$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::GetEncoding(936); `$OutputEncoding=[Console]::OutputEncoding;`n"
     $rulesReader = '[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:CODEX_INIT_RULES_B64))'
     $rulesFileReader = '[IO.File]::ReadAllText((Join-Path $PSScriptRoot ''work-rules.md''),[Text.Encoding]::UTF8)'
-    $rulesWriter = @{Found=$false}
+    $oldPrefix='''@''+$rtk+"`n`n"+'
+    $oldCheck=@'
+if($text.IndexOf('@'+$env:CODEX_INIT_RTK_FILE,[StringComparison]::OrdinalIgnoreCase) -lt 0){exit 1}
+'@
+    $newCheck=@'
+if(-not $text.StartsWith('# RTK'+[char]10,[StringComparison]::Ordinal)){exit 1}
+'@
+    $writeLicense=@'
+    $license = Join-Path $PSScriptRoot 'HERO-Anti-OverDefense.LICENSE.txt'
+    if ([IO.File]::Exists($license)) {
+        [IO.File]::Copy($license,(Join-Path ([IO.Path]::GetDirectoryName($path)) 'HERO-Anti-OverDefense.LICENSE.txt'),$true)
+    }
+'@
+    $rulesWriter = @{Found=$false;Check=$false}
     $evaluator = [Text.RegularExpressions.MatchEvaluator]{
         param($match)
         $flags = $match.Groups[1].Value
@@ -387,8 +531,14 @@ function Set-InitConsoleProtocol {
         if ($flags -notmatch '(?i)-OutputFormat\s+Text') { $flags += '-OutputFormat Text ' }
         $code = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($match.Groups[2].Value))
         if ($WorkRules -and $code.Contains($rulesReader)) {
-            $code = $code.Replace($rulesReader,$rulesFileReader)
+            if(-not $code.Contains($oldPrefix)){throw '找不到旧 RTK 引用写入步骤。'}
+            $code = $code.Replace($rulesReader,$rulesFileReader).Replace($oldPrefix,'')
+            $code = $code.Replace('    [IO.File]::WriteAllText($path,$newText,',$writeLicense+"`n"+'    [IO.File]::WriteAllText($path,$newText,')
             $rulesWriter.Found = $true
+        }
+        if($code.Contains($oldCheck)){
+            $code=$code.Replace($oldCheck,$newCheck)
+            $rulesWriter.Check=$true
         }
         # EncodedCommand serializes the information stream to CLIXML on
         # redirected stderr even with OutputFormat Text. A BOM-marked script
@@ -399,7 +549,7 @@ function Set-InitConsoleProtocol {
     }
     $SourceText = [regex]::Replace($SourceText,'(?i)(powershell\.exe\s+[^\r\n]*?)-EncodedCommand\s+([A-Za-z0-9+/=]+)',$evaluator)
     if ($WorkRules) {
-        if (-not $rulesWriter.Found) { throw '未找到桌面初始化的规则读取步骤，请重新构建桌面工具。' }
+        if (-not $rulesWriter.Found -or -not $rulesWriter.Check) { throw '未找到桌面初始化的规则读写校验步骤，请重新构建桌面工具。' }
         [IO.File]::WriteAllText((Join-Path $ScriptDirectory 'work-rules.md'),$WorkRules,$script:Utf8NoBom)
     }
     return $SourceText.Replace('chcp 65001 >nul','chcp 936 >nul')
@@ -467,22 +617,23 @@ function New-InitAdapter {
     $folderEnabled = [bool]$resolvedOptions.folderManagement
     $subagentsEnabled = [bool]$resolvedOptions.subagents
     $cuaEnabled = [bool]$resolvedOptions.cuaRepair
-    $rules = ''
-    if (-not $subagentsEnabled -or $resolvedOptions.antiOverDefense -or $resolvedOptions.workJournal -or $resolvedOptions.commandLineFirst) {
-        $rulesMatch = [regex]::Match($sourceText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
-        if (-not $rulesMatch.Success) { throw 'Base work-rules payload is missing.' }
-        $rules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesMatch.Groups[1].Value))
-        if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
-        $optionalRules = [ordered]@{
-            antiOverDefense = 'AntiOverDefense.md'
-            workJournal = 'WorkJournal.md'
-            commandLineFirst = 'CommandLineFirst.md'
-        }
-        foreach ($name in $optionalRules.Keys) {
-            if ($resolvedOptions[$name]) {
-                $section = [IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot $optionalRules[$name]),[Text.Encoding]::UTF8)
-                $rules = $rules.TrimEnd([char[]]"`r`n") + "`n`n" + $section
-            }
+    $rulesMatch = [regex]::Match($sourceText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
+    if (-not $rulesMatch.Success) { throw '找不到基础工作规则。' }
+    $rules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesMatch.Groups[1].Value))
+    if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
+    $headings=[ordered]@{GOAL='目标';AUTONOMY='自主推进';PRIORITY='指令优先级';STYLE='表达风格';DONE='完成条件';APPROVAL='授权';VERIFY='验证';SUBAGENTS='子代理'}
+    foreach($key in $headings.Keys){$rules=[regex]::Replace($rules,('(?m)^'+$key+'(?=\r?$)'),$headings[$key])}
+    $rtkRules=[IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot 'RtkRules.md'),[Text.Encoding]::UTF8)
+    $rules=$rtkRules.Replace("`r`n","`n").TrimEnd()+"`n`n"+$rules
+    $optionalRules = [ordered]@{
+        antiOverDefense = 'AntiOverDefense.md'
+        workJournal = 'WorkJournal.md'
+        commandLineFirst = 'CommandLineFirst.md'
+    }
+    foreach ($name in $optionalRules.Keys) {
+        if ($resolvedOptions[$name]) {
+            $section = [IO.File]::ReadAllText((Assert-PayloadFile $PayloadRoot $optionalRules[$name]),[Text.Encoding]::UTF8)
+            $rules = $rules.TrimEnd([char[]]"`r`n") + "`n`n" + $section
         }
     }
     $proxyDisabled = ($ProxyPortValue -eq 0)
@@ -502,7 +653,8 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.9')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.10')
+    $sourceText = $sourceText.Replace('Configured Codex workspace root: !EXPECTED_CODEX_ROOT!','!EXPECTED_CODEX_ROOT!')
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -691,14 +843,47 @@ exit /b %errorlevel%
     # GUI initialization never forcibly terminates a user's reopened task.
     # Exit the private cmd worker itself if Codex reappears after preflight.
     if ($sourceText -match '(?m)^:STOP_CODEX\r?$') {
-        $stopCode="if (@(Get-Process -Name ChatGPT,codex,codex-latest,codex-code-mode-host,codex-command-runner -ErrorAction SilentlyContinue).Count) { [Console]::Error.WriteLine('Codex is running. Save work and exit before initialization.'); exit 1 }; exit 0"
+        $stopCode=@'
+$ErrorActionPreference='Stop'
+try {
+    . '__BACKEND__'
+    Assert-InitializationAppsStopped '__PAYLOAD__'
+} catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+'@
+        $stopCode=$stopCode.Replace('__BACKEND__',(Join-Path $PSScriptRoot 'Backend.ps1').Replace("'","''")).Replace('__PAYLOAD__',$PayloadRoot.Replace("'","''"))
         $stopEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($stopCode))
         $stopBlock=":STOP_CODEX`r`npowershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $stopEncoded`r`nif errorlevel 1 exit 1`r`nexit /b 0`r`n`r`n"
         $sourceText=[regex]::Replace($sourceText,'(?ms)^:STOP_CODEX\r?\n.*?(?=^:[A-Z_]+\r?$)',[Text.RegularExpressions.MatchEvaluator]{param($m) $stopBlock})
         if($sourceText -match '(?i)taskkill\s+/f'){throw 'Unrecognized process termination in init adapter; stopped.'}
     }
     $scriptDirectory=[IO.Path]::ChangeExtension($adapterPath,'.scripts')
-    $sourceText = Set-InitConsoleProtocol $sourceText $scriptDirectory -WorkRules $rules
+    $sourceText = Set-InitConsoleProtocol $sourceText $scriptDirectory -WorkRules $rules -PayloadRoot $PayloadRoot
+    if($resolvedOptions.antiOverDefense){
+        $licenseName='HERO-Anti-OverDefense.LICENSE.txt'
+        [IO.File]::Copy((Assert-PayloadFile $PayloadRoot $licenseName),(Join-Path $scriptDirectory $licenseName))
+        $backupLicense=@'
+:BACKUP_AGENTS_AND_RTK
+if exist "%CODEX_HOME_DIR%\HERO-Anti-OverDefense.LICENSE.txt" (
+    copy /y "%CODEX_HOME_DIR%\HERO-Anti-OverDefense.LICENSE.txt" "%BACKUP_DIR%\HERO-Anti-OverDefense.LICENSE.txt" >nul
+    if errorlevel 1 exit /b 1
+)
+> "%BACKUP_DIR%\hero-license-managed.txt" echo 1
+if errorlevel 1 exit /b 1
+'@
+        $sourceText=$sourceText.Replace(":BACKUP_AGENTS_AND_RTK`r`n",$backupLicense.TrimEnd()+"`r`n")
+    }
+    $restoreLicense=@'
+if exist "%SESSION_DIR%\Backups\hero-license-managed.txt" (
+    if exist "%SESSION_DIR%\Backups\HERO-Anti-OverDefense.LICENSE.txt" (
+        copy /y "%SESSION_DIR%\Backups\HERO-Anti-OverDefense.LICENSE.txt" "%CODEX_HOME_DIR%\HERO-Anti-OverDefense.LICENSE.txt" >nul
+        if errorlevel 1 exit /b 1
+    ) else if exist "%CODEX_HOME_DIR%\HERO-Anti-OverDefense.LICENSE.txt" (
+        del /q "%CODEX_HOME_DIR%\HERO-Anti-OverDefense.LICENSE.txt" >nul
+        if errorlevel 1 exit /b 1
+    )
+)
+'@
+    $sourceText=$sourceText.Replace('if "!RESTORE_RTK!"=="1" (',$restoreLicense.TrimEnd()+"`r`n"+'if "!RESTORE_RTK!"=="1" (')
     if($resolvedOptions.inheritPermissions -and $null -ne $PermissionSnapshot){
         $snapshotPath=Join-Path $scriptDirectory 'permissions.toml'
         [IO.File]::WriteAllText($snapshotPath,$PermissionSnapshot.Payload,$script:Utf8NoBom)
@@ -875,7 +1060,7 @@ function Invoke-InitOperation {
         if ($Action -eq 'one-click') {
             Set-ScopedModelSettings $resolvedOptions
             Write-BackendLine $(if($resolvedOptions.memories){'Codex 记忆：已开启记忆生成与使用；现有记忆文件保留。'}else{'Codex 记忆：已关闭记忆生成与使用；现有记忆文件保留。'})
-            Write-BackendLine $(if($resolvedOptions.antiOverDefense){'防止过度防御：已写入 HERO 中文精简规则及实现、交付规则。'}else{'防止过度防御：未勾选，已跳过规则写入。'})
+            Write-BackendLine $(if($resolvedOptions.antiOverDefense){'防止过度防御：已写入 HERO 中文完整规则及实现、交付规则。'}else{'防止过度防御：未勾选，已跳过规则写入。'})
         }
         if ($Action -eq 'proxy') {
             $envFile = Join-Path (Get-CodexHomePath) '.env'
@@ -1177,8 +1362,12 @@ function Get-ReadOnlyStatus {
     $running=$false; try{$running=[bool](Get-Process -ErrorAction SilentlyContinue | Where-Object{$_.ProcessName -match '^(Codex|ChatGPT)$'})}catch{}
     $protectionRoot=Get-GuardInstallRootPath; $protectionInstalled=Get-ReadOnlyProtectionInstalled
     $runtime = Get-ReadOnlyRuntimeModeInfo $protectionRoot $desktop.InstallLocation
-    $rollbackEntries=@();$rollbackError=''
-    try { $rollbackEntries=@(Get-RollbackEntries) } catch { $rollbackError='备份列表读取失败：'+$_.Exception.Message }
+    $rollbackEntries=@();$rollbackError='';$rollbackDeleteId='';$rollbackDeleteCount=0
+    try {
+        $rollbackEntries=@(Get-RollbackEntries)
+        $deletion=Get-RollbackDeletionPlan $rollbackEntries
+        $rollbackDeleteId=$deletion.id;$rollbackDeleteCount=$deletion.entries.Count
+    } catch { $rollbackError='备份列表读取失败：'+$_.Exception.Message }
     return [ordered]@{
         backendVersion=$script:BackendVersion; desktopVersion=$desktop.Version; desktopHealth=$desktop.Health; desktopHealthy=$desktop.Healthy; desktopFound=$desktop.Found
         desktopInstallLocation=$desktop.InstallLocation; configModel=$config.Model; configEffort=$config.Effort
@@ -1187,7 +1376,7 @@ function Get-ReadOnlyStatus {
         runtimeMode=$runtime.Mode; runtimeModeDetail=$runtime.Detail; currentCliPath=$runtime.CliPath
         backupPath=if($latestBackup){$latestBackup}else{$backupRoot}; backupRoot=$backupRoot; latestBackupPath=$latestBackup
         statePath=Join-Path $protectionRoot 'State\guard-state.json'
-        rollbackEntries=$rollbackEntries; rollbackError=$rollbackError
+        rollbackEntries=$rollbackEntries; rollbackError=$rollbackError; rollbackDeleteId=$rollbackDeleteId; rollbackDeleteCount=$rollbackDeleteCount
     }
 }
 function Initialize-ConfigCompatibility {
@@ -1215,7 +1404,7 @@ function Invoke-BackendMain {
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -notin @('status','initialize-preflight','config-check','config-cleanup')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
+        if ($input.Operation -notin @('status','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
             'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot $input.Options)|ConvertTo-Json -Compress -Depth 8)); return 0 }
@@ -1234,6 +1423,7 @@ function Invoke-BackendMain {
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
             'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }
             'rollback-selected' { return (Invoke-SelectedRollback $input.PayloadRoot $input.Options.rollbackId $input.ProxyPort) }
+            'rollback-delete-all' { return (Remove-RollbackEntries $input.PayloadRoot $input.Options.rollbackId) }
             'cua-check' { return (Invoke-CuaOperation 'check' $input.PayloadRoot) }
             'cua-repair' { return (Invoke-CuaOperation 'repair' $input.PayloadRoot) }
             'guard-install' { return (Invoke-GuardOperation 'guard-install' $input.PayloadRoot) }

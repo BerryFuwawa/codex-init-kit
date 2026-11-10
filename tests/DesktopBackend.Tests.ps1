@@ -140,7 +140,7 @@ enabled = true
     [IO.File]::Copy($journalSource,(Join-Path $payload 'WorkJournal.md'))
     $commandLineSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\CommandLineFirst.md'}else{Join-Path $sourceRoot 'CommandLineFirst.md'}
     [IO.File]::Copy($commandLineSource,(Join-Path $payload 'CommandLineFirst.md'))
-    foreach($resource in @('ConfigCompatibility.cs','PermissionSettings.cs')){
+    foreach($resource in @('ConfigCompatibility.cs','PermissionSettings.cs','RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
         $resourceSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project ('app\'+$resource)}else{Join-Path $sourceRoot $resource}
         [IO.File]::Copy($resourceSource,(Join-Path $payload $resource))
     }
@@ -399,7 +399,7 @@ exit /b 0
     Assert ($enabledRulesMatch.Success) 'Enabled-subagent adapter lost the base work-rules payload.'
     Assert ($enabledRulesMatch.Value.Length -lt 8191) 'Base work-rules line exceeds the Windows command-line limit.'
     $enabledRules = Read-AdapterWorkRules $enabledFeatureAdapter
-    Assert ($enabledRules -match '(?m)^SUBAGENTS\r?$' -and $enabledRules.Contains('并行就并行')) 'Enabled-subagent adapter removed the SUBAGENTS rules section.'
+    Assert ($enabledRules -match '(?m)^子代理\r?$' -and $enabledRules.Contains('并行就并行')) 'Enabled-subagent adapter removed the subagent rules section.'
     $antiText=[IO.File]::ReadAllText((Join-Path $payload 'AntiOverDefense.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
     Assert ($enabledRules.Contains($antiText.TrimEnd()) -and ([regex]::Matches($enabledRules,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count -eq 1)) 'Enabled rule payload was missing or duplicated.'
     $journalText=[IO.File]::ReadAllText((Join-Path $payload 'WorkJournal.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
@@ -407,8 +407,9 @@ exit /b 0
     $commandLineText=[IO.File]::ReadAllText((Join-Path $payload 'CommandLineFirst.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
     Assert ($enabledRules.Contains($commandLineText.TrimEnd())) 'Command-line preference rules were missing.'
     Assert ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($enabledRules)).Length -gt 8191) 'The all-rules fixture no longer exercises oversized batch input.'
-    Assert ($antiText.Contains('cc79bd03a407eaabe5a0237274d3cdee25f79156') -and $antiText.Contains('Copyright (c) 2026 Ruofeng Yang') -and $antiText.Contains('THE SOFTWARE IS PROVIDED "AS IS"')) 'HERO source or MIT notice was omitted.'
-    Assert (([regex]::Matches($antiText,'(?m)^[1-9]\. ').Count -eq 9) -and $antiText.Contains('对的就说对。不要为了交差硬找问题。') -and -not $antiText.Contains('```')) 'Chinese short rules are incomplete or fenced.'
+    $licenseText=[IO.File]::ReadAllText((Join-Path $payload 'HERO-Anti-OverDefense.LICENSE.txt'))
+    Assert ($licenseText.Contains('cc79bd03a407eaabe5a0237274d3cdee25f79156') -and $licenseText.Contains('Copyright (c) 2026 Ruofeng Yang') -and $licenseText.Contains('THE SOFTWARE IS PROVIDED "AS IS"') -and -not $enabledRules.Contains('MIT License') -and -not $enabledRules.Contains('https://github.com/wanshuiyin/')) 'HERO attribution was not separated from AGENTS.'
+    Assert (([regex]::Matches($antiText,'(?m)^[1-9]\. ').Count -ge 9) -and $antiText.Contains('对的就说对。不要为了交差硬找问题。') -and $antiText.Contains('已经见过的形状') -and $antiText.Contains('不占优的数字')) 'Chinese full rules are incomplete.'
     $expectedOwnRules=@'
 ## 实现与防御边界
 
@@ -435,6 +436,8 @@ exit /b 0
     $commandLineDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{commandLineFirst=$false;subagents=$false}
     $commandLineDisabledRules=Read-AdapterWorkRules $commandLineDisabledAdapter
     Assert (-not $commandLineDisabledRules.Contains('<!-- BEGIN CODEX COMMAND LINE FIRST RULES -->') -and $commandLineDisabledRules.Contains($journalText.TrimEnd())) 'Unchecked command-line preference affected selected rules.'
+    $rtkText=[IO.File]::ReadAllText((Join-Path $payload 'RtkRules.md')).Replace("`r`n","`n").TrimEnd()
+    Assert ($commandLineDisabledRules.StartsWith($rtkText)) 'RTK ceased to be independent of the command-line preference.'
 
     $featureAdapter = New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 ([ordered]@{
         folderManagement = $false; subagents = $false; cuaRepair = $false
@@ -442,8 +445,8 @@ exit /b 0
     })
     $featureText = [IO.File]::ReadAllText($featureAdapter,[Text.Encoding]::GetEncoding(936))
     $disabledRules = Read-AdapterWorkRules $featureAdapter
-    Assert ($disabledRules -notmatch '(?m)^SUBAGENTS\r?$' -and -not $disabledRules.Contains('并行就并行')) 'Disabled-subagent adapter still contained the SUBAGENTS rules section.'
-    foreach ($requiredRulesHeader in @('<!-- BEGIN CODEX INIT WORK RULES -->','GOAL','AUTONOMY','PRIORITY','STYLE','DONE','APPROVAL','VERIFY')) {
+    Assert ($disabledRules -notmatch '(?m)^子代理\r?$' -and -not $disabledRules.Contains('并行就并行')) 'Disabled-subagent adapter still contained the subagent rules section.'
+    foreach ($requiredRulesHeader in @('<!-- BEGIN CODEX INIT WORK RULES -->','目标','自主推进','指令优先级','表达风格','完成条件','授权','验证')) {
         Assert ($disabledRules.Contains($requiredRulesHeader)) ('Disabled-subagent adapter dropped base work-rules header: ' + $requiredRulesHeader)
     }
     Assert ($featureText.Contains('if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" (') -and $featureText.Contains('call :SELECT_FOLDER_DRIVE')) 'Folder-management stage was not made optional.'
@@ -472,8 +475,10 @@ exit /b 0
         ':CONFIRM','exit /b 0',':CHECK_GITHUB_UPDATE','exit /b 0'
     )
     $mockSource = Join-Path $mockRoot 'init.cmd'
-    [IO.File]::WriteAllText($mockSource,($mockLines -join [Environment]::NewLine) + [Environment]::NewLine,[Text.Encoding]::GetEncoding(936))
-    $mockAdapter = New-InitAdapter $mockSource $mockRoot 'D' 10808 ([ordered]@{
+    $originalAdapterInput=[IO.File]::ReadAllText((Join-Path $payload 'init.cmd'),$script:InputEncoding)
+    $mockWriters=[regex]::Matches($originalAdapterInput,'(?ms)^:(?:WRITE_AGENTS_RULES|REBUILD_AGENTS_FILE)\r?\n.*?(?=^:[A-Z_]+\r?$)') | ForEach-Object Value
+    [IO.File]::WriteAllText($mockSource,(@($mockLines)+@($mockWriters) -join [Environment]::NewLine) + [Environment]::NewLine,[Text.Encoding]::GetEncoding(936))
+    $mockAdapter = New-InitAdapter $mockSource $payload 'D' 10808 ([ordered]@{
         folderManagement = $false; subagents = $true; cuaRepair = $false; antiOverDefense = $false; workJournal = $false; commandLineFirst = $false
         parentModel = 'gpt-6.1-sol'; childModel = 'gpt-5.6-luna'; parentEffort = 'medium'; childEffort = 'max'
     })
@@ -677,9 +682,17 @@ END CODEX LUNA PROMPT V1.3
     $pmCode=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($pmParts -join '')))
     $pmPath=Join-Path $scratch 'prompt-manager-fixture.ps1'
     [IO.File]::WriteAllText($pmPath,$pmCode,[Text.UTF8Encoding]::new($true))
+    $desktopPmParts=[regex]::Matches($enabledFeatureText,'(?m)^::PMB64:([^\r\n]+)') | ForEach-Object {$_.Groups[1].Value}
+    $desktopPmCode=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($desktopPmParts -join '')))
+    $desktopPmPath=Join-Path $scratch 'desktop-prompt-manager-fixture.ps1'
+    $driveFixture='function Get-AvailableDriveInfo { [pscustomobject]@{Name="D";Root=$env:CODEX_HOME_DIR} }'
+    $desktopPmCode=$desktopPmCode.Replace('if ($env:CODEX_PROMPT_MANAGER_ACTION -eq ''select-drive'') {',$driveFixture+"`n"+'if ($env:CODEX_PROMPT_MANAGER_ACTION -eq ''select-drive'') {')
+    [IO.File]::WriteAllText($desktopPmPath,$desktopPmCode,[Text.UTF8Encoding]::new($true))
     foreach($case in @(
         @{name='standalone';gui='0';parent='gpt-6.1-sol';parentEffort='high';child='gpt-6.1-sol';childEffort='high'},
-        @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'}
+        @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'},
+        @{name='desktop-luna';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'},
+        @{name='desktop-folder';gui='1'}
     )){
         $fixtureHome=Join-Path $scratch ('prompt-model-'+$case.name);[void][IO.Directory]::CreateDirectory($fixtureHome)
         [IO.File]::WriteAllText((Join-Path $fixtureHome 'config.toml'),"model = `"old`"`nmodel_reasoning_effort = `"low`"`n",[Text.UTF8Encoding]::new($false))
@@ -687,12 +700,19 @@ END CODEX LUNA PROMPT V1.3
         [IO.File]::WriteAllText((Join-Path $fixtureHome 'AGENTS.md'),$oldBlock,[Text.UTF8Encoding]::new($false))
         $psi=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))
         $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
-        $psi.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$pmPath+'"'
-        foreach($entry in @{CODEX_HOME_DIR=$fixtureHome;CODEX_PROMPT_MANAGER_ACTION='install-luna';CODEX_GUI_NO_PAUSE=$case.gui;CODEX_GUI_PARENT_MODEL=$case.parent;CODEX_GUI_PARENT_EFFORT=$case.parentEffort;CODEX_GUI_CHILD_MODEL=$case.child;CODEX_GUI_CHILD_EFFORT=$case.childEffort}.GetEnumerator()){$psi.EnvironmentVariables[$entry.Key]=[string]$entry.Value}
+        $managerPath=if($case.name.StartsWith('desktop-')){$desktopPmPath}else{$pmPath}
+        $action=if($case.name -eq 'desktop-folder'){'install-folder'}else{'install-luna'}
+        $psi.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$managerPath+'"'
+        foreach($entry in @{CODEX_HOME_DIR=$fixtureHome;CODEX_PROMPT_MANAGER_ACTION=$action;CODEX_FOLDER_DRIVE='D';CODEX_GUI_NO_PAUSE=$case.gui;CODEX_GUI_PARENT_MODEL=$case.parent;CODEX_GUI_PARENT_EFFORT=$case.parentEffort;CODEX_GUI_CHILD_MODEL=$case.child;CODEX_GUI_CHILD_EFFORT=$case.childEffort}.GetEnumerator()){$psi.EnvironmentVariables[$entry.Key]=[string]$entry.Value}
         $child=[Diagnostics.Process]::Start($psi);$out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(30000)){$child.Kill();throw 'Prompt manager fixture timed out.'}
         Assert ($child.ExitCode -eq 0) ('Prompt manager '+$case.name+' failed: '+$out.Result+' '+$err.Result);$child.Dispose()
         $fixtureConfig=[IO.File]::ReadAllText((Join-Path $fixtureHome 'config.toml'));$fixtureAgents=[IO.File]::ReadAllText((Join-Path $fixtureHome 'AGENTS.md'))
+        if($case.name -eq 'desktop-folder'){
+            Assert ($fixtureAgents.Contains('Codex 工作区根目录：D:\Codex') -and $fixtureAgents.Contains('user instruction') -and $fixtureConfig.Contains((Join-Path $fixtureHome 'Codex\Conversations'))) 'Localized folder manager changed markers, existing rules or workspace binding.'
+            continue
+        }
+        if($case.name -eq 'desktop-luna'){Assert ($fixtureAgents.Contains('## 主任务职责') -and -not $fixtureAgents.Contains('## Parent responsibilities')) 'Desktop Luna did not install the localized rules.'}
         Assert ($fixtureConfig -match ('(?m)^model = "'+[regex]::Escape($case.parent)+'"\r?$') -and $fixtureConfig -match ('(?m)^model_reasoning_effort = "'+$case.parentEffort+'"\r?$')) ('Parent selection lost in '+$case.name)
         Assert ($fixtureAgents.Contains('model = '+$case.child) -and $fixtureAgents.Contains('model_reasoning_effort = '+$case.childEffort) -and $fixtureAgents.Contains('user instruction')) ('Child selection or existing text lost in '+$case.name)
         Assert (([regex]::Matches($fixtureAgents,'(?m)^BEGIN CODEX LUNA PROMPT V1\.3\r?$')).Count -eq 1 -and $fixtureAgents -notmatch 'Do not create Sol, Terra|model = gpt-5\.6-luna') ('Legacy block was not safely replaced in '+$case.name)
@@ -825,6 +845,7 @@ END CODEX LUNA PROMPT V1.3
         'set "CODEX_INIT_AGENTS_FILE=%CODEX_TEST_AGENTS%"',
         'set "CODEX_INIT_RTK_FILE=%CODEX_TEST_RTK%"',
         'set "CODEX_INIT_RULES_B64=%CODEX_TEST_RULES_B64%"',
+        'set "CODEX_HOME_DIR=%CODEX_TEST_HOME%"',
         'call :FULL_INIT',
         'exit /b %errorlevel%',
         ':FULL_INIT',
@@ -839,7 +860,7 @@ END CODEX LUNA PROMPT V1.3
     $backupEnvironment = @{
         CODEX_TEST_AGENTS = $backupAgentsPath; CODEX_TEST_RTK = $backupRtkPath
         CODEX_TEST_RTK_EXE = $backupExePath; CODEX_TEST_BACKUP = $backupDir
-        CODEX_TEST_RULES_B64 = $rulesB64
+        CODEX_TEST_RULES_B64 = $rulesB64; CODEX_TEST_HOME=$backupFixtureRoot
     }
     $backupResult = Invoke-ChildProcess $backupFixturePath @() $backupFixtureRoot $backupEnvironment $script:InputEncoding
     Assert ($backupResult.ExitCode -eq 0) ('Actual backup/rebuild fixture failed: ' + $backupResult.Error)
@@ -859,7 +880,8 @@ END CODEX LUNA PROMPT V1.3
         $selectedText=[IO.File]::ReadAllText($selectedAdapter,$script:InputEncoding)
         $selectedRebuild=[regex]::Match($selectedText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
         Assert ($selectedRebuild.Contains('-File "')) 'Adapted work-rules rebuild did not use the private PowerShell writer.'
-        $selectedFixture=$backupFixtureText.Replace([regex]::Replace($rebuildSection,'\r\n|\r|\n',"`r`n"),$selectedRebuild)
+        $selectedBackup=[regex]::Match($selectedText,'(?ms)^:BACKUP_AGENTS_AND_RTK\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
+        $selectedFixture=$backupFixtureText.Replace([regex]::Replace($rebuildSection,'\r\n|\r|\n',"`r`n"),$selectedRebuild).Replace([regex]::Replace($backupSection,'\r\n|\r|\n',"`r`n"),$selectedBackup)
         [IO.File]::WriteAllText($backupFixturePath,$selectedFixture,$script:InputEncoding)
         $antiSession=Join-Path $scratch ('anti-session-'+$antiIndex);$antiSessions+= $antiSession
         $antiBackup=Join-Path $antiSession 'Backups';[void][IO.Directory]::CreateDirectory((Join-Path $antiBackup 'rtk'))
@@ -870,6 +892,10 @@ END CODEX LUNA PROMPT V1.3
         Assert ($antiResult.ExitCode -eq 0) ('Selected work rules failed the actual base rebuild: ' + $antiResult.Error)
         Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $antiBackup 'AGENTS.md'))) -eq $beforeAnti) 'Selected-rule initialization lost the original AGENTS bytes.'
         $actualAnti=[IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8)
+        Assert ($actualAnti.StartsWith($rtkText) -and -not $actualAnti.Contains('@'+$backupRtkPath)) 'Rebuilt AGENTS did not use complete inline RTK instructions.'
+        $licensePath=Join-Path $backupFixtureRoot 'HERO-Anti-OverDefense.LICENSE.txt'
+        if($antiIndex -ne 2){Assert ([IO.File]::ReadAllText($licensePath) -eq $licenseText -and [IO.File]::Exists((Join-Path $antiBackup 'hero-license-managed.txt'))) 'HERO license was not installed and tracked for rollback.'}
+        if($antiIndex -eq 1){Assert ([IO.File]::ReadAllText((Join-Path $antiBackup 'HERO-Anti-OverDefense.LICENSE.txt')) -eq $licenseText) 'Prior HERO license was not backed up.'}
         Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX ANTI OVERDEFENSE RULES -->').Count) -eq $(if($antiIndex -eq 2){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of rule blocks.'
         Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX WORK JOURNAL RULES -->').Count) -eq $(if($antiIndex -eq 3){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of work journal blocks.'
         Assert (([regex]::Matches($actualAnti,'<!-- BEGIN CODEX COMMAND LINE FIRST RULES -->').Count) -eq $(if($antiIndex -eq 4){0}else{1})) 'Repeated or unchecked initialization retained an incorrect number of command-line preference blocks.'
@@ -884,7 +910,7 @@ END CODEX LUNA PROMPT V1.3
         Remove-InitAdapter $selectedAdapter
         Assert (-not (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($selectedAdapter,'.scripts')))) 'Selected work-rules temporary files were not removed.'
     }
-    $rollbackSection=[regex]::Match($originalInitText,'(?ms)^:ROLLBACK_SESSION\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
+    $rollbackSection=[regex]::Match($enabledFeatureText,'(?ms)^:ROLLBACK_SESSION\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
     $antiRollback=Join-Path $scratch 'anti-rollback.cmd'
     $rollbackHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_HOME%`"`r`nset `"AGENTS_FILE=%CODEX_TEST_AGENTS%`"`r`ncall :ROLLBACK_SESSION `"%~1`"`r`nexit /b %errorlevel%`r`n"
     [IO.File]::WriteAllText($antiRollback,$rollbackHeader+$rollbackSection+"`r`n:STOP_CODEX`r`nexit /b 0`r`n",$script:InputEncoding)
@@ -895,6 +921,7 @@ END CODEX LUNA PROMPT V1.3
         Assert ($rolled.ExitCode -eq 0 -and [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath)) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $session 'Backups\AGENTS.md')))) 'Actual rollback did not restore the selected-rule backup exactly.'
     }
     Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($backupAgentsPath)) -eq $backupAgentsBytesB64) 'Original global instructions were not restored.'
+    Assert (-not [IO.File]::Exists($licensePath)) 'Rollback retained a HERO license created by the session.'
 
     $failureRoot = Join-Path $scratch 'backup-failure-fixture'
     [void][IO.Directory]::CreateDirectory($failureRoot)
@@ -942,7 +969,7 @@ END CODEX LUNA PROMPT V1.3
 
     # Catalog and selected rollback stay inside isolated backup/cache roots.
     $savedRollbackFunctions=@{}
-    foreach($name in @('Get-BackupRootPath','Get-CodexHomePath','Assert-DesktopStopped','Initialize-GuardRuntime','Test-DesktopRunning','Test-CanonicalPackage','Invoke-InitRollback','Load-State','Set-ActiveCli')) {
+    foreach($name in @('Get-BackupRootPath','Get-CodexHomePath','Get-GuardInstallRootPath','Assert-InitializationAppsStopped','Assert-DesktopStopped','Initialize-GuardRuntime','Test-DesktopRunning','Test-CanonicalPackage','Invoke-InitRollback','Load-State','Set-ActiveCli')) {
         $command=Get-Item ('Function:'+$name) -ErrorAction SilentlyContinue
         if($command){$savedRollbackFunctions[$name]=$command.ScriptBlock}
     }
@@ -950,6 +977,8 @@ END CODEX LUNA PROMPT V1.3
         $rollbackRoot=Join-Path $scratch 'rollback-snapshots';$rollbackHome=Join-Path $scratch 'rollback-home'
         function Get-BackupRootPath {return $rollbackRoot}
         function Get-CodexHomePath {return $rollbackHome}
+        function Get-GuardInstallRootPath {return (Join-Path $rollbackHome 'guard')}
+        function Assert-InitializationAppsStopped {if($rollbackRunning){throw 'fixture running'}}
         Assert (@(Get-RollbackEntries).Count -eq 0) 'Empty backup roots did not produce an empty list.'
         foreach($name in @('Codex_Full_Reset_20261030-120000','Codex_Full_Reset_20261101-140000')){
             $sessionRoot=Join-Path $rollbackRoot $name
@@ -993,6 +1022,46 @@ END CODEX LUNA PROMPT V1.3
         [IO.File]::AppendAllText((Join-Path $oldInit.path 'session.meta'),"RESTORE_ENV=1`n")
         $rejected=$false;try{Resolve-SelectedRollback $oldInit.id}catch{$rejected=$true};Assert $rejected 'Changed backup marker did not invalidate the stale selection.'
         $rejected=$false;try{Resolve-SelectedRollback ('0'*64)}catch{$rejected=$true};Assert $rejected 'An unknown rollback target was accepted.'
+
+        $standaloneRoot=Join-Path $rollbackHome 'packages\standalone'
+        $current=Join-Path $standaloneRoot 'current'
+        New-Item -ItemType Junction -Path $current -Target $releaseRoot -ErrorAction Stop | Out-Null
+        $referencedRoot=Join-Path $standaloneRoot 'releases\referenced'
+        [void][IO.Directory]::CreateDirectory($referencedRoot)
+        $guardState=Join-Path (Get-GuardInstallRootPath) 'State'
+        [void][IO.Directory]::CreateDirectory($guardState)
+        [IO.File]::WriteAllText((Join-Path $guardState 'guard-state.json'),(@{ActiveCliPath=(Join-Path $referencedRoot 'bin\codex.exe')} | ConvertTo-Json))
+        $outside=Join-Path $scratch 'outside-rollback-catalog'
+        [void][IO.Directory]::CreateDirectory($outside)
+        $outsideFile=Join-Path $outside 'keep.txt';[IO.File]::WriteAllText($outsideFile,'outside')
+        New-Item -ItemType Junction -Path (Join-Path $oldInit.path 'Backups\external') -Target $outside -ErrorAction Stop | Out-Null
+        $deletion=Get-RollbackDeletionPlan @(Get-RollbackEntries)
+        Assert ($deletion.entries.Count -eq 3) 'Clear list did not preserve active and referenced CLI caches.'
+        $rollbackRunning=$true
+        $rejected=$false;try{Remove-RollbackEntries $payload $deletion.id}catch{$rejected=$true}
+        Assert ($rejected -and (Test-Path -LiteralPath $oldInit.path)) 'Clear operation changed backups while the CLI was running.'
+        $rollbackRunning=$false
+        [IO.File]::AppendAllText((Join-Path $oldInit.path 'session.meta'),"RESTORE_RTK=1`n")
+        $rejected=$false;try{Remove-RollbackEntries $payload $deletion.id}catch{$rejected=$true}
+        Assert ($rejected -and (Test-Path -LiteralPath $oldInit.path)) 'Clear operation accepted an outdated list.'
+        $deletion=Get-RollbackDeletionPlan @(Get-RollbackEntries)
+        try{
+            Assert ((Remove-RollbackEntries $payload $deletion.id) -eq 0) 'Clear operation failed for the approved catalog.'
+            Assert (@(Get-RollbackEntries).Count -eq 2 -and (Test-Path -LiteralPath (Join-Path $current 'bin\codex.exe')) -and (Test-Path -LiteralPath $referencedRoot)) 'Clear operation removed active or referenced CLI data.'
+            Assert ([IO.File]::ReadAllText($outsideFile) -eq 'outside') 'Clear operation followed a junction outside the backup directory.'
+            $partial=Join-Path $rollbackRoot 'Codex_Full_Reset_20261102-140000'
+            [void][IO.Directory]::CreateDirectory((Join-Path $partial 'Backups'))
+            [IO.File]::WriteAllText((Join-Path $partial 'session.meta'),'RESTORE_CONFIG=1')
+            $locked=[IO.File]::Open((Join-Path $partial 'Backups\locked.dat'),[IO.FileMode]::Create,[IO.FileAccess]::ReadWrite,[IO.FileShare]::Read)
+            try{
+                $deletion=Get-RollbackDeletionPlan @(Get-RollbackEntries)
+                Assert ((Remove-RollbackEntries $payload $deletion.id) -eq 1) 'Clear operation reported success despite a locked backup.'
+                $remaining=Get-RollbackEntries|Where-Object {$_.path -eq $partial}
+                Assert ($remaining -and -not $remaining.available -and $remaining.detail.Contains('上次删除未完成')) 'Partially deleted backup could still be selected for rollback.'
+            } finally {$locked.Dispose()}
+            $deletion=Get-RollbackDeletionPlan @(Get-RollbackEntries)
+            Assert ((Remove-RollbackEntries $payload $deletion.id) -eq 0 -and -not (Test-Path -LiteralPath $partial)) 'A partial deletion could not be retried.'
+        } finally {if(Test-Path -LiteralPath $current){[IO.Directory]::Delete($current,$false)}}
     }finally{foreach($name in $savedRollbackFunctions.Keys){Set-Item ('Function:'+$name) $savedRollbackFunctions[$name]}}
 
     # Critical input failures remain non-zero and do not fall through.

@@ -16,12 +16,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.2.9";
+    public const string Version = "2.2.10";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -45,7 +45,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","PermissionSettings.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","PermissionAdapter.Tests.ps1","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","PermissionSettings.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","PermissionAdapter.Tests.ps1","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","RtkRules.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -53,7 +53,7 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup"; }
+    public static bool NeedsAdmin(string operation) { return operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
 
     public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
         const string family="OpenAI.Codex_2p2nqsd0c76g0";
@@ -109,6 +109,8 @@ public static class Core {
         normalized["commandLineFirst"]=ReadOptionBoolean(source,"commandLineFirst",true);
         normalized["inheritPermissions"]=ReadOptionBoolean(source,"inheritPermissions",true);
         normalized["allowCloseRunningApp"]=ReadOptionBoolean(source,"allowCloseRunningApp",false);
+        if(source.ContainsKey("closeApprovedProcesses"))
+            normalized["closeApprovedProcesses"]=ReadOptionString(source,"closeApprovedProcesses","");
         normalized["memories"]=ReadOptionBoolean(source,"memories",true);
         normalized["githubMirrorEnabled"]=ReadOptionBoolean(source,"githubMirrorEnabled",true);
         object customMirror;
@@ -221,17 +223,45 @@ public static class Core {
         return CheckUpdate(port,proxyHost,GitHubNetworkOptions.Load(NetworkSettingsPath),null);
     }
     public static Dictionary<string,object> CheckUpdate(int port,string proxyHost,GitHubNetworkOptions settings,Action<string> writeLog) {
-        var transfer=new GitHubTransfer(settings,port,proxyHost,writeLog);
-        var commit=ReadJson(transfer.Fetch("https://api.github.com/repos/"+Repository+"/commits/main",s=>Regex.IsMatch(Value(ReadJson(s),"sha",""),"^[0-9a-f]{40}$")));
-        var sha=Value(commit,"sha","");Dictionary<string,object> manifest=null;
-        transfer.Fetch("https://raw.githubusercontent.com/"+Repository+"/"+sha+"/desktop-update.json",s=>{manifest=ValidateUpdate(s);return true;});return manifest;
+        return CheckUpdate(new GitHubTransfer(settings,port,proxyHost,writeLog),writeLog);
+    }
+    internal static Dictionary<string,object> CheckUpdate(GitHubTransfer transfer,Action<string> writeLog) {
+        var commitUrl="https://api.github.com/repos/"+Repository+"/commits/main";
+        var rawRoot="https://raw.githubusercontent.com/"+Repository+"/";
+        var mainUrl=rawRoot+"main/desktop-update.json";
+        Func<string,bool> validCommit=s=>Regex.IsMatch(Value(ReadJson(s),"sha",""),"^[0-9a-f]{40}$");
+        Dictionary<string,object> manifest=null;
+        Func<string,bool> validManifest=s=>{manifest=ValidateUpdate(s);return true;};
+        string commitFailure,mainFailure=null;
+        HttpStatusCode? status,mainStatus;
+        var commit=transfer.FetchOfficial(commitUrl,validCommit,out commitFailure,out status);
+        bool tryMainFirst=status==HttpStatusCode.Forbidden||(int?)status==429;
+        if(tryMainFirst){
+            if(writeLog!=null)writeLog("GitHub 提交接口返回 HTTP "+(int)status+"，先读取官方更新清单。");
+            if(transfer.FetchOfficial(mainUrl,validManifest,out mainFailure,out mainStatus)!=null)return manifest;
+        }
+        if(commit==null){
+            try{commit=transfer.FetchMirrors(commitUrl,validCommit,commitFailure);}
+            catch(IOException){
+                if(writeLog!=null)writeLog("GitHub 提交查询未完成，改用本项目 main 的公开更新清单。");
+                if(tryMainFirst)transfer.FetchMirrors(mainUrl,validManifest,mainFailure);
+                else transfer.Fetch(mainUrl,validManifest);
+                return manifest;
+            }
+        }
+        var reference=Value(ReadJson(commit),"sha","");
+        transfer.Fetch(rawRoot+reference+"/desktop-update.json",validManifest);
+        return manifest;
     }
     public static Dictionary<string,object> ValidateUpdate(string json) {
         var manifest=ReadJson(json);
         if(Value(manifest,"repository","")!=Repository || Value(manifest,"schema_version","")!="1") throw new InvalidDataException("更新清单来源不匹配");
-        var version=new Version(Value(manifest,"version",""));
+        var version=Value(manifest,"version","");
+        new Version(version);
         var url=Value(manifest,"url",""); var uri=new Uri(url);
-        if(uri.Scheme!="https" || uri.Host!="github.com" || !uri.AbsolutePath.StartsWith("/"+Repository+"/releases/download/",StringComparison.Ordinal)) throw new InvalidDataException("更新链接不属于本项目");
+        if(uri.Scheme!="https" || uri.Host!="github.com" || uri.UserInfo.Length!=0 ||
+            !uri.AbsolutePath.StartsWith("/"+Repository+"/releases/download/v"+version+"/",StringComparison.Ordinal))
+            throw new InvalidDataException("更新链接不属于本项目的对应版本");
         if(!System.Text.RegularExpressions.Regex.IsMatch(Value(manifest,"sha256",""),"^[0-9a-f]{64}$")) throw new InvalidDataException("更新校验值不合法");
         return manifest;
     }
@@ -255,6 +285,28 @@ public static class Core {
         if(value==null) throw new ArgumentNullException("value");
         return "'"+value.Replace("'","''")+"'";
     }
+    internal static string UpdateWorkRoot(string target) {
+        return Path.Combine(Path.GetDirectoryName(target),"."+Path.GetFileName(target)+".update");
+    }
+    internal static void CleanupCompletedUpdates(string target) {
+        var root=UpdateWorkRoot(target);
+        if(!Directory.Exists(root))return;
+        try{
+            foreach(var directory in Directory.GetDirectories(root)){
+                Guid id;
+                if(!Guid.TryParseExact(Path.GetFileName(directory),"N",out id))continue;
+                var marker=Path.Combine(directory,"cleanup-ready");
+                if(!File.Exists(marker))continue;
+                try{
+                    File.Delete(Path.Combine(directory,"previous.tmp"));
+                    File.Delete(Path.Combine(directory,"replaced.tmp"));
+                    File.Delete(marker);
+                    Directory.Delete(directory);
+                }catch(IOException){}catch(UnauthorizedAccessException){}
+            }
+            if(Directory.GetFileSystemEntries(root).Length==0)Directory.Delete(root);
+        }catch(IOException){}catch(UnauthorizedAccessException){}
+    }
     public static string BuildUpdateScript(string stage,string target,int pid,string logPath,bool restart) {
         if(String.IsNullOrWhiteSpace(stage)) throw new ArgumentException("未指定更新文件。", "stage");
         if(String.IsNullOrWhiteSpace(target)) throw new ArgumentException("未指定更新目标。", "target");
@@ -262,33 +314,59 @@ public static class Core {
         var stagePath=Path.GetFullPath(stage); var targetPath=Path.GetFullPath(target); var resultLog=Path.GetFullPath(logPath);
         if(String.Equals(stagePath,targetPath,StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("更新文件和当前程序不能使用同一路径。");
         var expectedStageHash=Hash(stagePath); var expectedTargetHash=Hash(targetPath);
-        var backupPath=targetPath+".codex-update-backup-"+Guid.NewGuid().ToString("N")+".tmp";
-        var rollbackPath=targetPath+".codex-update-rollback-"+Guid.NewGuid().ToString("N")+".tmp";
+        var workRoot=UpdateWorkRoot(targetPath);
+        var transaction=Path.Combine(workRoot,Guid.NewGuid().ToString("N"));
         var script=new StringBuilder();
         script.Append("$ErrorActionPreference='Stop';");
         script.Append("$stage=").Append(PowerShellLiteral(stagePath)).Append(";");
         script.Append("$target=").Append(PowerShellLiteral(targetPath)).Append(";");
         script.Append("$log=").Append(PowerShellLiteral(resultLog)).Append(";");
         script.Append("$chineseLog=").Append(PowerShellLiteral(DesktopLocalization.ChineseLogPath(resultLog))).Append(";");
-        script.Append("$backup=").Append(PowerShellLiteral(backupPath)).Append(";");
-        script.Append("$rollback=").Append(PowerShellLiteral(rollbackPath)).Append(";");
+        script.Append("$workRoot=").Append(PowerShellLiteral(workRoot)).Append(";");
+        script.Append("$transaction=").Append(PowerShellLiteral(transaction)).Append(";");
+        script.Append("$backup=Join-Path $transaction 'previous.tmp';$rollback=Join-Path $transaction 'replaced.tmp';$marker=Join-Path $transaction 'cleanup-ready';");
         script.Append("$expectedStageHash=").Append(PowerShellLiteral(expectedStageHash)).Append(";");
         script.Append("$expectedTargetHash=").Append(PowerShellLiteral(expectedTargetHash)).Append(";");
         script.Append("$replaced=$false;$exitCode=1;");
         script.Append("function Get-Sha([string]$Path){if(-not [IO.File]::Exists($Path)){throw '找不到文件：'+$Path};$stream=[IO.File]::OpenRead($Path);$hash=[Security.Cryptography.SHA256]::Create();try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','').ToLowerInvariant()}finally{$stream.Dispose();$hash.Dispose()}};");
         script.Append("function Test-Sha([string]$Path,[string]$Expected){try{if(-not [IO.File]::Exists($Path)){return $false};return ((Get-Sha $Path) -ceq $Expected)}catch{return $false}};");
-        script.Append("function Write-UpdateLog([string]$Status,[string]$Message){try{$parent=[IO.Path]::GetDirectoryName($log);if($parent){[IO.Directory]::CreateDirectory($parent)|Out-Null};$time=Get-Date -Format o;$line=$time+' ['+$Status+'] '+$Message;[IO.File]::AppendAllText($log,$line+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)));$label=if($Status -eq 'success'){'成功'}else{'失败'};$translated=$Message;if($Message -match '[A-Za-z]{2,} [A-Za-z]{2,}'){$translated='更新操作未完成，原因尚未识别；请查看原始 update.log。';if($Message -match '(HRESULT: -?[0-9]+|0x[0-9a-fA-F]{4,8})'){$translated+=' 错误码：'+$Matches[1]}};[IO.File]::AppendAllText($chineseLog,$time+' 【'+$label+'】 '+$translated+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))}catch{}};");
+        script.Append("function Write-UpdateLog([string]$Status,[string]$Message){try{$parent=[IO.Path]::GetDirectoryName($log);if($parent){[IO.Directory]::CreateDirectory($parent)|Out-Null};$time=Get-Date -Format o;$line=$time+' ['+$Status+'] '+$Message;[IO.File]::AppendAllText($log,$line+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)));$label=switch($Status){'success'{'成功'}'cleanup'{'清理'}default{'失败'}};$translated=$Message;if($Status -eq 'failure' -and $Message -match '[A-Za-z]{2,} [A-Za-z]{2,}'){$translated='更新操作未完成，原因尚未识别；请查看原始 update.log。';if($Message -match '(HRESULT: -?[0-9]+|0x[0-9a-fA-F]{4,8})'){$translated+=' 错误码：'+$Matches[1]}};[IO.File]::AppendAllText($chineseLog,$time+' 【'+$label+'】 '+$translated+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))}catch{}};");
+        script.AppendLine(@"
+function Remove-UpdateFile([string]$Path) {
+    for($attempt=0;;$attempt++){
+        try{[IO.File]::Delete($Path);return}
+        catch{if($attempt -ge 3){throw};Start-Sleep -Milliseconds 300}
+    }
+}
+");
         if(pid>0) script.Append("Wait-Process -Id ").Append(pid.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(" -ErrorAction SilentlyContinue;");
         script.Append("try{");
         script.Append("if(-not (Test-Sha $stage $expectedStageHash)){throw '更新文件校验失败'};");
         script.Append("if(-not (Test-Sha $target $expectedTargetHash)){throw '更新前当前程序已变化'};");
+        script.Append("[void][IO.Directory]::CreateDirectory($transaction);");
         script.Append("[IO.File]::Replace($stage,$target,$backup);$replaced=$true;");
         script.Append("if(-not (Test-Sha $target $expectedStageHash)){throw '更新后程序校验失败'};");
         if(restart) script.Append("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;");
-        script.Append("if([IO.File]::Exists($backup)){[IO.File]::Delete($backup)};");
         script.Append("Write-UpdateLog 'success' '更新已安装。';$exitCode=0;");
-        script.Append("}catch{$failure=$_.Exception.Message+' (HRESULT: '+$_.Exception.HResult+')';if($replaced -and (Test-Sha $target $expectedStageHash) -and (Test-Sha $backup $expectedTargetHash)){try{[IO.File]::Replace($backup,$target,$rollback);if(-not (Test-Sha $target $expectedTargetHash)){throw '回滚文件校验失败'};if([IO.File]::Exists($rollback)){[IO.File]::Delete($rollback)};$replaced=$false;$failure=$failure+'；回滚成功'}catch{$failure=$failure+'；回滚失败：'+$_.Exception.Message}};Write-UpdateLog 'failure' $failure;}");
-        script.Append("finally{if([IO.File]::Exists($stage)){try{[IO.File]::Delete($stage)}catch{}};if($exitCode -eq 0 -or -not $replaced){if([IO.File]::Exists($backup)){try{[IO.File]::Delete($backup)}catch{}};if([IO.File]::Exists($rollback)){try{[IO.File]::Delete($rollback)}catch{}}}};exit $exitCode;");
+        script.Append("}catch{$failure=$_.Exception.Message+' (HRESULT: '+$_.Exception.HResult+')';if($replaced -and (Test-Sha $target $expectedStageHash) -and (Test-Sha $backup $expectedTargetHash)){try{[IO.File]::Replace($backup,$target,$rollback);if(-not (Test-Sha $target $expectedTargetHash)){throw '回滚文件校验失败'};$replaced=$false;$failure=$failure+'；回滚成功'}catch{$failure=$failure+'；回滚失败：'+$_.Exception.Message}};Write-UpdateLog 'failure' $failure;}");
+        script.AppendLine(@"
+finally {
+    try{Remove-UpdateFile $stage}catch{Write-UpdateLog 'cleanup' ('下载临时文件暂未清理：'+$stage)}
+    if([IO.Directory]::Exists($transaction)){
+        if($exitCode -eq 0 -or (!$replaced -and (Test-Sha $target $expectedTargetHash))){
+            try {
+                [IO.File]::WriteAllText($marker,'')
+                Remove-UpdateFile $backup
+                Remove-UpdateFile $rollback
+                Remove-UpdateFile $marker
+                if([IO.Directory]::Exists($transaction)){[IO.Directory]::Delete($transaction)}
+                if([IO.Directory]::Exists($workRoot) -and [IO.Directory]::GetFileSystemEntries($workRoot).Length -eq 0){[IO.Directory]::Delete($workRoot)}
+            } catch {Write-UpdateLog 'cleanup' ('更新备份暂未清理：'+$transaction+'；'+$_.Exception.Message)}
+        } else {Write-UpdateLog 'cleanup' ('已保留更新恢复文件：'+$transaction)}
+    }
+}
+exit $exitCode
+");
         return script.ToString();
     }
     public static void ScheduleUpdate(string stage) {
