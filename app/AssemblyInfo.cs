@@ -2,5 +2,5 @@ using System.Reflection;
 [assembly:AssemblyTitle("Codex Init Kit")]
 [assembly:AssemblyDescription("Codex workspace initialization, CUA repair and startup protection")]
 [assembly:AssemblyProduct("Codex Init Kit Desktop")]
-[assembly:AssemblyVersion("2.2.11.0")]
-[assembly:AssemblyFileVersion("2.2.11.0")]
+[assembly:AssemblyVersion("2.2.12.0")]
+[assembly:AssemblyFileVersion("2.2.12.0")]

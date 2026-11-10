@@ -317,6 +317,7 @@ set "LUNA_PROMPT_RESULT=NOT_RUN"
 exit /b 0
 :INSTALL_FOLDER_MANAGEMENT
 echo CALLED FOLDER
+if "%CODEX_GUI_TEST_FAILURE%"=="folder" exit /b 1
 set "FOLDER_RESULT=PASS"
 exit /b 0
 :VERIFY_FOLDER_BINDING
@@ -364,10 +365,10 @@ exit /b 0
         Assert ($flowResult.Output.Contains('跳过子代理规则安装（未勾选）') -eq (-not $luna)) 'Batch log did not reflect the selected subagent state.'
         Assert (-not $flowResult.Output.Contains('Luna 多线程均已通过')) 'Batch success log claimed skipped Luna installation passed.'
     }
-    foreach ($failure in @('binding','cua')) {
+    foreach ($failure in @('folder','binding','cua')) {
         $flowEnvironment['CODEX_GUI_TEST_FAILURE'] = $failure
         $flowResult = Invoke-ChildProcess $flowPath @() $scratch $flowEnvironment $script:InputEncoding
-        Assert ($flowResult.ExitCode -ne 0 -and -not $flowResult.Output.Contains('CALLED LUNA')) ('Actual batch flow ignored failure in ' + $failure)
+        Assert ($flowResult.ExitCode -ne 0 -and $flowResult.Output.Contains('FINAL_REPORT FAIL') -and -not $flowResult.Output.Contains('CALLED LUNA')) ('Actual batch flow ignored or failed to report failure in ' + $failure)
     }
     # Redirected Windows PowerShell emits CLIXML unless its output format is
     # explicit. Exercise both embedded writers and a genuine stderr/exit code.
@@ -697,6 +698,7 @@ END CODEX LUNA PROMPT V1.3
         $fixtureHome=Join-Path $scratch ('prompt-model-'+$case.name);[void][IO.Directory]::CreateDirectory($fixtureHome)
         [IO.File]::WriteAllText((Join-Path $fixtureHome 'config.toml'),"model = `"old`"`nmodel_reasoning_effort = `"low`"`n",[Text.UTF8Encoding]::new($false))
         $oldBlock="user instruction`nBEGIN CODEX LUNA PROMPT V1.3`nmodel = gpt-5.6-luna`nEND CODEX LUNA PROMPT V1.3`n"
+        if($case.name -eq 'desktop-folder'){$oldBlock="user instruction`n"}
         [IO.File]::WriteAllText((Join-Path $fixtureHome 'AGENTS.md'),$oldBlock,[Text.UTF8Encoding]::new($false))
         $psi=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))
         $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
@@ -710,6 +712,34 @@ END CODEX LUNA PROMPT V1.3
         $fixtureConfig=[IO.File]::ReadAllText((Join-Path $fixtureHome 'config.toml'));$fixtureAgents=[IO.File]::ReadAllText((Join-Path $fixtureHome 'AGENTS.md'))
         if($case.name -eq 'desktop-folder'){
             Assert ($fixtureAgents.Contains('Codex 工作区根目录：D:\Codex') -and $fixtureAgents.Contains('user instruction') -and $fixtureConfig.Contains((Join-Path $fixtureHome 'Codex\Conversations'))) 'Localized folder manager changed markers, existing rules or workspace binding.'
+
+            # Exercise the real binding verifier and stage flow against the
+            # localized UTF-8 rules that the desktop prompt manager wrote.
+            $folderRoot=Join-Path $fixtureHome 'Codex'
+            $folderAgents=Join-Path $fixtureHome 'AGENTS.md'
+            $fixtureAgents=$fixtureAgents.Replace('D:\Codex',$folderRoot)
+            [IO.File]::WriteAllText($folderAgents,$fixtureAgents,[Text.UTF8Encoding]::new($false))
+            $folderBinding=[regex]::Match($enabledFeatureText,'(?ms)^:VERIFY_FOLDER_BINDING\r?\n.*?(?=^:[A-Z_]+\r?$)').Value
+            Assert ($folderBinding.Contains('EXPECTED_CODEX_ROOT=!CODEX_FOLDER_DRIVE!:\Codex')) 'Folder binding verifier was not found.'
+            $folderBinding=$folderBinding.Replace('set "EXPECTED_CODEX_ROOT=!CODEX_FOLDER_DRIVE!:\Codex"','set "EXPECTED_CODEX_ROOT=%CODEX_TEST_ROOT%"')
+            $realStages=[regex]::Replace($safeStages,'(?ms)^:VERIFY_FOLDER_BINDING\r?\n.*?(?=^:RUN_CUA_REPAIR\r?$)',[Text.RegularExpressions.MatchEvaluator]{param($m) $folderBinding})
+            $realStages=$realStages.Replace('echo FINAL_REPORT !RESULT! !LUNA_PROMPT_RESULT! !LUNA_PROMPT_COUNT!','echo FINAL_REPORT !RESULT! !FULL_INIT_RESULT! !CONFIG_RESULT! !AGENTS_RESULT! !FOLDER_RESULT! !CUA_RESULT! !LUNA_PROMPT_RESULT!')
+            $folderHeader=$flowHeader.Replace('set "RTK_FILE=fixture"','set "CONFIG_FILE=%CODEX_TEST_CONFIG%"'+"`r`n"+'set "RTK_FILE=fixture"')
+            $folderFlow=Join-Path $scratch 'localized-folder-flow.cmd'
+            $folderAgentsVerifier=[regex]::Match($enabledFeatureText,'(?ms)^:VERIFY_AGENTS_CONTENT\r?\n.*?(?=^:VERIFY_FOLDER_BINDING\r?$)').Value
+            $folderAgentsPayload=[regex]::Match($enabledFeatureText,'(?ms)^::AGENTS_VERIFY_PAYLOAD_BEGIN\r?\n.*?^::AGENTS_VERIFY_PAYLOAD_END').Value
+            $folderSource=$folderHeader+"`r`n"+$flow+$realStages+"`r`n"+$folderAgentsVerifier+$folderAgentsPayload+"`r`n"
+            [IO.File]::WriteAllText($folderFlow,([regex]::Replace($folderSource,'\r\n|\r|\n',"`r`n")),$script:InputEncoding)
+            $folderEnv=@{CODEX_INIT_AGENTS_FILE=$folderAgents;CODEX_TEST_CONFIG=(Join-Path $fixtureHome 'config.toml');CODEX_TEST_ROOT=$folderRoot;CODEX_GUI_DRIVE='D';CODEX_GUI_FOLDER_MANAGEMENT='1';CODEX_GUI_CUA_REPAIR='1';CODEX_GUI_SUBAGENTS='0'}
+            $folderResult=Invoke-ChildProcess $folderFlow @() $scratch $folderEnv $script:InputEncoding
+            Assert ($folderResult.ExitCode -eq 0 -and $folderResult.Output.Contains('CALLED CUA') -and $folderResult.Output.Contains('RESULT = PASS')) 'Localized folder rules failed verification or prevented CUA from running.'
+            [IO.File]::WriteAllText($folderAgents,$fixtureAgents.Replace($folderRoot,'Z:\WrongCodex'),[Text.UTF8Encoding]::new($false))
+            $folderResult=Invoke-ChildProcess $folderFlow @() $scratch $folderEnv $script:InputEncoding
+            Assert ($folderResult.ExitCode -ne 0 -and $folderResult.Output.Contains('FINAL_REPORT FAIL') -and -not $folderResult.Output.Contains('CALLED CUA') -and $folderResult.Output.Contains('文件夹管理校验失败')) 'Invalid folder rules did not stop initialization with a useful message and failure report.'
+            [IO.File]::WriteAllText($folderAgents,$fixtureAgents,[Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($folderEnv.CODEX_TEST_CONFIG,$fixtureConfig.Replace((Join-Path $folderRoot 'Conversations'),(Join-Path $folderRoot 'Wrong')),[Text.UTF8Encoding]::new($false))
+            $folderResult=Invoke-ChildProcess $folderFlow @() $scratch $folderEnv $script:InputEncoding
+            Assert ($folderResult.ExitCode -ne 0 -and $folderResult.Output.Contains('FINAL_REPORT FAIL') -and -not $folderResult.Output.Contains('CALLED CUA') -and $folderResult.Output.Contains('文件夹管理校验失败')) 'Invalid folder binding did not stop initialization with a failure report.'
             continue
         }
         if($case.name -eq 'desktop-luna'){Assert ($fixtureAgents.Contains('## 主任务职责') -and -not $fixtureAgents.Contains('## Parent responsibilities')) 'Desktop Luna did not install the localized rules.'}

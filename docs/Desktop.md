@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.11
+# Codex Init Kit Desktop 2.2.12
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -42,7 +42,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-下载 EXE 后即可启动。运行环境为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1。EXE 尚未做代码签名。[v2.2.11 Release](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.11) · [下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) · [更新说明](Release-2.2.11.md)
+下载 EXE 后即可启动。运行环境为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1。EXE 尚未做代码签名。[v2.2.12 Release](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.12) · [下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) · [更新说明](Release-2.2.12.md)
 
 正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
@@ -74,7 +74,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.11` |
+| 版本 | `2.2.12` |
 | 内嵌初始化组件 | `4.8.6` |
 | 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |

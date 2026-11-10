@@ -652,8 +652,18 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.11')
-    $sourceText = $sourceText.Replace('Configured Codex workspace root: !EXPECTED_CODEX_ROOT!','!EXPECTED_CODEX_ROOT!')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.12')
+    $folderRuleCheck=@'
+$text=[IO.File]::ReadAllText($env:AGENTS_FILE,[Text.Encoding]::UTF8)
+if($text.IndexOf($env:EXPECTED_CODEX_ROOT,[StringComparison]::OrdinalIgnoreCase) -lt 0){
+    [Console]::Error.WriteLine('文件夹管理校验失败：规则中未找到所选工作目录。')
+    exit 1
+}
+exit 0
+'@
+    $folderRuleEncoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($folderRuleCheck))
+    $folderRuleLine='powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+$folderRuleEncoded+' || exit /b 1'
+    $sourceText=$sourceText.Replace('findstr /l /c:"Configured Codex workspace root: !EXPECTED_CODEX_ROOT!" "%AGENTS_FILE%" >nul || exit /b 1',$folderRuleLine)
     $proxySetup = 'set "PROXY_PORT=%CODEX_GUI_PROXY_PORT%"' + [Environment]::NewLine +
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
@@ -778,7 +788,7 @@ set "CONFIG_RESULT=FAIL"
     # edits.  This also makes a skipped stage independent of a stale errorlevel.
     $sourceText = [regex]::Replace($sourceText,
         '(?ms)^(if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" echo @@PROGRESS@@\{"step":3.*?\})\r?\n.*?(?=^echo 阶段 4/5)',
-        '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :INSTALL_FOLDER_MANAGEMENT' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo Folder-management stage failed.' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine)
+        '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :INSTALL_FOLDER_MANAGEMENT' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo 文件夹管理安装失败。' + [Environment]::NewLine + '    set "FOLDER_RESULT=FAIL"' + [Environment]::NewLine + '    set "RESULT=FAIL"' + [Environment]::NewLine + '    call :WRITE_REPORT "一键初始化 - 文件夹管理安装失败"' + [Environment]::NewLine + '    call :WRITE_ROLLBACK' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING' + [Environment]::NewLine + 'if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo 文件夹管理校验失败，请检查工作目录规则和无项目任务目录。' + [Environment]::NewLine + '    set "FOLDER_RESULT=FAIL"' + [Environment]::NewLine + '    set "RESULT=FAIL"' + [Environment]::NewLine + '    call :WRITE_REPORT "一键初始化 - 文件夹管理校验失败"' + [Environment]::NewLine + '    call :WRITE_ROLLBACK' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine)
     $sourceText = [regex]::Replace($sourceText,
         '(?ms)^(if /i "%CODEX_GUI_CUA_REPAIR%"=="1" echo @@PROGRESS@@\{"step":4.*?\})\r?\n.*?(?=^echo 阶段 5/5)',
         '$1' + [Environment]::NewLine + 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR' + [Environment]::NewLine + 'if /i "%CODEX_GUI_CUA_REPAIR%"=="1" if errorlevel 1 (' + [Environment]::NewLine + '    echo CUA 运行时检查或修复失败，已停止后续安装。' + [Environment]::NewLine + '    set "RESULT=FAIL"' + [Environment]::NewLine + '    call :WRITE_REPORT "一键初始化 - CUA 检查或修复失败"' + [Environment]::NewLine + '    call :WRITE_ROLLBACK' + [Environment]::NewLine + '    goto :ONE_CLICK_INIT_FAIL' + [Environment]::NewLine + ')' + [Environment]::NewLine)
