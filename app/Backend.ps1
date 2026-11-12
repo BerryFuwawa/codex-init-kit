@@ -652,7 +652,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.12')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.13')
     $folderRuleCheck=@'
 $text=[IO.File]::ReadAllText($env:AGENTS_FILE,[Text.Encoding]::UTF8)
 if($text.IndexOf($env:EXPECTED_CODEX_ROOT,[StringComparison]::OrdinalIgnoreCase) -lt 0){

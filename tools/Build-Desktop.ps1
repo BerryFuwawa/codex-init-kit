@@ -45,6 +45,7 @@ $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'app') -Filter '*.cs' |
 $argsList+=(Join-Path $root 'tests\DesktopLocalization.Tests.cs')
 $argsList+=(Join-Path $root 'tests\GitHubTransport.Tests.cs')
 $argsList+=(Join-Path $root 'tests\CurrentModelSettings.Tests.cs')
+$argsList+=(Join-Path $root 'tests\ProxyPortSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }

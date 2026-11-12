@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.2.12
+# Codex Init Kit Desktop 2.2.13
 
 这个程序把初始化、电脑操作组件修复和启动维护放进一个窗口。下载 `CodexInitKit.exe` 就能使用，所需脚本已包含在程序里。
 
@@ -42,7 +42,9 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 ## 获取与启动
 
-下载 EXE 后即可启动。运行环境为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1。EXE 尚未做代码签名。[v2.2.12 Release](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.12) · [下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) · [更新说明](Release-2.2.12.md)
+下载 EXE 后即可启动。运行环境为 Windows x64、.NET Framework 4.8 和 Windows PowerShell 5.1。EXE 尚未做代码签名。[v2.2.13 Release](https://github.com/BerryFuwawa/codex-init-kit/releases/tag/v2.2.13) · [下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe) · [更新说明](Release-2.2.13.md)
+
+火绒在本机对 v2.2.12 和 v2.2.13 开发构建出现过 `Backdoor/Meterpreter.el` 文件查杀记录，检测结论仍待火绒官方复核。系统加固的“利用 PowerShell 执行可疑脚本”是另外一类行为提示，可能在后台检查、初始化或更新时出现。遇到拦截时，请保留检测名称、文件版本和日志，以便核对；SHA-256 只用于确认下载文件与发布文件一致。
 
 正式文件的字节数和 SHA-256 以 [SHA256SUMS.txt](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/SHA256SUMS.txt) 及 Release 资产为准；桌面更新清单也绑定相同的 EXE 哈希。
 
@@ -74,7 +76,7 @@ CUA 组件目录为 `%LOCALAPPDATA%\OpenAI\Codex\runtimes\cua_node`。有些 Win
 
 | 项目 | 默认值或位置 |
 | --- | --- |
-| 版本 | `2.2.12` |
+| 版本 | `2.2.13` |
 | 内嵌初始化组件 | `4.8.6` |
 | 内嵌启动保护组件 | `5.2.4` |
 | 工作目录 | `<盘符>:\Codex`；默认选 `D`，不可用时选择第一个可用固定盘 |

@@ -30,6 +30,9 @@ public class MainWindow : Window {
     readonly List<Button> navigation=new List<Button>();
     readonly ComboBox drive=new ComboBox();
     readonly TextBox port=new TextBox();
+    readonly ComboBox proxyPortPreset=new ComboBox();
+    readonly TextBlock proxyPortNotice=new TextBlock();
+    string customProxyPort="";
     readonly TextBox proxyHost=new TextBox();
     readonly CheckBox guard=new CheckBox();
     readonly CheckBox proxyEnabled=new CheckBox(),folderManagement=new CheckBox(),subagents=new CheckBox(),cuaRepair=new CheckBox();
@@ -95,7 +98,7 @@ public class MainWindow : Window {
         ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliStandalone.IsChecked!=true||cliNative.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("初始化后使用的 CLI：官方独立 CLI"))throw new InvalidDataException("Detected standalone CLI was not selected automatically");
         cliNative.IsChecked=true;ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliNative.IsChecked!=true||Convert.ToString(Options()["cliMode"])!="desktop-native")throw new InvalidDataException("Status refresh replaced the manual CLI choice");Navigate("概览");Navigate("初始化");if(cliNative.IsChecked!=true)throw new InvalidDataException("Navigation lost the selected CLI");
         cliChoiceManual=false;ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","Unknown"}});rejected=false;try{RequireCliChoice();}catch(InvalidOperationException){rejected=true;}if(!rejected||cliNative.IsChecked==true||cliStandalone.IsChecked==true)throw new InvalidDataException("Unknown CLI mode silently selected a default");cliStandalone.IsChecked=true;RequireCliChoice();if(Convert.ToString(Options()["cliMode"])!="official-standalone")throw new InvalidDataException("Manual selection after unknown detection failed");ResetCliChoice();
-        Navigate("浏览器连接");var browserSettings=(StackPanel)((Border)content.Children[1]).Child;var browserInputs=browserSettings.Children.OfType<TextBox>().ToArray();var browserToggle=browserSettings.Children.OfType<CheckBox>().First();var browserButtons=browserSettings.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).ToArray();if(!browserButtons.Contains("修复并启动 Codex")||browserInputs.Length!=2)throw new InvalidOperationException("Browser startup entry is missing");browserInputs[0].Text="192.168.5.8";browserInputs[1].Text="7890";if(ProxyHost()!="192.168.5.8"||Port()!=7890)throw new InvalidOperationException("Browser proxy settings did not synchronize");browserToggle.IsChecked=false;if(proxyEnabled.IsChecked!=false)throw new InvalidOperationException("Browser proxy switch did not synchronize");browserToggle.IsChecked=true;proxyHost.Text="";port.Text="10808";
+        Navigate("浏览器连接");var browserSettings=(StackPanel)((Border)content.Children[1]).Child;var browserButtons=browserSettings.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).ToArray();if(!browserButtons.Contains("修复并启动 Codex")||!browserSettings.IsAncestorOf(port)||!browserSettings.IsAncestorOf(proxyPortPreset))throw new InvalidOperationException("Browser startup entry or proxy inputs are missing");proxyHost.Text="192.168.5.8";proxyPortPreset.SelectedIndex=5;if(ProxyHost()!="192.168.5.8"||Port()!=7890||!port.IsReadOnly)throw new InvalidOperationException("Browser proxy settings did not synchronize");proxyEnabled.IsChecked=false;if(port.IsEnabled||proxyPortPreset.IsEnabled)throw new InvalidOperationException("Browser proxy switch did not disable its inputs");proxyEnabled.IsChecked=true;proxyHost.Text="";proxyPortPreset.SelectedIndex=0;
         VerifyMaintenanceModes();
         memories.IsChecked=false;if((bool)Options()["memories"]||!InitSummary().Contains("关闭，保留已有记忆文件"))throw new InvalidDataException("Memory selection was not preserved");memories.IsChecked=true;
         if(!githubMirrors.IsChecked.Value||NetworkOptions().customGithubMirror.Length!=0)throw new InvalidDataException("GitHub mirror defaults changed");
@@ -157,7 +160,19 @@ public class MainWindow : Window {
         drive.ItemsSource=DriveInfo.GetDrives().Where(x=>x.DriveType==DriveType.Fixed && x.IsReady).Select(x=>x.Name.Substring(0,1)).ToArray(); drive.SelectedItem="D"; if(drive.SelectedIndex<0) drive.SelectedIndex=0;
         drive.Style=(Style)Resources["KitCombo"];drive.FontSize=15;drive.Width=320;drive.HorizontalAlignment=HorizontalAlignment.Left;
         foreach(var input in new[]{port,proxyHost})input.Style=(Style)Resources["KitInput"];
-        port.Text="10808";port.Width=320;port.HorizontalAlignment=HorizontalAlignment.Left;
+        port.Width=90;port.Height=44;port.MaxLength=5;port.HorizontalAlignment=HorizontalAlignment.Left;
+        proxyPortPreset.Style=(Style)Resources["KitCombo"];proxyPortPreset.Width=240;
+        proxyPortPreset.ItemsSource=ProxyPortSettings.Presets;
+        proxyPortNotice.Foreground=B("#E9C779");proxyPortNotice.FontSize=12;proxyPortNotice.TextWrapping=TextWrapping.Wrap;proxyPortNotice.Margin=new Thickness(0,0,0,8);proxyPortNotice.Visibility=Visibility.Collapsed;
+        proxyPortPreset.SelectionChanged+=(s,e)=>{
+            var selected=(ProxyPortPreset)proxyPortPreset.SelectedItem;
+            port.IsReadOnly=selected.Port!=0;
+            port.Text=selected.Port==0?customProxyPort:selected.Port.ToString();
+            port.Background=port.IsReadOnly?B("#202938"):B("#101620");port.Foreground=port.IsReadOnly?MutedBrush:TextBrush;
+            proxyPortNotice.Visibility=Visibility.Collapsed;
+        };
+        port.TextChanged+=(s,e)=>{if(!port.IsReadOnly){customProxyPort=port.Text;proxyPortNotice.Visibility=Visibility.Collapsed;}};
+        proxyPortPreset.SelectedIndex=0;
         proxyHost.Text="";proxyHost.Width=320;proxyHost.HorizontalAlignment=HorizontalAlignment.Left;proxyHost.ToolTip="留空使用 127.0.0.1。软路由在局域网其他设备时，请填写可访问的路由器 IP 地址；本工具不会启动代理服务。";
         var checks=new[]{proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,guard,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,subagents};var labels=new[]{"启用 HTTP 代理","文件夹管理功能","防止过度防御","按需笔记与文档管理","优先使用命令行","启用 Codex 记忆","CLI 启动保护与修复","CUA 检查与修复","浏览器链接修复","更新官方CLI","更新桌面版（含原生CLI）","子代理多线程"};for(int i=0;i<checks.Length;i++){checks[i].Style=(Style)Resources["KitCheck"];checks[i].Content=labels[i];checks[i].IsChecked=checks[i]!=subagents;}
         cliNative.Content="桌面版原生 CLI";cliStandalone.Content="官方独立 CLI";foreach(var choice in new[]{cliNative,cliStandalone}){choice.GroupName="InitializationCliMode";choice.Style=(Style)Resources["KitCliChoice"];choice.Checked+=(s,e)=>{if(!applyingCliDetection){cliChoiceManual=true;UpdateCliDetectionHint();}};choice.Click+=(s,e)=>{cliChoiceManual=true;UpdateCliDetectionHint();};}
@@ -173,7 +188,7 @@ public class MainWindow : Window {
         githubMirrors.IsChecked=network.githubMirrorEnabled;githubCustomMirror.Text=network.customGithubMirror;githubCustomMirror.IsEnabled=network.githubMirrorEnabled;
         githubMirrors.Checked+=(a,b)=>githubCustomMirror.IsEnabled=true;githubMirrors.Unchecked+=(a,b)=>githubCustomMirror.IsEnabled=false;
         githubLogView.IsReadOnly=true;githubLogView.TextWrapping=TextWrapping.Wrap;githubLogView.Height=150;githubLogView.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;githubLogView.Background=B("#101620");githubLogView.Foreground=TextBrush;githubLogView.BorderThickness=new Thickness(0);githubLogView.Padding=new Thickness(10);
-        proxyEnabled.Checked+=(s,e)=>{port.IsEnabled=true;proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{port.IsEnabled=false;proxyHost.IsEnabled=false;};
+        proxyEnabled.Checked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=false;};
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
         var effortText=new FrameworkElementFactory(typeof(TextBlock));effortText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding{Converter=new EffortLabels()});var effortTemplate=new DataTemplate{VisualTree=effortText};parentEffort.ItemTemplate=effortTemplate;childEffort.ItemTemplate=effortTemplate;
         parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem="medium";childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="medium";
@@ -185,11 +200,34 @@ public class MainWindow : Window {
         modelCheck.Foreground=MutedBrush;modelCheck.TextWrapping=TextWrapping.Wrap;modelCheck.Margin=new Thickness(0,8,0,12);
         subagents.Checked+=(s,e)=>UpdateModelInputs();subagents.Unchecked+=(s,e)=>UpdateModelInputs();
         if(!preview)try{ApplyCurrentModelSettings(CurrentModelSettings.Load(CurrentModelSettings.CodexHome()));}catch(Exception ex){modelSettingsError="无法读取当前模型设置："+ex.Message+"。请处理后重新打开工具。";}
+        if(!preview)LoadCurrentProxyPort();
         UpdateModelInputs();
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
         Navigate("概览"); Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
     }
     static Brush B(string hex) { return (Brush)new BrushConverter().ConvertFromString(hex); }
+    void LoadCurrentProxyPort() {
+        try {
+            var saved=ProxyPortSettings.Load(CurrentModelSettings.CodexHome());
+            var preset=ProxyPortSettings.Presets.FirstOrDefault(item=>item.Port==saved);
+            if(preset==null){customProxyPort=saved.ToString();preset=ProxyPortSettings.Presets.Last();}
+            proxyPortPreset.SelectedItem=preset;
+        } catch(Exception ex) {
+            proxyPortPreset.SelectedItem=ProxyPortSettings.Presets.Last();
+            proxyPortNotice.Text="无法读取已有代理端口："+DesktopLocalization.ExceptionText(ex)+" 请重新选择或填写端口。";
+            proxyPortNotice.Visibility=Visibility.Visible;
+        }
+    }
+    Grid ProxyPortRow() {
+        var row=new Grid{HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,6,0,8)};
+        row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(125)});
+        row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        row.Children.Add(new TextBlock{Text="你的代理端口：",Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});
+        port.Margin=new Thickness(0);Grid.SetColumn(port,1);row.Children.Add(port);
+        proxyPortPreset.Margin=new Thickness(8,0,0,0);Grid.SetColumn(proxyPortPreset,2);row.Children.Add(proxyPortPreset);
+        return row;
+    }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
     Button Button(string label,Action action,bool primary) {
         var b=new Button{Content=label,Background=primary?Accent:B("#293348"),Foreground=primary?B("#101B31"):TextBrush,BorderThickness=new Thickness(0),Padding=new Thickness(18,10,18,10),Cursor=System.Windows.Input.Cursors.Hand,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,10,4)};
@@ -220,7 +258,7 @@ public class MainWindow : Window {
         parent.Children.Add(new Border{Background=B("#151C28"),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,10),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
+    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control); } page=name; content.Children.Clear(); heading.Text=name; foreach(var b in navigation){b.Background=Convert.ToString(b.Content)==name?B("#2E4063"):Brushes.Transparent; b.Foreground=Convert.ToString(b.Content)==name?Accent:MutedBrush;}
         if(name=="概览")Overview(); else if(name=="初始化")Wizard(); else if(name=="浏览器连接")BrowserConnection(); else if(name=="维护恢复")Maintenance(); else if(name=="更新")Updates(); else LogsPage();
         if(log.Parent!=null)logViewport.Attach();
     }
@@ -293,9 +331,9 @@ public class MainWindow : Window {
             var p=Card("01   选择工作盘与代理","工作区会创建在所选盘的 Codex 文件夹。已有工作文件不会自动搬迁。");
             p.Children.Add(T("工作盘",13,TextBrush));p.Children.Add(drive);p.Children.Add(T("\n网络连接",13,TextBrush));p.Children.Add(proxyEnabled);
             var proxyRows=new StackPanel{Margin=new Thickness(0,6,0,0)};
-            var portRow=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};portRow.Children.Add(new TextBlock{Text="HTTP 代理端口",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});portRow.Children.Add(port);proxyRows.Children.Add(portRow);
+            proxyRows.Children.Add(ProxyPortRow());proxyRows.Children.Add(proxyPortNotice);
             var hostRow=new StackPanel{Orientation=Orientation.Horizontal};hostRow.Children.Add(new TextBlock{Text="代理 IP（默认 127.0.0.1）",Width=180,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,8)});hostRow.Children.Add(proxyHost);proxyRows.Children.Add(hostRow);p.Children.Add(proxyRows);
-            p.Children.Add(T("填写 V2RayN、Clash、软路由等提供的 HTTP／混合代理端口。端口默认按 V2RayN 的 10808 填写，请以你的实际设置为准。IP 留空使用 127.0.0.1；软路由在局域网其他设备时，请填写可访问的路由器 IP 地址。本工具不会启动代理服务。关闭后会忽略端口和 IP。",12,MutedBrush));
+            p.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。IP 留空使用 127.0.0.1；软路由请填写可访问的路由器 IP 地址。关闭代理后会忽略端口和 IP。",12,MutedBrush));
             var features=Card("02   选择要启用的功能","按类别选择所需功能。配置与全局规则将在备份后按本次选择重建，子代理多线程默认关闭。");FeatureGroups(features);
             var cliLabel=T("初始化后使用的 CLI",13,TextBrush);cliLabel.Margin=new Thickness(0,16,0,4);features.Children.Add(cliLabel);Row(features,cliNative,cliStandalone);features.Children.Add(cliDetectionHint);features.Children.Add(T("独立 CLI 缺失时会先准备组件；启动保护与更新选项可单独选择。",12,MutedBrush));
             var models=Card("03   模型设置","默认读取当前全局模型设置，未设置的项目使用默认值；可通过下拉框更换。思考强度随模型切换，实际调用权限取决于账号。");ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);models.Children.Add(Button("检查所选配置",()=>CheckModels(),false));
@@ -449,12 +487,9 @@ public class MainWindow : Window {
         if(browserReport!=null&&status!=null&&Core.Value(browserReport,"desktopVersion","")!=Core.Value(status,"desktopVersion",""))environment.Children.Add(T("应用版本已变化：下方旧检查结果已失效，请重新检查浏览器连接。",13,B("#E9C779")));
         foreach(var item in new[]{new[]{"desktopVersion","最近检查的桌面版"},new[]{"runtime","浏览器控制运行时"},new[]{"proxy","最近检查代理"},new[]{"patch","补丁状态"},new[]{"checkedAt","最近检查"}})environment.Children.Add(T(item[1]+"："+DesktopLocalization.TranslateText(Core.Value(browserReport,item[0],"未检查")),13,MutedBrush));
         var settings=Card("代理设置","与初始化页面同步。使用代理软件提供的 HTTP／混合端口；关闭代理后，修复操作会恢复本工具管理的入口为直连。");
-        var enabled=new CheckBox{Content="启用 HTTP 代理",IsChecked=proxyEnabled.IsChecked,Style=(Style)Resources["KitCheck"]};
-        var hostInput=new TextBox{Text=proxyHost.Text,Style=(Style)Resources["KitInput"]};var portInput=new TextBox{Text=port.Text,Style=(Style)Resources["KitInput"]};
-        hostInput.IsEnabled=portInput.IsEnabled=enabled.IsChecked==true;
-        enabled.Checked+=(a,b)=>{proxyEnabled.IsChecked=true;hostInput.IsEnabled=portInput.IsEnabled=true;};enabled.Unchecked+=(a,b)=>{proxyEnabled.IsChecked=false;hostInput.IsEnabled=portInput.IsEnabled=false;};
-        hostInput.TextChanged+=(a,b)=>proxyHost.Text=hostInput.Text;portInput.TextChanged+=(a,b)=>port.Text=portInput.Text;
-        settings.Children.Add(enabled);settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(hostInput);settings.Children.Add(T("HTTP 代理端口",12,MutedBrush));settings.Children.Add(portInput);
+        settings.Children.Add(proxyEnabled);settings.Children.Add(ProxyPortRow());settings.Children.Add(proxyPortNotice);
+        settings.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",12,MutedBrush));
+        settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(proxyHost);
         Row(settings,Button("修复并启动 Codex",async()=>await Run("browser-start-prepare","修复并启动 Codex",true),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",()=>{Clipboard.SetText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。");banner.Text="已复制 · 重启 Codex 后在新对话中运行测试";},false));
         settings.Children.Add(T("通过此按钮启动时会先检查并按需修复；原来的 Codex 图标不会经过此检查。",12,MutedBrush));
         var checks=Card("分项验证","HTTP 403 只表示服务可达，不表示 Chrome 已连接。环境探针验证 Node 与子进程继承，真实 CUA 连接仍需重启后测试。");

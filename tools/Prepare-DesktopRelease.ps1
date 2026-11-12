@@ -14,7 +14,7 @@ $manifest=[ordered]@{
     version=$version
     url=('https://github.com/BerryFuwawa/codex-init-kit/releases/download/v'+$version+'/CodexInitKit.exe')
     sha256=$hash
-    notes='修复中文工作目录规则的校验，让初始化继续执行 CUA 检查；文件夹管理失败时写入准确的失败报告。'
+    notes='新增代理端口预设和已有端口继承，初始化与浏览器连接页共用紧凑端口选择。火绒检测待官方复核，详见发布说明。'
 }
 [IO.File]::WriteAllText((Join-Path $root 'desktop-update.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path (Split-Path $Executable -Parent) 'SHA256SUMS.txt'),($hash+'  CodexInitKit.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
