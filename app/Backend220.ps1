@@ -343,8 +343,16 @@ function Set-InitializationCliMode {
 }
 function Invoke-Initialize220 {
     param($InputData)
-    Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp) ([string]$InputData.Options.closeApprovedProcesses)
     $opts=$InputData.Options
+    $steps=[Collections.Generic.List[object]]::new()
+    if($opts.desktopUpdate){$steps.Add(@{Name='更新桌面版（含原生 CLI）';Kind='desktop'})}
+    $steps.Add(@{Name='重建配置、目录及 CUA';Kind='base'})
+    if($opts.officialCliUpdate){$steps.Add(@{Name='更新官方独立 CLI';Kind='official'})}
+    if($InputData.InstallProtection){$steps.Add(@{Name='安装启动保护';Kind='guard'})}
+    $steps.Add(@{Name='应用所选 CLI';Kind='cli'})
+    if($opts.browserRepair){$steps.Add(@{Name='浏览器连接修复';Kind='browser'})}
+    Write-BackendLine ('@@PROGRESS@@'+(@{step=1;total=$steps.Count+1;stageId='preflight';state='running';title='前置检查';detail='正在核对应用状态与所选 CLI'}|ConvertTo-Json -Compress))
+    Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp) ([string]$InputData.Options.closeApprovedProcesses)
     $cliMode=$opts.cliMode
     if($cliMode -eq 'auto'){
         $desktop=Get-ReadOnlyDesktopInfo
@@ -356,19 +364,13 @@ function Invoke-Initialize220 {
         }
         Write-BackendLine ('初始化前检测到：'+$label+'；本次自动沿用。')
     }
+    Write-BackendLine ('@@PROGRESS@@'+(@{step=1;total=$steps.Count+1;stageId='preflight';state='complete';title='前置检查';detail='应用状态与 CLI 选择检查完成'}|ConvertTo-Json -Compress))
     $cliSnapshot=Get-InitializationCliSnapshot
-    $steps=[Collections.Generic.List[object]]::new()
-    if($opts.desktopUpdate){$steps.Add(@{Name='更新桌面版（含原生 CLI）';Kind='desktop'})}
-    $steps.Add(@{Name='重建配置、目录及 CUA';Kind='base'})
-    if($opts.officialCliUpdate){$steps.Add(@{Name='更新官方独立 CLI';Kind='official'})}
-    if($InputData.InstallProtection){$steps.Add(@{Name='安装启动保护';Kind='guard'})}
-    $steps.Add(@{Name='应用所选 CLI';Kind='cli'})
-    if($opts.browserRepair){$steps.Add(@{Name='浏览器连接修复';Kind='browser'})}
     $results=[Collections.Generic.List[object]]::new();$index=0;$desktopSafe=$true;$basePassed=$false;$cliResult=$null;$cliApplied=$false
     $script:InitializationProgressActive=$true
     try {
         foreach($step in $steps){
-            $index++;Write-BackendLine ('@@PROGRESS@@'+(@{step=$index;total=$steps.Count;title=$step.Name}|ConvertTo-Json -Compress))
+            $index++;$script:InitializationStageId=$step.Kind;$script:InitializationStageIndex=$index+1;$script:InitializationStageTotal=$steps.Count+1;Write-BackendLine ('@@PROGRESS@@'+(@{step=$index+1;total=$steps.Count+1;title=$step.Name;stageId=$step.Kind;state='running';detail=$step.Name}|ConvertTo-Json -Compress))
             try {
                 switch($step.Kind){
                     'desktop' {
@@ -396,16 +398,17 @@ function Invoke-Initialize220 {
                     }
                     'browser' {if(-not $desktopSafe){throw 'Desktop update pending; browser repair paused.'};if((Invoke-BrowserOperation 'repair' $InputData.PayloadRoot $InputData.ProxyPort $opts) -ne 0){throw '浏览器修复未完成，可在浏览器连接页单独重试。'}}
                 }
-                $entry=@{name=$step.Name;state='complete';message=if($step.Kind -eq 'cli'){'已选择并核验：'+$selected}else{'完成'}}
+                $entry=@{stageId=$step.Kind;name=$step.Name;state='complete';message=if($step.Kind -eq 'cli'){'已选择并核验：'+$selected}else{'完成'}}
                 $results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry;Write-BackendLine ('当前 CLI 模式：'+$selected)}
             } catch {
                 $message=$_.Exception.Message
                 if($step.Kind -eq 'cli'){
                     try{Restore-InitializationCliSnapshot $cliSnapshot $InputData.PayloadRoot;$message+='；已恢复初始化前的 CLI 路径设置。'}catch{$message+='；恢复原 CLI 设置失败：'+$_.Exception.Message}
                 }
-                $entry=@{name=$step.Name;state='incomplete';message=$message};$results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry}
+                $entry=@{stageId=$step.Kind;name=$step.Name;state='incomplete';message=$message};$results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry}
                 Write-BackendLine ('[INCOMPLETE] '+$step.Name+': '+$message)
             }
+            Write-BackendLine ('@@PROGRESS@@'+(@{step=$index+1;total=$steps.Count+1;stageId=$step.Kind;state=$entry.state;title=$step.Name;detail=$entry.message}|ConvertTo-Json -Compress))
         }
         if($cliApplied){
             try{$actual=Assert-InitializationCliMode $cliMode;Write-BackendLine ('最终 CLI 模式：'+$actual)}

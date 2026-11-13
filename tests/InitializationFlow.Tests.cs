@@ -78,7 +78,7 @@ public static class InitializationFlowTests {
                 var title=panel.Children.OfType<TextBlock>().First();var body=(TextBlock)panel.Children.OfType<ScrollViewer>().Single().Content;
                 var button=panel.Children.OfType<Button>().Single();
                 Assert(title.Text==expectedTitle&&dialog.Title==expectedTitle&&title.IsVisible&&title.ActualHeight>0,"Result dialog title was not visible");
-                var ink=body.Foreground as SolidColorBrush;var background=((Border)dialog.Content).Background as SolidColorBrush;
+                var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:SilverTheme.Dark) as SolidColorBrush;
                 Assert(body.Text.Contains(expectedBody)&&body.IsVisible&&body.ActualHeight>0&&body.ActualWidth>0&&ink!=null&&ink.Color.A>0&&background!=null&&ink.Color!=background.Color,"Result details for "+expectedTitle+" were empty or hidden: expected="+expectedBody+", text="+body.Text+", visible="+body.IsVisible+", height="+body.ActualHeight);
                 Assert(button.IsVisible&&button.IsDefault&&Convert.ToString(button.Content)=="确认","Result confirmation button was unavailable");
                 loaded=true;Click(button);
@@ -99,7 +99,7 @@ public static class InitializationFlowTests {
         using(var s=new Scenario(exitCode)){
             bool presented=false;
             s.Window.PresentInitializationDialog=dialog=>{presented=true;PresentAndConfirm(s.Window,dialog,expectedTitle,expectedBody);};
-            foreach(var page in new[]{"概览","浏览器连接","维护恢复","更新","日志","初始化"}){
+            foreach(var page in new[]{"概览","连接与修复","CLI 管理","备份与回滚","更新与下载","日志","初始化"}){
                 Sidebar(s.Window,page);Assert((bool)Field(s.Window,"busy"),"Navigation ended the active operation");
                 if(page=="初始化")Assert((int)Field(s.Window,"wizard")==2,"Navigation lost the running results page");
             }
@@ -186,7 +186,7 @@ public static class InitializationFlowTests {
     static void VerifyInitializationGroups() {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
         try {
-            Navigate(window,"初始化");window.UpdateLayout();
+            Set(window,"configurationTab",1);Navigate(window,"初始化");window.UpdateLayout();
             var content=(StackPanel)Field(window,"content");var features=(StackPanel)((Border)content.Children[1]).Child;
             var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
             foreach(var title in new[]{"工作与规则","记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
@@ -227,9 +227,9 @@ public static class InitializationFlowTests {
     public static void Run(){
         OverviewDuringInitialization();ReturnAfterInitialization();
         VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","基础配置和所选功能已完成");
-        VerifyOutcome(2,"浏览器连接",Fixture("partial","更新桌面版：未完成"),"初始化部分完成","更新桌面版：未完成");
-        VerifyOutcome(2,"更新","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
-        VerifyOutcome(1,"维护恢复",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");
+        VerifyOutcome(2,"连接与修复",Fixture("partial","更新桌面版：未完成"),"初始化部分完成","更新桌面版：未完成");
+        VerifyOutcome(2,"更新与下载","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
+        VerifyOutcome(1,"CLI 管理",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);

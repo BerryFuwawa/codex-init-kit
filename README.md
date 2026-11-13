@@ -22,9 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.13.md">v2.2.13</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.12.md">v2.2.12</a> · <a href="docs/Release-2.3.0.md">v2.3.0 界面升级开发中</a></sub></p>
 
-本项目完全开源，初始化、维护和更新流程的源码均可在本仓库审阅。本机火绒出现过文件检测与 PowerShell 系统加固提示，正在申请官方复核。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
+本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。本机火绒出现过文件检测与 PowerShell 系统加固提示，正在申请官方复核。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
+
+> v2.2.13 已撤回公开发布，自动更新清单暂时保留 v2.2.12。v2.3.0 正在完成银灰界面和隔离验收；可分发 EXE 与火绒复核仍待完成。
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
@@ -34,9 +36,9 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 | 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
-| **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「浏览器连接」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
+| **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「连接与修复」→「浏览器」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
 | **🖥️ Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
-| **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「维护恢复」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
+| **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「连接与修复」→「电脑操作」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
 | **🚀 刚安装 Codex，不知道怎样配置模型、代理和工作目录** | 从「初始化」选择功能，查看变更摘要，确认后一次完成。[查看初始化选项](docs/Settings.md) |
 | **🛡️ Codex 防御性太强，总是重复校验、添加不必要的保护？** | 初始化时勾选默认开启的「防止过度防御」，将 HERO 中文完整规则和防御边界写入全局 `AGENTS.md`。[查看规则说明](docs/AntiOverDefense.md) |
@@ -63,7 +65,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 ## 下载后，三步开始
 
 1. **下载并启动**：下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)，双击打开。所需脚本已包含在 EXE 中。
-2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「浏览器连接」或「维护恢复」。
+2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「连接与修复」→「浏览器」或「CLI 管理」。
 3. **需要初始化时**：保存工作并退出 Codex，选择工作盘、代理和功能，在确认页核对模型及 CLI 模式后执行。v2.2.9 默认沿用检测到的 CLI 类型，也可手动选择。
 
 初始化完成后会显示实际结果。部分步骤未完成时，可查看中文日志和具体项目，再单独重试。
@@ -73,12 +75,18 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 - 初始化不会清除已有对话记录或项目文件，也不会自动搬移已有工作文件。
 - 完整初始化会备份并重建当前用户配置与全局 `AGENTS.md`。旧的全局自定义内容保存在本次备份中，不会自动写回；项目目录内的 `AGENTS.md` 不受这项全局重置影响。
-- 可在「维护恢复」选择初始化备份或保护器 CLI 版本回滚。浏览器补丁、CUA 备份和启动保护各有单独的恢复范围。[查看恢复说明](docs/Desktop.md)
+- 可在「备份与回滚」选择初始化备份或保护器 CLI 版本回滚。浏览器补丁、CUA 备份和启动保护各有单独的恢复范围。[查看恢复说明](docs/Desktop.md)
 - 发布页提供 `SHA256SUMS.txt`。发布 EXE 当前未签名；请从本仓库的 [Releases](https://github.com/BerryFuwawa/codex-init-kit/releases) 获取并核对文件。
 
 </details>
 
-## 界面预览
+## v2.3.0 界面预览
+
+原生 WPF 银灰界面，默认约 900 × 660，按用途分为七项导航。初始化采用分组配置、变更确认和阶段时间线，日志按需展开；关闭 Windows 动画时使用静态反馈。
+
+![Codex Init Kit 2.3.0 概览，银灰界面与分类导航](assets/screenshots/overview.png)
+
+![Codex 初始化阶段时间线与真实步骤进度](assets/screenshots/initialization-progress.png)
 
 <table>
   <tr>
@@ -90,11 +98,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 <details>
 <summary><strong>查看更多页面：维护恢复、更新和日志</strong></summary>
 
-**维护恢复**：检查与修复组件、切换 CLI、诊断以及选择备份回滚。
+**CLI 管理**：切换 CLI，分别更新两类组件，并管理启动保护。
 
 ![Codex Init Kit 维护恢复页面](assets/screenshots/maintenance.png)
 
-**更新**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
+**更新与下载**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
 
 ![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/updates.png)
 
@@ -110,11 +118,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ### Codex 连接不上 Chrome，应该从哪里开始？
 
-先到「浏览器连接」检查组件完整性、代理端口和环境继承。如果使用代理，确认代理软件已启动，并填写它提供的 HTTP／混合端口。需要修复时先保存工作、退出 Codex；修复后重启并使用页面提供的测试指令实际读取网页。[详细步骤与恢复方法](docs/BrowserConnection.md)
+先到「连接与修复」→「浏览器」检查组件完整性、代理端口和环境继承。如果使用代理，确认代理软件已启动，并填写它提供的 HTTP／混合端口。需要修复时先保存工作、退出 Codex；修复后重启并使用页面提供的测试指令实际读取网页。[详细步骤与恢复方法](docs/BrowserConnection.md)
 
 ### Codex 桌面版打不开或提示“无法加载组织设置”，怎么办？
 
-如果当前使用桌面原生 CLI，可以先保存工作并退出 Codex，在「维护恢复」点击「切换官方独立 CLI」，然后重启 Codex 验证；组件缺失时工具会按需准备。日志中出现 `bundled_executable_relocation_failed`、`EPERM` 和 `rename_staging` 时，也可检查桌面启动组件。该提示可能有多种原因，切换 CLI 不保证解决所有情况。[桌面启动故障处理](docs/DesktopStartupRecovery.md)
+如果当前使用桌面原生 CLI，可以先保存工作并退出 Codex，在「CLI 管理」点击「切换官方独立 CLI」，然后重启 Codex 验证；组件缺失时工具会按需准备。日志中出现 `bundled_executable_relocation_failed`、`EPERM` 和 `rename_staging` 时，也可检查桌面启动组件。该提示可能有多种原因，切换 CLI 不保证解决所有情况。[桌面启动故障处理](docs/DesktopStartupRecovery.md)
 
 ### Codex 初始化会删除对话、项目或记忆吗？
 
@@ -130,7 +138,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ### 下载很慢或更新失败怎么办？
 
-工具的「更新」页支持 GitHub 自动镜像和自定义 HTTPS 镜像。按官方、自定义、内置十个镜像的顺序尝试，内置镜像并行测速。你也可以在 [Releases 页面](https://github.com/BerryFuwawa/codex-init-kit/releases)手动下载。镜像设置不改变系统代理，也不会接管微软商店或 OpenAI 安装器内部的网络行为。[查看镜像说明](docs/GitHubMirrors.md)
+工具的「更新与下载」页支持 GitHub 自动镜像和自定义 HTTPS 镜像。按官方、自定义、内置十个镜像的顺序尝试，内置镜像并行测速。你也可以在 [Releases 页面](https://github.com/BerryFuwawa/codex-init-kit/releases)手动下载。镜像设置不改变系统代理，也不会接管微软商店或 OpenAI 安装器内部的网络行为。[查看镜像说明](docs/GitHubMirrors.md)
 
 ## 文档与反馈
 

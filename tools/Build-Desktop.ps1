@@ -13,6 +13,7 @@ $guard=Join-Path $scriptRoot '第2步-Codex启动保护与更新管理器-V5.1.2
 $out=Join-Path $OutputDirectory 'CodexInitKit.exe'
 $argsList=@('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output',"/out:$out",('/win32manifest:'+(Join-Path $root 'app\app.manifest')))
 $argsList+=('/win32icon:'+(Join-Path $root 'assets\app.ico'))
+$argsList+=('/resource:'+(Join-Path $root 'LICENSE')+',Payload.Project.LICENSE')
 $argsList+=('/resource:'+(Join-Path $root 'assets\logo.png')+',Brand.logo.png')
 $argsList+=('/resource:'+(Join-Path $root 'app\Controls.xaml')+',UI.Controls.xaml')
 foreach($ref in @('System.dll','System.Core.dll','System.Web.Extensions.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll')) { $argsList+="/reference:$(Join-Path $framework $ref)" }
@@ -47,6 +48,7 @@ $argsList+=(Join-Path $root 'tests\GitHubTransport.Tests.cs')
 $argsList+=(Join-Path $root 'tests\CurrentModelSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\ProxyPortSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
+$argsList+=(Join-Path $root 'tests\InitializationProgress.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

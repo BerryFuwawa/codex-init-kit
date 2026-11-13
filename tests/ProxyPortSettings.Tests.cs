@@ -56,6 +56,7 @@ public static class ProxyPortSettingsTests {
                 Write(path,"HTTP_PROXY=http://127.0.0.1:"+preset.Port+"\n");
                 var window=new MainWindow(false);
                 try{
+                    Assert(!Field<ComboBox>(window,"proxyPortPreset").IsDropDownOpen,"First launch unexpectedly opened the preset dropdown.");
                     Assert(Field<ComboBox>(window,"proxyPortPreset").SelectedItem==preset&&Field<TextBox>(window,"port").IsReadOnly,"Startup did not reverse-map a saved preset.");
                     Assert((int)Call(window,"Port")==preset.Port,"Startup update requests would use a stale port.");
                 }finally{window.Close();}
@@ -78,7 +79,7 @@ public static class ProxyPortSettingsTests {
             combo.SelectedIndex=8;Assert(port.Text==""&&!port.IsReadOnly,"First custom selection was not empty and editable.");
             port.Text="12345";combo.SelectedIndex=2;
             Assert(port.Text=="3067"&&port.IsReadOnly,"Karing selection did not fill and lock the port.");
-            Call(preview,"Navigate","浏览器连接");
+            Call(preview,"Navigate","连接与修复");
             Assert(combo.SelectedIndex==2&&port.IsReadOnly&&port.Text=="3067","Browser navigation lost the proxy choice.");
             combo.SelectedIndex=8;Assert(port.Text=="12345"&&!port.IsReadOnly,"Returning to custom lost the previous value.");
             enabled.IsChecked=false;Assert(!combo.IsEnabled&&!port.IsEnabled&&!Field<TextBox>(preview,"proxyHost").IsEnabled&&(int)Call(preview,"Port")==0,"Disabled proxy did not disable and ignore all inputs.");
@@ -89,14 +90,14 @@ public static class ProxyPortSettingsTests {
             }
             combo.SelectedIndex=5;Call(preview,"Navigate","初始化");
             Assert(port.Text=="7890"&&port.IsReadOnly&&Convert.ToString(Call(preview,"InitSummary")).Contains("127.0.0.1:7890"),"Confirmation lost the selected proxy port.");
-            foreach(var page in new[]{"初始化","浏览器连接"}){
+            foreach(var page in new[]{"初始化","连接与修复"}){
                 Call(preview,"Navigate",page);
-                foreach(var width in new[]{940.0,1120.0}){
+                foreach(var width in new[]{800.0,900.0}){
                     preview.Width=width;
                     var view=(FrameworkElement)preview.Content;
                     view.Measure(new Size(width,1200));view.Arrange(new Rect(0,0,width,1200));view.UpdateLayout();
-                    var row=(Grid)combo.Parent;var content=(FrameworkElement)Field<StackPanel>(preview,"content");
-                    Assert(row.ActualWidth<=content.ActualWidth-44&&Math.Abs(combo.ActualHeight-port.ActualHeight)<1&&Math.Abs(port.ActualWidth-90)<1,"Proxy row layout at "+width+": row "+row.ActualWidth+", content "+content.ActualWidth+", heights "+combo.ActualHeight+"/"+port.ActualHeight+", port "+port.ActualWidth);
+                    var row=(Grid)combo.Parent;Assert(row.Children.OfType<TextBlock>().Select(x=>x.Text).SequenceEqual(new[]{"阁下的代理端口：","←常用软件预设端口"})&&Grid.GetColumn(port)==1&&Grid.GetColumn(combo)==2,"Proxy row labels or control order changed.");var content=(FrameworkElement)Field<StackPanel>(preview,"content");
+                    Assert(row.ActualWidth<=content.ActualWidth-32&&Math.Abs(combo.ActualHeight-port.ActualHeight)<1&&Math.Abs(port.ActualWidth-90)<1,"Proxy row layout at "+width+": row "+row.ActualWidth+", content "+content.ActualWidth+", heights "+combo.ActualHeight+"/"+port.ActualHeight+", port "+port.ActualWidth);
                 }
             }
         }finally{preview.Close();}

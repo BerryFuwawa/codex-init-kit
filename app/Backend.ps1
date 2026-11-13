@@ -592,7 +592,10 @@ function Invoke-ChildProcess {
         $stdoutBuilder = New-Object System.Text.StringBuilder
         while (($line = $process.StandardOutput.ReadLine()) -ne $null) {
             [void]$stdoutBuilder.AppendLine($line)
-            if (-not ($script:InitializationProgressActive -and $line.StartsWith('@@PROGRESS@@'))) { Write-BackendLine $line }
+            if ($script:InitializationProgressActive -and $line.StartsWith('@@PROGRESS@@')) {
+                $childProgress=$line.Substring(12)|ConvertFrom-Json
+                Write-BackendLine ('@@PROGRESS@@'+(@{step=$script:InitializationStageIndex;total=$script:InitializationStageTotal;stageId=$script:InitializationStageId;state='running';title=$childProgress.title;detail=$childProgress.title}|ConvertTo-Json -Compress))
+            } else { Write-BackendLine $line }
         }
         $process.WaitForExit()
         $stdout = $stdoutBuilder.ToString(); $stderr = $stderrTask.Result
@@ -652,7 +655,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.2.13')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.3.0')
     $folderRuleCheck=@'
 $text=[IO.File]::ReadAllText($env:AGENTS_FILE,[Text.Encoding]::UTF8)
 if($text.IndexOf($env:EXPECTED_CODEX_ROOT,[StringComparison]::OrdinalIgnoreCase) -lt 0){

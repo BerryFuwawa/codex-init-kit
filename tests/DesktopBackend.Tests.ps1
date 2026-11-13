@@ -42,6 +42,7 @@ $codeHome = Join-Path $scratch 'home'
 
 $oldCodeHome = $env:CODEX_HOME
 try {
+    $env:CODEX_HOME = $codeHome
     Initialize-ConfigCompatibility
     $compatHome = Join-Path $scratch 'compat-home'
     $compatProject = Join-Path $scratch 'chosen-project'
@@ -512,7 +513,7 @@ exit /b 0
     Assert ((Get-Command Install-Or-RepairProtection -ErrorAction SilentlyContinue).CommandType -eq 'Function') 'Guard operation was not imported into script scope.'
     Assert ((Get-Command Load-State -ErrorAction SilentlyContinue).CommandType -eq 'Function') 'Guard state helper was not imported into script scope.'
     Assert (-not (Test-Path -LiteralPath $isolatedGuardRoot)) 'Read-only Guard load created an install root.'
-    $proxyFile = Join-Path (Get-CodexHomePath) '.env'
+    $proxyFile = Join-Path $codeHome '.env'
     [IO.File]::WriteAllText($proxyFile,"HTTP_PROXY=http://127.0.0.1:9999`r`nHTTPS_PROXY=http://127.0.0.1:9999`r`n",[Text.UTF8Encoding]::new($false))
     foreach ($selectedPort in @(0,23456)) {
         $proxySnapshot = Set-TransientProxyEnvironment $selectedPort
@@ -842,7 +843,8 @@ END CODEX LUNA PROMPT V1.3
     $writeResult = Invoke-ChildProcess $writeFixturePath @() $writeFixtureRoot $writeEnvironment $script:InputEncoding
     Assert ($writeResult.ExitCode -eq 0) ('WRITE_AGENTS_RULES base-only fixture failed: ' + $writeResult.Error)
     $writeResultText = [IO.File]::ReadAllText($writeAgentsPath,[Text.Encoding]::UTF8)
-    Assert ($writeResultText -eq ('@' + $writeRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n")) 'WRITE_AGENTS_RULES did not write the fresh base output.'
+    $expectedWriteText = '@' + $writeRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
+    Assert ($writeResultText -eq $expectedWriteText) ('WRITE_AGENTS_RULES output differs. Actual: '+$writeResultText+' Expected: '+$expectedWriteText)
     Assert ($writeResultText -notmatch 'BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT PROMPT|old global content') 'WRITE_AGENTS_RULES installed or retained optional/legacy blocks during the base stage.'
 
     # The real backup label preserves exact bytes, including a UTF-8 BOM, and
