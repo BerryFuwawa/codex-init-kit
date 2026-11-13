@@ -16,7 +16,7 @@ using System.Windows.Media.Animation;
 
 namespace CodexKit {
 public partial class MainWindow : Window {
-    static readonly Brush BackgroundBrush=B("#10141E"), PanelBrush=SilverTheme.Panel, TextBrush=B("#EDF2FC"), MutedBrush=B("#A4B0C5"), Accent=SilverTheme.Mint;
+    static readonly Brush BackgroundBrush=B("#10141E"), PanelBrush=MorandiTheme.Panel, TextBrush=B("#EDF2FC"), MutedBrush=B("#A4B0C5"), Accent=MorandiTheme.Accent;
     readonly StackPanel content=new StackPanel();
     readonly TextBlock heading=new TextBlock(), subtitle=new TextBlock(), banner=new TextBlock();
     readonly TextBlock updateStatus=new TextBlock();
@@ -145,6 +145,7 @@ public partial class MainWindow : Window {
     public MainWindow(bool isPreview) {
         logViewport=new LogViewport(log);
         preview=isPreview;if(preview)StartOperation=(op,id,disk,proxy,protect,options)=>{throw new InvalidOperationException("设计预览不会执行初始化或维护操作。");};modelCatalog=ModelCatalog.Preset(); Title="Codex Init Kit"; Width=1120; Height=800; MinWidth=940; MinHeight=720; WindowStartupLocation=WindowStartupLocation.CenterScreen;
+        SourceInitialized+=(s,e)=>MorandiTheme.StyleWindow(this);
         Icon=Brand.Logo();
         Background=BackgroundBrush; Foreground=TextBrush; FontFamily=new FontFamily("Microsoft YaHei UI"); FontSize=14;
         using(var styles=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("UI.Controls.xaml"))Resources.MergedDictionaries.Add((ResourceDictionary)System.Windows.Markup.XamlReader.Load(styles));
@@ -199,7 +200,7 @@ public partial class MainWindow : Window {
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
         Navigate("概览"); Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
     }
-    static Brush B(string hex) { return SilverTheme.Legacy(hex); }
+    static Brush B(string hex) { return MorandiTheme.Legacy(hex); }
     void LoadCurrentProxyPort() {
         try {
             var saved=ProxyPortSettings.Load(CurrentModelSettings.CodexHome());
@@ -222,7 +223,7 @@ public partial class MainWindow : Window {
     }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
     Button Button(string label,Action action,bool primary) {
-        var button=new Button{Content=label,Style=(Style)Resources["KitButton"],Background=primary?SilverTheme.Primary:SilverTheme.Panel,Foreground=primary?SilverTheme.Dark:TextBrush,FontSize=13,Padding=new Thickness(14,8,14,8),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,8,4)};
+        var button=new Button{Content=label,Style=(Style)Resources["KitButton"],Background=primary?MorandiTheme.Primary:MorandiTheme.Panel,Foreground=primary?MorandiTheme.OnPrimary:TextBrush,FontSize=13,Padding=new Thickness(14,8,14,8),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,8,4)};
         button.Click+=(s,e)=>action();Motion.Button(button,preview);return button;
     }
     Button Link(string label,Action action) { var b=Button(label,action,false); b.Background=Brushes.Transparent;b.BorderThickness=new Thickness(0); b.Foreground=Accent; b.Padding=new Thickness(0,6,0,6); b.FontSize=12; return b; }
@@ -231,7 +232,7 @@ public partial class MainWindow : Window {
         var panel=new StackPanel();
         var label=T(title,13,Accent);label.FontWeight=FontWeights.SemiBold;label.Margin=new Thickness(0,0,0,6);panel.Children.Add(label);
         foreach(var choice in choices)panel.Children.Add(choice);
-        return new Border{Background=B("#151C28"),BorderBrush=B("#2D394D"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,12,14,12),Margin=new Thickness(0,0,0,10),Child=panel};
+        return new Border{Background=MorandiTheme.Group,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,12,14,12),Margin=new Thickness(0,0,0,10),Child=panel};
     }
     void FeatureGroups(StackPanel parent) {
         var grid=new Grid{Margin=new Thickness(0,8,0,0)};
@@ -247,7 +248,7 @@ public partial class MainWindow : Window {
         parent.Children.Add(new Border{Background=B("#151C28"),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,10),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?SilverTheme.Primary:Brushes.Transparent;b.Foreground=active?SilverTheme.Dark:MutedBrush;}
+    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Primary:Brushes.Transparent;b.Foreground=active?MorandiTheme.OnPrimary:MutedBrush;}
         if(name=="概览")Overview();else if(name=="初始化")Wizard();else if(name=="连接与修复")RepairPage();else if(name=="CLI 管理")CliPage();else if(name=="备份与回滚")BackupPage();else if(name=="更新与下载")Updates();else LogsPage();
         if(log.Parent!=null)logViewport.Attach();Motion.Enter(content,preview,220);
     }
@@ -588,9 +589,9 @@ public partial class MainWindow : Window {
         try{
             status=new Dictionary<string,object>{{"rollbackEntries",entries},{"rollbackDeleteId",new string('a',64)},{"rollbackDeleteCount",3}};selectedRollbackId="";Navigate("备份与回滚");
             if(rollbackList.Items.Count!=3||rollbackButton.IsEnabled||rollbackFolderButton.IsEnabled||!rollbackDeleteButton.IsEnabled||
-               ((SolidColorBrush)rollbackFolderButton.Background).Color!=Color.FromRgb(56,56,56))throw new InvalidDataException("Rollback actions did not reflect the empty selection");
+               ((SolidColorBrush)rollbackFolderButton.Background).Color!=((SolidColorBrush)MorandiTheme.Disabled).Color)throw new InvalidDataException("Rollback actions did not reflect the empty selection");
             rollbackList.SelectedIndex=0;if(!rollbackButton.IsEnabled||!rollbackFolderButton.IsEnabled||selectedRollbackId!=new string('a',64)||
-               ((SolidColorBrush)rollbackFolderButton.Background).Color==Color.FromRgb(56,56,56))throw new InvalidDataException("Rollback selection was not retained");
+               ((SolidColorBrush)rollbackFolderButton.Background).Color==((SolidColorBrush)MorandiTheme.Disabled).Color)throw new InvalidDataException("Rollback selection was not retained");
             string opened=null;OpenSelectedRollbackFolder(path=>opened=path);if(opened!=folder)throw new InvalidDataException("Open backup folder did not resolve the selected path");
             var summary=RollbackSummary((Dictionary<string,object>)entries[0]);if(!summary.Contains("2026-11-01 14:00:00")||!summary.Contains("2.2.4")||!summary.Contains("不删除对话"))throw new InvalidDataException("Rollback confirmation lacks its exact target or impact");
             Navigate("备份与回滚");if(rollbackList.SelectedIndex!=0||!rollbackButton.IsEnabled)throw new InvalidDataException("Returning to maintenance lost the rollback selection");
@@ -602,7 +603,7 @@ public partial class MainWindow : Window {
             foreach(var mode in new[]{"DesktopNative","OfficialStandalone"})foreach(int width in new[]{940,1120}){
                 status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");var root=(FrameworkElement)Content;root.Measure(new Size(width,720));root.Arrange(new Rect(0,0,width,720));root.UpdateLayout();
                 var hero=(StackPanel)((Border)content.Children[0]).Child;var notice=hero.Children.OfType<TextBlock>().FirstOrDefault(x=>x.Name=="DataPreservationNotice");var label=notice;var actions=hero.Children.OfType<Grid>().First();var start=actions.Children.OfType<Button>().First();
-                if(label==null||label.Text!="本工具不会初始化数据与对话"||label.Foreground!=Brushes.White||Convert.ToString(notice.ToolTip)!="初始化会备份并重建配置，保留现有对话记录和项目文件。")throw new InvalidDataException("Overview data-preservation notice or tooltip is missing");
+                if(label==null||label.Text!="本工具不会初始化数据与对话"||label.Foreground!=MutedBrush||Convert.ToString(notice.ToolTip)!="初始化会备份并重建配置，保留现有对话记录和项目文件。")throw new InvalidDataException("Overview data-preservation notice or tooltip is missing");
                 if(notice.ActualWidth>=hero.ActualWidth||notice.ActualHeight>20||notice.ActualWidth<label.DesiredSize.Width-label.Margin.Left-label.Margin.Right-1||label.ActualHeight<label.DesiredSize.Height-label.Margin.Top-label.Margin.Bottom-1)throw new InvalidDataException("Overview notice stretched or clipped at width "+width);
                 if(Math.Abs(notice.TranslatePoint(new Point(),hero).X-start.TranslatePoint(new Point(),hero).X)>1||notice.TranslatePoint(new Point(),hero).Y<actions.TranslatePoint(new Point(0,actions.ActualHeight),hero).Y+7)throw new InvalidDataException("Overview notice is not below and left-aligned with initialization");
             }

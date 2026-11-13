@@ -66,7 +66,7 @@ GitHub 请求顺序为官方 → 自定义 → 内置十个镜像。内置站点
 
 ## 动画与架构
 
-银灰渐变、统一控件和薄边框由 SilverTheme.cs 与 Controls.xaml 管理；页面由 MainWindow.Pages.cs 组织，后台操作沿用现有接口。没有增加 WebView、网页运行时或第三方 UI 依赖。
+雾夜蓝配色、统一控件和薄边框由 MorandiTheme.cs 与 Controls.xaml 管理；页面由 MainWindow.Pages.cs 组织，后台操作沿用现有接口。没有增加 WebView、网页运行时或第三方 UI 依赖。
 
 页面进入、按钮按压、下拉和弹窗使用短时非线性过渡；快速重复操作从当前值衔接。只有正在执行的不确定进度使用活动动画。关闭 Windows 客户区动画后使用静态反馈，不依靠动画表达成功或失败。[设计说明](Design-2.3.0.md)
 

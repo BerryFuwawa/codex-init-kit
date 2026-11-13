@@ -78,7 +78,7 @@ public static class InitializationFlowTests {
                 var title=panel.Children.OfType<TextBlock>().First();var body=(TextBlock)panel.Children.OfType<ScrollViewer>().Single().Content;
                 var button=panel.Children.OfType<Button>().Single();
                 Assert(title.Text==expectedTitle&&dialog.Title==expectedTitle&&title.IsVisible&&title.ActualHeight>0,"Result dialog title was not visible");
-                var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:SilverTheme.Dark) as SolidColorBrush;
+                var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:MorandiTheme.Dark) as SolidColorBrush;
                 Assert(body.Text.Contains(expectedBody)&&body.IsVisible&&body.ActualHeight>0&&body.ActualWidth>0&&ink!=null&&ink.Color.A>0&&background!=null&&ink.Color!=background.Color,"Result details for "+expectedTitle+" were empty or hidden: expected="+expectedBody+", text="+body.Text+", visible="+body.IsVisible+", height="+body.ActualHeight);
                 Assert(button.IsVisible&&button.IsDefault&&Convert.ToString(button.Content)=="确认","Result confirmation button was unavailable");
                 loaded=true;Click(button);

@@ -1,6 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:CodexKit;assembly=CodexInitKit">
   <Style x:Key="KitScrollThumb" TargetType="Thumb">
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border x:Name="Grip" Background="#6C7786" CornerRadius="4" Margin="2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="#9BA8B8"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="#C9D5E4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border x:Name="Grip" Background="#3B4B5D" CornerRadius="4" Margin="2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="#AFBED0"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="#9DAFC4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitScrollPage" TargetType="RepeatButton">
     <Setter Property="Focusable" Value="False"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
@@ -18,82 +18,83 @@
     <Style.Triggers><Trigger Property="Orientation" Value="Horizontal"><Setter Property="Width" Value="Auto"/><Setter Property="Height" Value="12"/><Setter Property="MinHeight" Value="0"/><Setter Property="MinWidth" Value="24"/></Trigger></Style.Triggers>
   </Style>
   <Style x:Key="KitInput" TargetType="TextBox">
-    <Setter Property="Background" Value="#252A33"/><Setter Property="Foreground" Value="#F2F3F7"/>
-    <Setter Property="BorderBrush" Value="#687482"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Background" Value="#1C2937"/><Setter Property="Foreground" Value="#ECEEF0"/>
+    <Setter Property="BorderBrush" Value="#3B4B5D"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CaretBrush" Value="#ECEEF0"/><Setter Property="SelectionBrush" Value="#AFBED0"/><Setter Property="SelectionOpacity" Value="0.6"/>
     <Setter Property="Padding" Value="10,6"/><Setter Property="FontSize" Value="14"/>
     <Setter Property="Height" Value="36"/><Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8"><ScrollViewer x:Name="PART_ContentHost"/></Border></ControlTemplate></Setter.Value></Setter>
-    <Style.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="#C9D5E4"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.65"/></Trigger></Style.Triggers>
+    <Style.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="#9DAFC4"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.65"/></Trigger></Style.Triggers>
   </Style>
   <Style x:Key="KitCheck" TargetType="CheckBox">
-    <Setter Property="Foreground" Value="#F2F3F7"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Foreground" Value="#ECEEF0"/><Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Margin" Value="0,6,0,6"/><Setter Property="Padding" Value="0"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border x:Name="Box" Width="20" Height="20" CornerRadius="5" Background="#252A33" BorderBrush="#8B96A6" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
-          <Path x:Name="Tick" Data="M 4,9 L 8,13 L 15,5" Stroke="#1B2029" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+        <Border x:Name="Box" Width="20" Height="20" CornerRadius="5" Background="#1C2937" BorderBrush="#AFBED0" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
+          <Path x:Name="Tick" Data="M 4,9 L 8,13 L 15,5" Stroke="#172535" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
         </Border>
         <ContentPresenter Grid.Column="1" VerticalAlignment="Center" RecognizesAccessKey="True"/>
       </Grid>
       <ControlTemplate.Triggers>
-        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#C9D5E4"/><Setter TargetName="Box" Property="BorderBrush" Value="#C9D5E4"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
-        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#EFF5FF"/></Trigger>
-        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#A5E7D5"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#9DAFC4"/><Setter TargetName="Box" Property="BorderBrush" Value="#9DAFC4"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#AFBED0"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#AFBED0"/></Trigger>
         <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitCliChoice" TargetType="RadioButton">
-    <Setter Property="Foreground" Value="#F2F3F7"/><Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Foreground" Value="#ECEEF0"/><Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Margin" Value="0,4,10,4"/><Setter Property="Padding" Value="16,10"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-      <Border x:Name="Choice" Background="#46505E" BorderBrush="#8B96A6" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+      <Border x:Name="Choice" Background="#2B3A4C" BorderBrush="#AFBED0" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Border>
       <ControlTemplate.Triggers>
-        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Choice" Property="Background" Value="#C9D5E4"/><Setter TargetName="Choice" Property="BorderBrush" Value="#C9D5E4"/><Setter Property="Foreground" Value="#1B2029"/></Trigger>
-        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Choice" Property="BorderBrush" Value="#A5E7D5"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Choice" Property="Background" Value="#9DAFC4"/><Setter TargetName="Choice" Property="BorderBrush" Value="#9DAFC4"/><Setter Property="Foreground" Value="#172535"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Choice" Property="BorderBrush" Value="#AFBED0"/></Trigger>
         <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitComboItem" TargetType="ComboBoxItem">
-    <Setter Property="Foreground" Value="#F2F3F7"/><Setter Property="Padding" Value="12,6"/><Setter Property="FontSize" Value="12.5"/>
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Item" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="#46505E"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Item" Property="Background" Value="#596577"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    <Setter Property="Foreground" Value="#ECEEF0"/><Setter Property="Padding" Value="12,6"/><Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Item" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Item" Property="Background" Value="#2B3A4C"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Item" Property="Background" Value="#3B5066"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitCombo" TargetType="ComboBox">
-    <Setter Property="Foreground" Value="#F2F3F7"/><Setter Property="Height" Value="36"/>
-    <Setter Property="Background" Value="#252A33"/><Setter Property="BorderBrush" Value="#687482"/>
+    <Setter Property="Foreground" Value="#ECEEF0"/><Setter Property="Height" Value="36"/>
+    <Setter Property="Background" Value="#1C2937"/><Setter Property="BorderBrush" Value="#3B4B5D"/>
     <Setter Property="ItemContainerStyle" Value="{StaticResource KitComboItem}"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
       <Grid>
         <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press">
-          <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border x:Name="Surface" Background="#252A33" BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=ComboBox}}" BorderThickness="1" CornerRadius="8"><Path Data="M 0,0 L 5,5 L 10,0" Stroke="#C9D5E4" StrokeThickness="1.8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#C9D5E4"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#C9D5E4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></ToggleButton.Template>
+          <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border x:Name="Surface" Background="#1C2937" BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource AncestorType=ComboBox}}" BorderThickness="1" CornerRadius="8"><Path Data="M 0,0 L 5,5 L 10,0" Stroke="#9DAFC4" StrokeThickness="1.8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#9DAFC4"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#9DAFC4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></ToggleButton.Template>
         </ToggleButton>
         <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="13,0,40,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
         <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False" StaysOpen="False" IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Fade">
-          <Border Background="#343B47" BorderBrush="#687482" BorderThickness="1" CornerRadius="9" Padding="5" Margin="0,5,0,0" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><local:SmoothScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></local:SmoothScrollViewer></Border>
+          <Border Background="#253343" BorderBrush="#3B4B5D" BorderThickness="1" CornerRadius="9" Padding="5" Margin="0,5,0,0" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"><local:SmoothScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></local:SmoothScrollViewer></Border>
         </Popup>
       </Grid>
-      <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#A5E7D5"/></Trigger></ControlTemplate.Triggers>
+      <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="#AFBED0"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
 
   <Style x:Key="KitButton" TargetType="Button">
-    <Setter Property="Cursor" Value="Hand"/><Setter Property="BorderBrush" Value="#7A8798"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Cursor" Value="Hand"/><Setter Property="BorderBrush" Value="#3B4B5D"/><Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
       <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
-      <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#A5E7D5"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers>
+      <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitProgress" TargetType="ProgressBar">
-    <Setter Property="Foreground"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#C7D4E9" Offset="0"/><GradientStop Color="#A5E7D5" Offset="1"/></LinearGradientBrush></Setter.Value></Setter>
+    <Setter Property="Foreground"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#9DAFC4" Offset="0"/><GradientStop Color="#AFBED0" Offset="1"/></LinearGradientBrush></Setter.Value></Setter>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ProgressBar"><Grid ClipToBounds="True">
-      <Border x:Name="PART_Track" Background="#232A35" CornerRadius="4"/>
+      <Border x:Name="PART_Track" Background="#2B3A4C" CornerRadius="4"/>
       <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="4" HorizontalAlignment="Left"/>
       <Border x:Name="Activity" Width="70" Background="{TemplateBinding Foreground}" CornerRadius="4" HorizontalAlignment="Left" Visibility="Collapsed"><Border.RenderTransform><TranslateTransform x:Name="ActivityOffset" X="-70"/></Border.RenderTransform></Border>
     </Grid><ControlTemplate.Triggers><Trigger Property="IsIndeterminate" Value="True"><Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/><Setter TargetName="Activity" Property="Visibility" Value="Visible"/><Trigger.EnterActions><BeginStoryboard x:Name="ActivityMotion"><Storyboard><DoubleAnimation Storyboard.TargetName="ActivityOffset" Storyboard.TargetProperty="X" From="-70" To="650" Duration="0:0:1.6" RepeatBehavior="Forever"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.EnterActions><Trigger.ExitActions><StopStoryboard BeginStoryboardName="ActivityMotion"/></Trigger.ExitActions></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style TargetType="Expander"><Setter Property="Foreground" Value="#D7DEE8"/><Setter Property="Padding" Value="4"/></Style>
-  <Style x:Key="KitRollbackItem" TargetType="ListBoxItem"><Setter Property="Margin" Value="0,2"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SelectionSurface" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"><ContentPresenter HorizontalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="SelectionSurface" Property="Background" Value="#536174"/><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#A5E7D5"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#B8C8DB"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+  <Style TargetType="Expander"><Setter Property="Foreground" Value="#AEB8C4"/><Setter Property="Padding" Value="4"/></Style>
+  <Style x:Key="KitRollbackItem" TargetType="ListBoxItem"><Setter Property="Margin" Value="0,2"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SelectionSurface" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"><ContentPresenter HorizontalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="SelectionSurface" Property="Background" Value="#3B5066"/><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
 </ResourceDictionary>
