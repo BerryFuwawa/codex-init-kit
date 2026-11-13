@@ -96,7 +96,7 @@ public static class ProxyPortSettingsTests {
                     preview.Width=width;
                     var view=(FrameworkElement)preview.Content;
                     view.Measure(new Size(width,1200));view.Arrange(new Rect(0,0,width,1200));view.UpdateLayout();
-                    var row=(Grid)combo.Parent;Assert(row.Children.OfType<TextBlock>().Select(x=>x.Text).SequenceEqual(new[]{"阁下的代理端口：","←常用软件预设端口"})&&Grid.GetColumn(port)==1&&Grid.GetColumn(combo)==2,"Proxy row labels or control order changed.");var content=(FrameworkElement)Field<StackPanel>(preview,"content");
+                    var row=(Grid)combo.Parent;var hint=row.Children.OfType<Border>().SingleOrDefault(x=>x.Name=="ProxyPresetHint");Assert(row.Children.OfType<TextBlock>().Any(x=>x.Text=="阁下的代理端口：")&&hint!=null&&InitializationFlowTests.Descendants<TextBlock>(hint).Any(x=>x.Text=="常用端口预设")&&Convert.ToString(hint.ToolTip).Contains("自定义代理端口")&&Grid.GetColumn(port)==1&&Grid.GetColumn(combo)==2,"Proxy row labels or control order changed.");var content=(FrameworkElement)Field<StackPanel>(preview,"content");
                     Assert(row.ActualWidth<=content.ActualWidth-32&&Math.Abs(combo.ActualHeight-port.ActualHeight)<1&&Math.Abs(port.ActualWidth-90)<1,"Proxy row layout at "+width+": row "+row.ActualWidth+", content "+content.ActualWidth+", heights "+combo.ActualHeight+"/"+port.ActualHeight+", port "+port.ActualWidth);
                 }
             }

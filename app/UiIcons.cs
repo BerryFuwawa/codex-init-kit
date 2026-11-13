@@ -14,7 +14,7 @@ internal static class UiIcons {
         else if(key.Contains("回滚")||key.Contains("恢复"))data="M3,4 L3,10 L9,10 M3,10 C9,0 22,7 19,16 C17,23 8,22 5,18";
         else if(key.Contains("刷新")||key.Contains("重试")||key.Contains("重新"))data="M4,9 C6,2 17,2 20,8 M20,3 L20,9 L14,9 M20,15 C18,22 7,22 4,16 M4,21 L4,15 L10,15";
         else if(key.Contains("检查")||key.Contains("诊断"))data="M16,10 A6,6 0 1 1 4,10 A6,6 0 1 1 16,10 M15,15 L21,21";
-        else if(key.Contains("修复"))data="M14,4 C19,1 23,7 19,11 L16,11 L7,21 L3,17 L12,8 L12,5 M14,4 L15,8 L19,9";
+        else if(key.Contains("修复"))data="M14,3 C11,2 8,4 8,7 C8,8 8,9 8.5,10 L3,15.5 C1.5,17 1.5,19 3,20.5 C4.5,22 6.5,22 8,20.5 L13.5,15 C14.5,15.5 16,15.5 17,15 C20,14 22,11 21,8 L17,12 L13,8 Z";
         else if(!key.Contains("保存")&&(key.Contains("更新")||key.Contains("下载")||key.Contains("版本")))data="M12,3 L12,16 M7,11 L12,16 L17,11 M4,17 L4,21 L20,21 L20,17";
         else if(key.Contains("保存"))data="M4,3 L17,3 L21,7 L21,21 L4,21 Z M8,3 L8,10 L16,10 L16,3 M8,21 L8,15 L17,15 L17,21";
         else if(key.Contains("最新日志"))data="M12,3 L12,16 M7,11 L12,16 L17,11 M5,21 L19,21";

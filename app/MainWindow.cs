@@ -219,7 +219,8 @@ public partial class MainWindow : Window {
         row.Children.Add(new TextBlock{Text="阁下的代理端口：",FontSize=12,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});
         port.Margin=new Thickness(0);Grid.SetColumn(port,1);row.Children.Add(port);
         proxyPortPreset.Margin=new Thickness(8,0,0,0);Grid.SetColumn(proxyPortPreset,2);row.Children.Add(proxyPortPreset);
-        var hint=new TextBlock{Text="←常用软件预设端口",FontSize=11,Foreground=MutedBrush,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(9,0,0,0)};Grid.SetColumn(hint,3);row.Children.Add(hint);return row;
+        var hintContent=new StackPanel{Orientation=Orientation.Horizontal};hintContent.Children.Add(new System.Windows.Shapes.Path{Data=Geometry.Parse("M21,12 A9,9 0 1 1 3,12 A9,9 0 1 1 21,12 M12,10 L12,17 M12,6.5 L12,7"),Stroke=Accent,StrokeThickness=1.6,StrokeStartLineCap=PenLineCap.Round,Width=12,Height=12,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,5,0)});hintContent.Children.Add(new TextBlock{Text="常用端口预设",FontSize=11,Foreground=Accent,VerticalAlignment=VerticalAlignment.Center});
+        var hint=new Border{Name="ProxyPresetHint",Child=hintContent,Background=MorandiTheme.Group,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(7,4,7,4),Margin=new Thickness(8,0,0,0),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,ToolTip="选择代理软件后会自动填写常用端口；如果软件中改过端口，请选择自定义代理端口。"};Grid.SetColumn(hint,3);row.Children.Add(hint);return row;
     }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
     Button Button(string label,Action action,bool primary) {
