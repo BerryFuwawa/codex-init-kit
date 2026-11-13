@@ -223,14 +223,14 @@ public partial class MainWindow : Window {
     }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
     Button Button(string label,Action action,bool primary) {
-        var button=new Button{Content=label,Style=(Style)Resources["KitButton"],Background=primary?MorandiTheme.Primary:MorandiTheme.Panel,Foreground=primary?MorandiTheme.OnPrimary:TextBrush,FontSize=13,Padding=new Thickness(14,8,14,8),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,8,4)};
+        var button=new Button{Content=label,Tag=UiIcons.For(label),Style=(Style)Resources["KitButton"],Background=primary?MorandiTheme.Primary:MorandiTheme.Panel,Foreground=primary?MorandiTheme.OnPrimary:TextBrush,FontSize=13,Padding=new Thickness(14,8,14,8),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,8,4)};
         button.Click+=(s,e)=>action();Motion.Button(button,preview);return button;
     }
     Button Link(string label,Action action) { var b=Button(label,action,false); b.Background=Brushes.Transparent;b.BorderThickness=new Thickness(0); b.Foreground=Accent; b.Padding=new Thickness(0,6,0,6); b.FontSize=12; return b; }
-    StackPanel Card(string title,string description){var panel=new StackPanel{Margin=new Thickness(16,14,16,14)};panel.Children.Add(T(title,17,TextBrush));if(description.Length>0)panel.Children.Add(T(description,12,MutedBrush));var border=Surface(panel);border.Margin=new Thickness(0,0,0,12);content.Children.Add(border);return panel;}
+    StackPanel Card(string title,string description){var panel=new StackPanel{Margin=new Thickness(16,14,16,14)};panel.Children.Add(IconHeading(title,17,TextBrush,false));if(description.Length>0)panel.Children.Add(T(description,12,MutedBrush));var border=Surface(panel);border.Margin=new Thickness(0,0,0,12);content.Children.Add(border);return panel;}
     Border FeatureGroup(string title,params CheckBox[] choices) {
         var panel=new StackPanel();
-        var label=T(title,13,Accent);label.FontWeight=FontWeights.SemiBold;label.Margin=new Thickness(0,0,0,6);panel.Children.Add(label);
+        var label=IconHeading(title,13,Accent,true);label.Margin=new Thickness(0,0,0,6);panel.Children.Add(label);
         foreach(var choice in choices)panel.Children.Add(choice);
         return new Border{Background=MorandiTheme.Group,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,12,14,12),Margin=new Thickness(0,0,0,10),Child=panel};
     }
@@ -248,7 +248,8 @@ public partial class MainWindow : Window {
         parent.Children.Add(new Border{Background=B("#151C28"),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,10),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Primary:Brushes.Transparent;b.Foreground=active?MorandiTheme.OnPrimary:MutedBrush;}
+    void Navigate(string name) { pageScroll.StopAnimation();logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
+        foreach(var section in navigationSections.Values.Distinct())section.Foreground=navigationSections.ContainsKey(name)&&navigationSections[name]==section?Accent:TextBrush;
         if(name=="概览")Overview();else if(name=="初始化")Wizard();else if(name=="连接与修复")RepairPage();else if(name=="CLI 管理")CliPage();else if(name=="备份与回滚")BackupPage();else if(name=="更新与下载")Updates();else LogsPage();
         if(log.Parent!=null)logViewport.Attach();Motion.Enter(content,preview,220);
     }
@@ -444,11 +445,18 @@ public partial class MainWindow : Window {
         if(parentModel.Parent!=parentEffort.Parent||childModel.Parent!=childEffort.Parent||parentModel.Parent==childModel.Parent)throw new InvalidDataException("Model controls no longer grouped");
         parentModel.ApplyTemplate();var popup=(System.Windows.Controls.Primitives.Popup)parentModel.Template.FindName("PART_Popup",parentModel);var popupScroll=((Border)popup.Child).Child as SmoothScrollViewer;if(popupScroll==null)throw new InvalidOperationException("Model dropdown scrolling is not smooth");double itemsHeight=10;foreach(var id in ModelCatalog.Preset().Models.Keys){var item=new ComboBoxItem{Content=id,Style=(Style)Resources["KitComboItem"]};item.Measure(new Size(320,Double.PositiveInfinity));itemsHeight+=item.DesiredSize.Height;if(item.FontSize!=12.5)throw new InvalidOperationException("Dropdown font was not compact");}if(itemsHeight<=0||popupScroll.MaxHeight<=0)throw new InvalidOperationException("Preset dropdown scrolling is unavailable");
     }
+    TextBlock updatePageDescription,updatePageNotes;
+    Button updatePageDownload;
+    void RefreshUpdatePage(){
+        if(page!="更新与下载"||updatePageDescription==null)return;
+        updatePageDescription.Text=update==null?"尚未获得更新清单，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知");
+        var newer=update!=null&&new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version);updatePageNotes.Text=newer?Core.Value(update,"notes","有新版本可用。"):"";updatePageNotes.Visibility=updatePageDownload.Visibility=newer?Visibility.Visible:Visibility.Collapsed;
+    }
     void Updates() {
         subtitle.Text="从项目 GitHub 发现新版本，确认后下载、校验并替换。";
         var p=Card("当前版本  v"+Core.Version,update==null?"尚未获得更新清单。应用启动时会自动检查，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知"));
         Row(p,Button("检查更新",async()=>await CheckUpdates(false),true),Button("打开版本发布页 ↗",()=>Open("https://github.com/"+Core.Repository+"/releases"),false));
-        if(update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version)) { p.Children.Add(T(Core.Value(update,"notes","有新版本可用。"),14,Accent)); p.Children.Add(Button("下载并更新",async()=>await InstallUpdate(),true)); }
+        updatePageDescription=p.Children.OfType<TextBlock>().First();updatePageNotes=T("",14,Accent);updatePageDownload=Button("下载并更新",async()=>await InstallUpdate(),true);p.Children.Add(updatePageNotes);p.Children.Add(updatePageDownload);RefreshUpdatePage();
         var networkCard=Card("GitHub 下载加速","自定义镜像留空时跳过。内置镜像并行测速，优先使用最快的有效站点。请求沿用当前 HTTP 代理设置。");
         networkCard.Children.Add(githubMirrors);networkCard.Children.Add(T("自定义镜像前缀（可选，HTTPS）",12,MutedBrush));networkCard.Children.Add(githubCustomMirror);
         networkCard.Children.Add(T("顺序：官方 → 自定义 → 内置 10 个镜像",12,MutedBrush));
@@ -698,8 +706,8 @@ public partial class MainWindow : Window {
     async Task CheckUpdates(bool silent) {
         if(preview){updateStatus.Text="设计预览不检查在线更新";return;}
         if(checkingUpdate)return;
-        try {checkingUpdate=true;updateStatus.Text="自动检查更新中…"; var proxy=Port();var host=ProxyHost(); var network=NetworkOptions();ResetGitHubLog();update=await Task.Run(()=>Core.CheckUpdate(proxy,host,network,GitHubLog));ApplyUpdateState();if(page=="更新与下载")Navigate("更新与下载");}
-        catch(Exception ex){updateStatus.Text="更新检查未完成";updateStatus.ToolTip=DesktopLocalization.ExceptionText(ex);RecordUiError(ex,false);if(!silent && page=="更新与下载")Navigate("更新与下载");}
+        try {checkingUpdate=true;updateStatus.Text="自动检查更新中…"; var proxy=Port();var host=ProxyHost(); var network=NetworkOptions();ResetGitHubLog();update=await Task.Run(()=>Core.CheckUpdate(proxy,host,network,GitHubLog));ApplyUpdateState();RefreshUpdatePage();}
+        catch(Exception ex){updateStatus.Text="更新检查未完成";updateStatus.ToolTip=DesktopLocalization.ExceptionText(ex);RecordUiError(ex,false);if(page=="更新与下载"&&updatePageDescription!=null)updatePageDescription.Text="检查未完成，可在下载记录中查看原因后重试。";}
         finally {checkingUpdate=false;}
     }
     void ResetGitHubLog(){githubLogText="";githubLogView.Text="";}

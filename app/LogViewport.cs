@@ -15,7 +15,7 @@ internal sealed class LogViewport {
     internal LogViewport(TextBox textBox) {
         view=textBox;Following=true;
         view.AddHandler(ScrollViewer.ScrollChangedEvent,new ScrollChangedEventHandler(Scrolled));
-        view.PreviewMouseWheel+=(s,e)=>BeforeInput();
+        view.AddHandler(UIElement.PreviewMouseWheelEvent,new System.Windows.Input.MouseWheelEventHandler((s,e)=>BeforeInput()),true);
         view.PreviewMouseDown+=(s,e)=>BeforeInput();
         view.PreviewKeyDown+=(s,e)=>BeforeInput();
         view.Loaded+=(s,e)=>{if(attached)Schedule();};

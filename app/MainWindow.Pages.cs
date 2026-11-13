@@ -12,8 +12,11 @@ using System.Windows.Threading;
 namespace CodexKit {
 public partial class MainWindow {
     readonly StackPanel pageNavigation=new StackPanel();
+    readonly SmoothScrollViewer pageScroll=new SmoothScrollViewer();
+    readonly Dictionary<string,TextBlock> navigationSections=new Dictionary<string,TextBlock>();
     readonly InitializationProgress initializationProgress=new InitializationProgress();
     readonly Dictionary<string,TextBlock[]> stageLabels=new Dictionary<string,TextBlock[]>();
+    System.Windows.Shapes.Path pageHeadingIcon;
     ProgressBar stageProgress;
     TextBlock stageHeading,stageCounter,stageElapsed;
     int configurationTab,repairTab=1,progressReadLine=-1;
@@ -28,16 +31,39 @@ public partial class MainWindow {
         var brand=new StackPanel{Margin=new Thickness(17,20,12,14)};var logoRow=new StackPanel{Orientation=Orientation.Horizontal};logoRow.Children.Add(new Image{Source=Brand.Logo(),Width=29,Height=29,Margin=new Thickness(0,0,8,0)});logoRow.Children.Add(new TextBlock{Text="Codex Init Kit",FontSize=13,FontWeight=FontWeights.SemiBold,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});brand.Children.Add(logoRow);rail.Children.Add(brand);
         var nav=new StackPanel{Margin=new Thickness(10,0,10,0)};var navScroll=new SmoothScrollViewer{Content=nav,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(navScroll,1);rail.Children.Add(navScroll);
         var groups=new[]{new[]{"开始","概览","初始化"},new[]{"维护","连接与修复","CLI 管理","备份与回滚"},new[]{"工具","更新与下载","日志"}};
-        foreach(var group in groups){var caption=T(group[0],11,MutedBrush);caption.Margin=new Thickness(10,13,0,5);nav.Children.Add(caption);foreach(var item in group.Skip(1)){var name=item;var button=Button(name,async()=>{Navigate(name);if((name=="CLI 管理"||name=="备份与回滚")&&!preview&&!busy)await RefreshStatusQuietly();},false);button.HorizontalAlignment=HorizontalAlignment.Stretch;button.HorizontalContentAlignment=HorizontalAlignment.Left;button.Padding=new Thickness(13,9,8,9);button.Margin=new Thickness(0,2,0,2);button.BorderThickness=new Thickness(0);nav.Children.Add(button);navigation.Add(button);}}
+        foreach(var group in groups){
+            var section=new StackPanel{Margin=new Thickness(0,10,0,3)};
+            var header=new Grid{Margin=new Thickness(7,0,5,5)};header.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});header.ColumnDefinitions.Add(new ColumnDefinition());
+            var caption=T(group[0],14,TextBrush);caption.FontWeight=FontWeights.SemiBold;caption.Margin=new Thickness(0);header.Children.Add(caption);
+            var divider=new Border{Height=1,Background=MorandiTheme.Border,Margin=new Thickness(9,0,0,0),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(divider,1);header.Children.Add(divider);section.Children.Add(header);
+            var children=new StackPanel{Margin=new Thickness(5,0,0,0)};
+            foreach(var item in group.Skip(1)){
+                var name=item;var button=Button(name,async()=>{Navigate(name);if((name=="CLI 管理"||name=="备份与回滚")&&!preview&&!busy)await RefreshStatusQuietly();},false);
+                button.Style=(Style)Resources["KitNavigation"];button.Tag=Geometry.Parse(NavigationIcon(name));button.FontSize=12.5;button.HorizontalAlignment=HorizontalAlignment.Stretch;button.HorizontalContentAlignment=HorizontalAlignment.Left;button.Padding=new Thickness(10,8,5,8);button.Margin=new Thickness(0,1,0,1);button.BorderThickness=new Thickness(0);button.BorderBrush=Brushes.Transparent;
+                children.Children.Add(button);navigation.Add(button);navigationSections[name]=caption;
+            }
+            section.Children.Add(new Border{BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1,0,0,0),Margin=new Thickness(11,0,0,0),Child=children});nav.Children.Add(section);
+        }
         var foot=new StackPanel{Margin=new Thickness(17,10,10,13)};foot.Children.Add(T("v"+Core.Version,11,MutedBrush));foot.Children.Add(Link("GitHub ↗",()=>Open("https://github.com/"+Core.Repository)));foot.Children.Add(Link("关于与许可",ShowLicenses));Grid.SetRow(foot,2);rail.Children.Add(foot);
         var main=new Grid{Margin=new Thickness(19,15,19,12)};main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition());main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});Grid.SetColumn(main,1);layout.Children.Add(main);
-        var titles=new StackPanel();heading.FontSize=24;heading.FontWeight=FontWeights.SemiBold;titles.Children.Add(heading);subtitle.Foreground=MutedBrush;subtitle.FontSize=12;subtitle.TextWrapping=TextWrapping.Wrap;subtitle.Margin=new Thickness(0,4,0,12);titles.Children.Add(subtitle);main.Children.Add(titles);
+        var titles=new StackPanel();heading.FontSize=24;heading.FontWeight=FontWeights.SemiBold;var headingRow=new DockPanel();pageHeadingIcon=new System.Windows.Shapes.Path{Data=UiIcons.For("概览",true),Stroke=Accent,StrokeThickness=1.6,Width=22,Height=22,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,10,0),VerticalAlignment=VerticalAlignment.Center};headingRow.Children.Add(pageHeadingIcon);headingRow.Children.Add(heading);titles.Children.Add(headingRow);subtitle.Foreground=MutedBrush;subtitle.FontSize=12;subtitle.TextWrapping=TextWrapping.Wrap;subtitle.Margin=new Thickness(0,4,0,12);titles.Children.Add(subtitle);main.Children.Add(titles);
         Grid.SetRow(pageNavigation,1);main.Children.Add(pageNavigation);
-        var scroll=new SmoothScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(scroll,2);main.Children.Add(scroll);
+        pageScroll.Content=content;pageScroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;pageScroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;Grid.SetRow(pageScroll,2);main.Children.Add(pageScroll);
         var bottom=new StackPanel{Margin=new Thickness(0,9,0,0)};var line=new Grid();line.ColumnDefinitions.Add(new ColumnDefinition());line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
         banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");line.Children.Add(banner);
         var updates=new StackPanel{HorizontalAlignment=HorizontalAlignment.Right};updateNotice=Button("检测到更新，点击更新",async()=>await InstallUpdate(),false);updateNotice.Visibility=Visibility.Collapsed;updateNotice.Margin=new Thickness(0);updateNotice.Padding=new Thickness(8,3,8,3);updates.Children.Add(updateNotice);updateStatus.FontSize=11;updateStatus.Foreground=MutedBrush;updateStatus.Text="自动检查更新";updates.Children.Add(updateStatus);Grid.SetColumn(updates,1);line.Children.Add(updates);bottom.Children.Add(line);
         progress.Style=(Style)Resources["KitProgress"];progress.Height=3;progress.Maximum=100;progress.Margin=new Thickness(0,7,0,0);bottom.Children.Add(progress);Grid.SetRow(bottom,3);main.Children.Add(bottom);
+    }
+    static string NavigationIcon(string page){
+        switch(page){
+            case "概览":return "M3,10 L12,3 L21,10 M5,9 L5,21 L19,21 L19,9 M9,21 L9,14 L15,14 L15,21";
+            case "初始化":return "M5,20 L18,7 M3,8 L7,8 M5,6 L5,10 M17,2 L17,6 M15,4 L19,4 M17,16 L21,16 M19,14 L19,18";
+            case "连接与修复":return "M9,15 L15,9 M7,13 L5,15 C2,18 6,22 9,19 L12,16 M12,8 L15,5 C18,2 22,6 19,9 L17,11";
+            case "CLI 管理":return "M3,4 L21,4 L21,20 L3,20 Z M6,9 L10,12 L6,15 M13,16 L18,16";
+            case "备份与回滚":return "M4,8 C6,3 15,2 19,7 C25,15 15,24 7,19 M3,3 L3,9 L9,9 M12,7 L12,13 L16,15";
+            case "更新与下载":return "M12,3 L12,16 M7,11 L12,16 L17,11 M4,17 L4,21 L20,21 L20,17";
+            default:return "M5,3 L16,3 L20,7 L20,21 L5,21 Z M8,9 L16,9 M8,13 L16,13 M8,17 L14,17";
+        }
     }
     void ShowLicenses(){
         var text="Codex Init Kit\nCopyright © 2026 BerryFuwawa\n\n项目源码： https://github.com/"+Core.Repository+"\n\n";
@@ -117,6 +143,9 @@ public partial class MainWindow {
         var actions=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,14,0,0)};
         if(confirmation){var cancel=Button("取消",()=>Motion.Close(dialog,false,preview),false);cancel.IsDefault=true;cancel.IsCancel=true;actions.Children.Add(cancel);}
         var accept=Button(confirmation?"确认并继续":"知道了",()=>Motion.Close(dialog,true,preview),true);accept.IsDefault=!confirmation;actions.Children.Add(accept);panel.Children.Add(actions);dialog.Content=Surface(panel);Motion.Dialog(dialog,preview);return dialog;
+    }
+    DockPanel IconHeading(string text,int size,Brush color,bool strong){
+        var row=new DockPanel{Margin=new Thickness(0,0,0,8)};var icon=new System.Windows.Shapes.Path{Data=UiIcons.For(text,true),Stroke=Accent,StrokeThickness=1.6,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=size,Height=size,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Center};row.Children.Add(icon);var label=T(text,size,color);label.Margin=new Thickness(0);if(strong)label.FontWeight=FontWeights.SemiBold;row.Children.Add(label);return row;
     }
     static Border Surface(UIElement child){return new Border{Child=child,Background=MorandiTheme.Panel,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12)};}
 }

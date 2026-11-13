@@ -49,6 +49,7 @@ $argsList+=(Join-Path $root 'tests\CurrentModelSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\ProxyPortSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationProgress.Tests.cs')
+$argsList+=(Join-Path $root 'tests\Scrolling.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

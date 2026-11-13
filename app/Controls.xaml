@@ -83,8 +83,8 @@
   <Style x:Key="KitButton" TargetType="Button">
     <Setter Property="Cursor" Value="Hand"/><Setter Property="BorderBrush" Value="#3B4B5D"/><Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-      <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
-      <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers>
+      <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}"><DockPanel><Path x:Name="ButtonIcon" Data="{TemplateBinding Tag}" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="14" Height="14" Stretch="Uniform" Margin="0,0,7,0" VerticalAlignment="Center"/><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/></DockPanel></Border>
+      <ControlTemplate.Triggers><Trigger Property="Tag" Value="{x:Null}"><Setter TargetName="ButtonIcon" Property="Visibility" Value="Collapsed"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style x:Key="KitProgress" TargetType="ProgressBar">
@@ -97,4 +97,18 @@
   </Style>
   <Style TargetType="Expander"><Setter Property="Foreground" Value="#AEB8C4"/><Setter Property="Padding" Value="4"/></Style>
   <Style x:Key="KitRollbackItem" TargetType="ListBoxItem"><Setter Property="Margin" Value="0,2"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SelectionSurface" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"><ContentPresenter HorizontalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="SelectionSurface" Property="Background" Value="#3B5066"/><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+  <Style x:Key="KitNavigation" TargetType="Button">
+    <Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Border x:Name="NavigationSurface" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="7">
+        <Grid>
+          <Border Width="3" Height="18" CornerRadius="1.5" Background="{TemplateBinding BorderBrush}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+          <Grid Margin="{TemplateBinding Padding}"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Path Data="{TemplateBinding Tag}" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center"/>
+            <ContentPresenter Grid.Column="1" Margin="8,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+          </Grid>
+        </Grid>
+      </Border>
+      <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavigationSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
 </ResourceDictionary>
