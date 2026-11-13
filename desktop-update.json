@@ -1,8 +1,8 @@
 {
-    "schema_version": 1,
-    "repository": "BerryFuwawa/codex-init-kit",
-    "version": "2.2.12",
-    "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.2.12/CodexInitKit.exe",
-    "sha256": "018033aedf970183b281bfb150a45d69f2d4743f397ac3f4ae8cd64b336e91a5",
-    "notes": "修复中文工作目录规则的校验，让初始化继续执行 CUA 检查；文件夹管理失败时写入准确的失败报告。"
+  "schema_version": 1,
+  "repository": "BerryFuwawa/codex-init-kit",
+  "version": "2.3.0",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.0/CodexInitKit.exe",
+  "sha256": "58b8a0738921ed7e8c7c2cbe64ad851430ff9d507af8103d3b30515dbbdd396e",
+  "notes": "雾夜蓝界面与两级导航；初始化阶段进度；连续平滑滚动、更新页位置保持及统一图标；代理端口提示优化。火绒已确认此前检测为误报，病毒库更新后生效。"
 }

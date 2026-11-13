@@ -2,7 +2,7 @@
 
 原生 WPF 中文桌面工具，集中管理 Codex 初始化、浏览器连接、组件修复、CLI 和备份。默认窗口约 900 × 660，最小 800 × 540；小屏幕可滚动查看，支持 Windows 缩放。
 
-当前源码为 v2.3.0，发布验收尚未完成。v2.2.13 已转为草稿，公开更新清单暂时指向 v2.2.12。[公开版本](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [v2.3.0 更新说明](Release-2.3.0.md)
+当前版本为 v2.3.0。v2.2.13 保留为草稿；更新清单绑定 v2.3.0 正式 EXE 的 SHA-256。[公开版本](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [v2.3.0 更新说明](Release-2.3.0.md)
 
 ## 遇到问题，先选哪项？
 
@@ -79,4 +79,4 @@ GitHub 请求顺序为官方 → 自定义 → 内置十个镜像。内置站点
 
 环境：Windows x64、.NET Framework 4.8、Windows PowerShell 5.1。通过 tools/Build-Desktop.ps1 编译；EXE 的 --verify 运行内嵌回归，--self-test 检查资源，--render-preview 导出示例页面。测试使用隔离 CODEX_HOME，不真实初始化、不关闭当前 Codex，不升级当前桌面应用。
 
-主程序源码使用 MIT 许可；第三方规则许可单独保留，可从“关于与许可”查看。公开源码与文件 SHA-256 不构成无病毒证明。火绒 Backdoor/Meterpreter.el 检测仍待官方复核；PowerShell 系统加固提示是另一类行为提示。v2.3.0 当前完整 EXE 生成后文件未能保留，可分发构建和在线更新验收尚未完成。
+主程序源码使用 MIT 许可；第三方规则许可单独保留，可从“关于与许可”查看。2026-11-13，火绒安全实验室已确认此前提交的 `Backdoor/Meterpreter.el` 检测为误报，说明近期病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。邮件未提供具体病毒库版本号；旧病毒库仍可能触发提示，v2.3.0 已在本机现有信任设置下通过正式构建、资源检查及完整隔离验收；不将其解释为旧病毒库已全部消除提示。真实初始化和重启后的 Chrome 连接未在当前运行的 Codex 上执行。

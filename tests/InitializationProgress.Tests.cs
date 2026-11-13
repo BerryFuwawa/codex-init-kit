@@ -11,7 +11,11 @@ public static class InitializationProgressTests {
         options["desktopUpdate"]=false;options["officialCliUpdate"]=false;options["browserRepair"]=false;model.Reset(options,false);Require(model.Stages.Count==3&&model.Value==0&&model.Outcome=="","New run retained old steps or progress");
         model.Stopped(1,"未收到后台响应",false);Require(model.Stages[0].State=="incomplete"&&model.Stages.Skip(1).All(x=>x.State=="skipped"),"Early failure left stages permanently running");model.Reset(options,false);model.Stopped(1,"",true);Require(model.Stages.All(x=>x.State=="skipped"),"Authorization cancellation reported work as complete");
         var element=new FrameworkElement();Motion.Value(element,UIElement.OpacityProperty,.65,120,false);Require(Math.Abs(element.Opacity-.65)<.01&&!element.HasAnimatedProperties,"Reduced-motion path left an animation running");
-        var transform=new TranslateTransform();Motion.Value(transform,TranslateTransform.XProperty,30,180,true);Pump(55);var current=transform.X;Require(current>0&&current<30,"Nonlinear motion did not pass through intermediate values");Motion.Value(transform,TranslateTransform.XProperty,0,120,true);Require(Math.Abs(transform.X-current)<.5,"Retargeting motion jumped");Pump(170);Require(Math.Abs(transform.X)<.1,"Retargeted motion did not settle");
+        var transform=new TranslateTransform();var surface=new System.Windows.Controls.Border{Width=30,Height=30,Background=Brushes.Gray,RenderTransform=transform};
+        var host=new Window{Content=surface,Width=80,Height=80,Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};host.Show();host.UpdateLayout();Pump(40);
+        bool intermediate=false;EventHandler sample=(s,e)=>{if(transform.X>0&&transform.X<30)intermediate=true;};CompositionTarget.Rendering+=sample;
+        try{Motion.Value(transform,TranslateTransform.XProperty,30,180,true);Pump(120);Require(intermediate,"Nonlinear motion did not pass through intermediate values");var current=transform.X;Motion.Value(transform,TranslateTransform.XProperty,0,120,true);Require(Math.Abs(transform.X-current)<.5,"Retargeting motion jumped");Pump(240);Require(Math.Abs(transform.X)<.1,"Retargeted motion did not settle");}
+        finally{CompositionTarget.Rendering-=sample;host.Close();}
     }
     static void Pump(int milliseconds){var frame=new DispatcherFrame();var timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(milliseconds)};timer.Tick+=(s,e)=>{timer.Stop();frame.Continue=false;};timer.Start();Dispatcher.PushFrame(frame);}
 }

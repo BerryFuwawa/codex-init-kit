@@ -22,11 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.2.12.md">v2.2.12</a> · <a href="docs/Release-2.3.0.md">v2.3.0 界面升级开发中</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.0.md">v2.3.0</a></sub></p>
 
-本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。本机火绒出现过文件检测与 PowerShell 系统加固提示，正在申请官方复核。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
+本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> v2.2.13 已撤回公开发布，自动更新清单暂时保留 v2.2.12。v2.3.0 正在完成雾夜蓝界面和隔离验收；可分发 EXE 与火绒复核仍待完成。
+> v2.3.0 采用雾夜蓝界面、两级分类导航与阶段执行进度。v2.2.13 保留为草稿，已有版本可通过工具内检查更新升级。
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
