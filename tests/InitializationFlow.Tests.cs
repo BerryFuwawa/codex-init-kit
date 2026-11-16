@@ -74,9 +74,9 @@ public static class InitializationFlowTests {
         dialog.WindowStartupLocation=WindowStartupLocation.Manual;dialog.Left=-20000;dialog.Top=-20000;dialog.Opacity=0;
         dialog.Loaded+=(s,e)=>dialog.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,new Action(()=>{
             try{
-                dialog.UpdateLayout();var panel=(StackPanel)((Border)dialog.Content).Child;
+                dialog.UpdateLayout();var panel=(Grid)((Border)dialog.Content).Child;
                 var title=panel.Children.OfType<TextBlock>().First();var body=(TextBlock)panel.Children.OfType<ScrollViewer>().Single().Content;
-                var button=panel.Children.OfType<Button>().Single();
+                var button=Descendants<Button>(panel).Single();
                 Assert(title.Text==expectedTitle&&dialog.Title==expectedTitle&&title.IsVisible&&title.ActualHeight>0,"Result dialog title was not visible");
                 var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:MorandiTheme.Dark) as SolidColorBrush;
                 Assert(body.Text.Contains(expectedBody)&&body.IsVisible&&body.ActualHeight>0&&body.ActualWidth>0&&ink!=null&&ink.Color.A>0&&background!=null&&ink.Color!=background.Color,"Result details for "+expectedTitle+" were empty or hidden: expected="+expectedBody+", text="+body.Text+", visible="+body.IsVisible+", height="+body.ActualHeight);
@@ -168,10 +168,10 @@ public static class InitializationFlowTests {
         Exception error=null;
         dialog.Loaded+=(s,e)=>dialog.Dispatcher.BeginInvoke(new Action(()=>{
             try {
-                var panel=(StackPanel)dialog.Content;var buttons=panel.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+                var panel=(Grid)((Border)dialog.Content).Child;var buttons=Descendants<Button>(panel).ToArray();
                 var cancel=buttons.Single(b=>Convert.ToString(b.Content)=="取消");
                 Assert(cancel.IsDefault&&cancel.IsCancel,"Application closure did not default to cancellation");
-                Assert(panel.Children.OfType<TextBlock>().Any(t=>t.Text.Contains("请先保存工作")&&t.ActualHeight>0),"Application closure did not show the interruption warning");
+                Assert(Descendants<TextBlock>(panel).Any(t=>t.Text.Contains("请先保存工作")&&t.ActualHeight>0),"Application closure did not show the interruption warning");
                 Click(accept?buttons.Single(b=>Convert.ToString(b.Content)=="关闭并继续"):cancel);
             }catch(Exception ex){error=ex;dialog.Close();}
         }));
@@ -202,21 +202,23 @@ public static class InitializationFlowTests {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
         var root=Path.Combine(Path.GetTempPath(),"CodexKit-preflight-ui-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try {
-            Assert(Convert.ToString(Call(window,"InitSummary")).Contains("审批与沙箱使用 Codex 默认设置"),"Confirmation did not explain the default permissions");
+            Assert(Convert.ToString(Call(window,"InitSummary")).Contains("原有权限、自定义配置、设备登记、授权与连接数据保留"),"Confirmation did not explain preserved settings");
             var response=new TaskCompletionSource<Dictionary<string,object>>();int checks=0,dialogs=0,workers=0;
+            var profile=new DesktopProfileRecord{path=Path.Combine(root,"observed-profile"),capturedUtc=DateTime.UtcNow.ToString("o"),packageFamily=DesktopProfile.PackageFamily,processes=new[]{"123:639298120645079230"}};
             window.InitializationPreflight=()=>{checks++;return response.Task;};
             window.PresentAppCloseDialog=dialog=>{dialogs++;return AppCloseDialog(dialog,accept);};
             window.OperationLogPath=id=>Path.Combine(root,"init.log");
             window.StartOperation=(op,id,drive,port,guard,options)=>{
                 Assert(op=="initialize"&&(bool)options["allowCloseRunningApp"]==(running&&accept),"One-time close authorization was missing or persisted incorrectly");workers++;
                 Assert(running&&accept?Core.Value(options,"closeApprovedProcesses","")=="123:639298120645079230":!options.ContainsKey("closeApprovedProcesses"),"Close approval did not name the detected process instance");
+                Assert(running?DesktopProfile.Parse(Core.Value(options,"desktopProfileRecord","")).path==profile.path:!options.ContainsKey("desktopProfileRecord"),"Confirmed profile was lost or invented");
                 return Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"),"/d /c exit 0"){UseShellExecute=false,CreateNoWindow=true});
             };
             Set(window,"wizard",1);Navigate(window,"初始化");
             var task=(Task)Call(window,"BeginInitialization");Pump((Task)Call(window,"BeginInitialization"));
             Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");Navigate(window,"概览");
             if(fail)response.SetException(new InvalidDataException("fixture permission read failure"));
-            else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
+            else response.SetResult(new Dictionary<string,object>{{"desktopProfile",running?profile:null},{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
             Pump(task);
             bool started=!fail&&(!running||accept);
             Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");
@@ -226,7 +228,7 @@ public static class InitializationFlowTests {
     }
     public static void Run(){
         OverviewDuringInitialization();ReturnAfterInitialization();
-        VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","基础配置和所选功能已完成");
+        VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","所选配置已检查或保存");
         VerifyOutcome(2,"连接与修复",Fixture("partial","更新桌面版：未完成"),"初始化部分完成","更新桌面版：未完成");
         VerifyOutcome(2,"更新与下载","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
         VerifyOutcome(1,"CLI 管理",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");

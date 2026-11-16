@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Net;
 using System.Text.RegularExpressions;
 
 namespace CodexKit {
@@ -12,6 +13,9 @@ public sealed class ProxyPortPreset {
     public override string ToString(){return Name;}
 }
 
+public sealed class SavedProxyAddress {
+    public string Host="127.0.0.1";public int Port=10808;public bool Configured;
+}
 public static class ProxyPortSettings {
     public static readonly ProxyPortPreset[] Presets={
         new ProxyPortPreset("v2rayN 新版",10808),
@@ -25,11 +29,12 @@ public static class ProxyPortSettings {
         new ProxyPortPreset("自定义代理端口",0)
     };
 
-    public static int Load(string home) {
+    public static int Load(string home) {return LoadAddress(home).Port;}
+    public static SavedProxyAddress LoadAddress(string home) {
         string text;
         try{text=File.ReadAllText(Path.Combine(home,".env"),new UTF8Encoding(false,true));}
-        catch(FileNotFoundException){return 10808;}
-        catch(DirectoryNotFoundException){return 10808;}
+        catch(FileNotFoundException){return new SavedProxyAddress();}
+        catch(DirectoryNotFoundException){return new SavedProxyAddress();}
         var values=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         foreach(var line in Regex.Split(text,@"\r\n|\n|\r")){
             var entry=Regex.Match(line,@"^\s*(?:export\s+)?(HTTP_PROXY|HTTPS_PROXY)\s*=\s*(.*)$",RegexOptions.IgnoreCase);
@@ -37,13 +42,16 @@ public static class ProxyPortSettings {
         }
         var address=ReadValue(values,"HTTP_PROXY");
         if(address.Length==0)address=ReadValue(values,"HTTPS_PROXY");
-        if(address.Length==0)return 10808;
+        if(address.Length==0)return new SavedProxyAddress();
         var explicitPort=Regex.Match(address,@"^https?://(?:[^/?#@\s]+@)?(?:\[[^\]\s]+\]|[^:/?#\s]+):(?<port>[0-9]{1,5})/?$",RegexOptions.IgnoreCase);
         Uri uri;int port;
         if(!explicitPort.Success||!Uri.TryCreate(address,UriKind.Absolute,out uri)||
            String.IsNullOrEmpty(uri.Host)||!Int32.TryParse(explicitPort.Groups["port"].Value,out port)||port<1||port>65535)
             throw new InvalidDataException("已有代理地址的端口无效，请选择预设或填写 1–65535 的自定义端口。");
-        return port;
+        IPAddress ip;
+        if(uri.Scheme!="http"||uri.UserInfo.Length>0||!IPAddress.TryParse(uri.Host.Trim('[',']'),out ip))
+            throw new InvalidDataException("已有代理使用当前界面尚不支持的协议、认证信息或主机名。原配置保留；请明确填写 HTTP／混合代理 IP 和端口后再应用。");
+        return new SavedProxyAddress{Host=ip.ToString(),Port=port,Configured=true};
     }
 
     static string ReadValue(Dictionary<string,string> values,string key) {

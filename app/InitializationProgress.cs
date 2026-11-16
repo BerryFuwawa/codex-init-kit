@@ -12,11 +12,11 @@ internal sealed class InitializationProgress {
     internal readonly List<ConfigurationEffect> Effects=new List<ConfigurationEffect>();
     internal bool EffectsKnown;
     internal string Outcome="",Summary="";
-    internal DateTime Started=DateTime.UtcNow;
+    internal DateTime Started=DateTime.UtcNow;internal DateTime? Ended;
     internal void Reset(Dictionary<string,object> options,bool protection){
         var previous=Stages.ToDictionary(x=>x.Id,x=>new InitializationStage(x.Id,x.Title){State=x.State,Detail=x.Detail});
         if(Core.Value(options,"retryStages","").Length==0){Effects.Clear();EffectsKnown=false;}
-        Stages.Clear();Outcome="";Summary="";Started=DateTime.UtcNow;
+        Stages.Clear();Outcome="";Summary="";Started=DateTime.UtcNow;Ended=null;
         Stages.Add(new InitializationStage("preflight","前置检查"));
         if(Convert.ToBoolean(options["desktopUpdate"]))Stages.Add(new InitializationStage("desktop","更新桌面版"));
         Stages.Add(new InitializationStage("base","配置、目录与 CUA"));
@@ -33,6 +33,7 @@ internal sealed class InitializationProgress {
         stage.State=Core.Value(record,"state","running");stage.Detail=DesktopLocalization.TranslateText(Core.Value(record,"detail",""));
     }
     internal void Finish(Dictionary<string,object> record){
+        Ended=DateTime.UtcNow;
         Outcome=Core.Value(record,"state","failed");Summary=DesktopLocalization.TranslateText(Core.Value(record,"summary",""),true);
         object entries;
         if(record.TryGetValue("effects",out entries)&&entries is System.Collections.IEnumerable){EffectsKnown=true;foreach(var item in (System.Collections.IEnumerable)entries){var entry=item as Dictionary<string,object>;if(entry==null)continue;var effect=ConfigurationEffect.Read(entry);if(effect.id.Length==0)continue;Effects.RemoveAll(x=>x.id==effect.id);Effects.Add(effect);}}
@@ -43,13 +44,16 @@ internal sealed class InitializationProgress {
         }
     }
     internal void Stopped(int code,string error,bool cancelled){
-        if(Outcome.Length>0)return;
-        Outcome=cancelled?"cancelled":code==0?"complete":code==2?"partial":"failed";
-        var active=Stages.FirstOrDefault(x=>x.State=="running")??Stages.FirstOrDefault(x=>x.State=="pending");
-        if(active!=null&&!cancelled&&code!=0){active.State="incomplete";active.Detail=String.IsNullOrWhiteSpace(error)?"本步骤未完成，请查看日志。":error;}
-        foreach(var stage in Stages.Where(x=>x.State=="pending"||x.State=="running")){stage.State="skipped";stage.Detail=cancelled?"已取消，未执行":"未收到此步骤的完成结果，请查看日志。";}
+        if(!Ended.HasValue)Ended=DateTime.UtcNow;
+        bool missing=Outcome.Length==0;
+        if(!missing)return;
+        Outcome=cancelled?"cancelled":code==0||code==2?"partial":"failed";
+        foreach(var stage in Stages.Where(x=>x.State=="pending"||x.State=="running")){
+            stage.State=cancelled?"skipped":"uncertain";
+            stage.Detail=cancelled?"已取消，未执行":String.IsNullOrWhiteSpace(error)?"未收到完成结果；重试前会先检查已保存内容。":error;
+        }
     }
-    internal int Finished {get{return Stages.Count(x=>x.State=="complete"||x.State=="incomplete"||x.State=="skipped");}}
+    internal int Finished {get{return Stages.Count(x=>x.State=="complete"||x.State=="incomplete"||x.State=="uncertain"||x.State=="skipped");}}
     internal int Complete {get{return Stages.Count(x=>x.State=="complete");}}
     internal double Value {get{return Stages.Count==0?0:100.0*Finished/Stages.Count;}}
 }

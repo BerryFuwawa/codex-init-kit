@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.1.1";
+    public const string Version="2.3.1";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -46,6 +46,9 @@ public sealed class NativeOptions {
     public string ProxyHost="127.0.0.1",ParentModel="gpt-6.1-sol",ChildModel="gpt-6.1-sol",ParentEffort="high",ChildEffort="high";
     public int ProxyPort=10808;
     public string[] ApprovedProcesses;
+    public string SavedDesktopProfile;
+    public string ObservedDesktopProfile;
+    public bool RestoreDesktopProfile;
     public string ProxyUrl {get{if(!Proxy)return null;var host=ProxyHost.Trim().Trim('[',']');return "http://"+(host.Contains(":")?"["+host+"]":host)+":"+ProxyPort;}}
     public void Validate(NativePaths paths){paths.Validate();if(Folder&&(String.IsNullOrWhiteSpace(paths.Workspace)||!Path.IsPathRooted(paths.Workspace)))throw new ArgumentException("请明确选择工作目录或工作盘。");if(Folder&&!Directory.Exists(Path.GetPathRoot(paths.Workspace)))throw new DirectoryNotFoundException("所选工作盘不可用。");if(Proxy&&(ProxyPort<1||ProxyPort>65535))throw new ArgumentException("代理端口须为 1–65535。");if(Proxy){var h=ProxyHost.Trim().Trim('[',']');if(String.IsNullOrEmpty(h)||Uri.CheckHostName(h)==UriHostNameType.Unknown||h.Contains("/"))throw new ArgumentException("代理 IP／主机名无效。");}foreach(var model in new[]{ParentModel,ChildModel})if(!Regex.IsMatch(model??"",@"^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$"))throw new ArgumentException("模型 ID 无效。");foreach(var effort in new[]{ParentEffort,ChildEffort})if(!new[]{"low","medium","high","xhigh","max","ultra"}.Contains(effort))throw new ArgumentException("思考强度无效。");}
 }
@@ -63,7 +66,7 @@ public interface INativeCommands {NativeCommandResult Run(string file,string[] a
 public interface INativeDownloads {string Text(string url,Func<string,bool> validate);void File(string url,string target,Action<string> validate);}
 public sealed class OfficialDesktop {public string FullName,Version,Install,Source,StartupCode;}
 public interface INativeDesktop {OfficialDesktop Discover();}
-public sealed class ProcessIdentity {public int Id,ParentId,SessionId;public long Started;public string Name,Path,Owner;public string Key{get{return Id+":"+Started;}}}
+public sealed class ProcessIdentity {public int Id,ParentId,SessionId;public long Started;public string Name,Path,Owner;internal string CommandLine;public string Key{get{return Id+":"+Started;}}}
 public interface INativeProcesses {List<ProcessIdentity> List(NativePaths paths,OfficialDesktop desktop);void RequestExit(ProcessIdentity process,bool force);List<ProcessIdentity> Wait(NativePaths paths,OfficialDesktop desktop,int timeoutMs);}
 public sealed class NativeServices {public INativeRegistry Registry;public INativeCommands Commands;public INativeDownloads Downloads;public INativeDesktop Desktop;public INativeProcesses Processes;public Action<string> Log=delegate{};}
 }

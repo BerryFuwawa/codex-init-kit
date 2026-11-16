@@ -12,6 +12,9 @@ namespace CodexKit {
 public static class Program {
     [STAThread] public static int Main(string[] args) {
         Native.NativeRuntime.Configure();
+        if(args.Length==3&&args[1]=="--profile-fixture"){
+            File.WriteAllText(args[2],Core.Json.Serialize(new{argument=args[0],profile=Environment.GetEnvironmentVariable("CODEX_ELECTRON_USER_DATA_PATH"),proxy=Environment.GetEnvironmentVariable("HTTPS_PROXY"),websocket=Environment.GetEnvironmentVariable("NODE_USE_ENV_PROXY"),cli=Environment.GetEnvironmentVariable("CODEX_CLI_PATH")}),new UTF8Encoding(false));return 0;
+        }
         if(args.Length==3&&args[0]=="--register-native-guard")return NativeTaskRegistration.Complete(args[1],args[2]);
         if(args.Length==2&&args[0]=="--verify-native-desktop-readonly")return NativeDesktopTests.ReadOnlyInspection(args[1]);
         if(args.Length==2&&args[0]=="--verify-native-desktop")return NativeDesktopTests.Run(args[1]);

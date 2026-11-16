@@ -9,7 +9,7 @@ public static class ScrollingTests {
     static void Wheel(UIElement target,int delta){target.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice,Environment.TickCount,delta){RoutedEvent=Mouse.PreviewMouseWheelEvent});}
     public static void Run(){
         SmoothScrollViewer.Verify();
-        var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();Call(window,"Navigate","更新与下载");window.UpdateLayout();Pump(80);
+        var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};typeof(MainWindow).GetField("githubLogText",Private).SetValue(window,String.Join("\n",Enumerable.Range(0,100).Select(i=>"下载记录 "+i)));window.Show();Call(window,"Navigate","更新与下载");window.UpdateLayout();Pump(80);
         var scroll=(SmoothScrollViewer)Field(window,"pageScroll");var content=(StackPanel)Field(window,"content");var log=(TextBox)Field(window,"githubLogView");
         try{
             var samples=new List<double>();scroll.ScrollChanged+=(s,e)=>{if(e.OriginalSource==scroll&&e.VerticalChange!=0)samples.Add(scroll.VerticalOffset);};

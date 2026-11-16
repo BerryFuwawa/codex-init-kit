@@ -26,6 +26,7 @@ internal static class ManagedToml {
         }
         return doc;
     }
+    internal static string SavedValue(string text,params string[] path){try{var entry=Read(text).Entries.FirstOrDefault(x=>x.Path.SequenceEqual(path));if(entry==null)return "未设置";var value=entry.Value.Trim();var m=Regex.Match(value,@"^(?:""(?<v>(?:\\.|[^""\\])*)""|'(?<v>[^']*)')\s*(?:#.*)?$");if(!m.Success)return "未能识别";return value.StartsWith("\"")?NativeData.Json.Deserialize<string>("\""+m.Groups["v"].Value+"\""):m.Groups["v"].Value;}catch(InvalidDataException){return "未能识别";}}
     static string Comparable(string value){var b=new StringBuilder();char quote='\0';bool escape=false;foreach(char c in value){if(quote!='\0'){b.Append(c);if(escape)escape=false;else if(c=='\\'&&quote=='"')escape=true;else if(c==quote)quote='\0';}else if(c=='#')break;else if(c=='"'||c=='\''){quote=c;b.Append(c);}else if(!Char.IsWhiteSpace(c))b.Append(c);}return b.ToString();}
     internal static string Merge(string current,string desired,string allOwned){
         var doc=Read(current);var wanted=Read(desired).Entries;var owned=Read(allOwned).Entries.Select(x=>Id(x.Path)).ToArray();var replacements=new Dictionary<int,string>();var removed=new HashSet<int>();var inserts=new Dictionary<int,List<string>>();var newTables=new Dictionary<string,List<string>>();string newline=current.Contains("\r\n")?"\r\n":"\n";

@@ -1,7 +1,7 @@
 using File=CodexKit.Native.NativeFile;
 using Directory=CodexKit.Native.NativeDirectory;
 using FileInfo=CodexKit.Native.NativeFileInfo;
-using System;using System.IO;using System.Linq;using System.Text;using System.Collections.Generic;using System.Diagnostics;using System.Threading;using System.Runtime.InteropServices;using System.ComponentModel;using System.Security.Principal;using System.Management;using Microsoft.Win32;
+using System;using System.IO;using System.Linq;using System.Text;using System.Collections.Generic;using System.Diagnostics;using System.Threading;using System.Runtime.InteropServices;using System.ComponentModel;using System.Security.Principal;using System.Management;using Microsoft.Win32;using System.Text.RegularExpressions;
 namespace CodexKit.Native {
 public sealed class WindowsRegistryStore:INativeRegistry {
     [DllImport("user32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern IntPtr SendMessageTimeout(IntPtr window,uint message,IntPtr parameter,string data,uint flags,uint timeout,out IntPtr result);
@@ -48,9 +48,10 @@ public sealed class NativeGitHubDownloads:INativeDownloads {
     public void File(string url,string target,Action<string> validate){transfer.Download(url,target,validate);}
 }
 public sealed class WindowsNativeProcesses:INativeProcesses {
+    public static bool IsDesktopExecutable(string path){return !String.IsNullOrWhiteSpace(path)&&Regex.IsMatch(path,"^"+Regex.Escape(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"WindowsApps")+Path.DirectorySeparatorChar)+@"OpenAI\.Codex_[0-9.]+_x64__2p2nqsd0c76g0[\\/]app[\\/](ChatGPT|Codex)\.exe$",RegexOptions.IgnoreCase);}
     internal Func<ManagementObject,ProcessIdentity> ReadIdentity=Entry;
     static readonly HashSet<string> ChildNames=new HashSet<string>(new[]{"ChatGPT","Codex","codex-latest","node","node_repl","cua_node","cua-helper","codex-computer-use-swift","codex-code-mode-host","codex-command-runner","codex-windows-sandbox-setup"},StringComparer.OrdinalIgnoreCase);
-    static ProcessIdentity Entry(ManagementObject p){var owner=p.InvokeMethod("GetOwnerSid",null,null);if(Convert.ToUInt32(owner["ReturnValue"])!=0)throw new UnauthorizedAccessException("无法核验进程所属用户。");return new ProcessIdentity{Id=Convert.ToInt32(p["ProcessId"]),ParentId=Convert.ToInt32(p["ParentProcessId"]),SessionId=Convert.ToInt32(p["SessionId"]),Path=Convert.ToString(p["ExecutablePath"]),Name=Path.GetFileNameWithoutExtension(Convert.ToString(p["Name"])),Owner=Convert.ToString(owner["Sid"]),Started=ManagementDateTimeConverter.ToDateTime(Convert.ToString(p["CreationDate"])).ToUniversalTime().Ticks};}
+    static ProcessIdentity Entry(ManagementObject p){var owner=p.InvokeMethod("GetOwnerSid",null,null);if(Convert.ToUInt32(owner["ReturnValue"])!=0)throw new UnauthorizedAccessException("无法核验进程所属用户。");return new ProcessIdentity{Id=Convert.ToInt32(p["ProcessId"]),ParentId=Convert.ToInt32(p["ParentProcessId"]),SessionId=Convert.ToInt32(p["SessionId"]),Path=Convert.ToString(p["ExecutablePath"]),Name=Path.GetFileNameWithoutExtension(Convert.ToString(p["Name"])),Owner=Convert.ToString(owner["Sid"]),CommandLine=Convert.ToString(p["CommandLine"]),Started=ManagementDateTimeConverter.ToDateTime(Convert.ToString(p["CreationDate"])).ToUniversalTime().Ticks};}
     static bool Gone(int id){try{using(var p=Process.GetProcessById(id))return p.HasExited;}catch(ArgumentException){return true;}}
     public List<ProcessIdentity> List(NativePaths paths,OfficialDesktop desktop){
         var roots=new[]{desktop==null?null:desktop.Install,paths.RuntimeRoot,Path.Combine(paths.Home,"packages","standalone"),paths.LegacyCli}.Where(x=>!String.IsNullOrEmpty(x)).ToArray();var own=WindowsIdentity.GetCurrent().User.Value;int session=Process.GetCurrentProcess().SessionId;
@@ -59,7 +60,7 @@ public sealed class WindowsNativeProcesses:INativeProcesses {
         try{
             var ids=new HashSet<int>();bool changed;
             do{changed=false;foreach(var p in candidates){int id=Convert.ToInt32(p["ProcessId"]);if(ids.Contains(id))continue;var path=Convert.ToString(p["ExecutablePath"]);var name=Path.GetFileNameWithoutExtension(Convert.ToString(p["Name"]));bool pathMatch=roots.Any(root=>!String.IsNullOrEmpty(path)&&NativeData.Inside(path,root));bool child=ids.Contains(Convert.ToInt32(p["ParentProcessId"]))&&ChildNames.Contains(name);
-                if(!pathMatch&&!child){if(String.IsNullOrEmpty(path)&&(name.Equals("ChatGPT",StringComparison.OrdinalIgnoreCase)||name.Equals("Codex",StringComparison.OrdinalIgnoreCase))&&!Gone(id))throw new UnauthorizedAccessException("无法读取正在运行的 "+name+"（PID "+id+"）路径，初始化未开始。");continue;}
+                if(!pathMatch&&!child&&!IsDesktopExecutable(path)){if(String.IsNullOrEmpty(path)&&(name.Equals("ChatGPT",StringComparison.OrdinalIgnoreCase)||name.Equals("Codex",StringComparison.OrdinalIgnoreCase))&&!Gone(id))throw new UnauthorizedAccessException("无法读取正在运行的 "+name+"（PID "+id+"）路径，初始化未开始。");continue;}
                 ProcessIdentity entry;try{entry=ReadIdentity(p);}catch{if(Gone(id))continue;throw;}
                 if(entry.Owner==own){ids.Add(id);result.Add(entry);changed=true;}
             }}while(changed);return result;

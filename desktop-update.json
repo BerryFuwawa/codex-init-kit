@@ -3,6 +3,6 @@
   "repository": "BerryFuwawa/codex-init-kit",
   "version": "2.3.1",
   "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.1/CodexInitKit.exe",
-  "sha256": "27714a216ac0e31ce20218ccc0ec968389d3a8b07437a75cd40d9f6b129d3613",
-  "notes": "新增 WebSocket 线路修复，浏览器、模型与 Dot 连接分开检查；支持共用或独立代理。矢量 Logo 更清晰，进度使用真实旋转动画。"
+  "sha256": "15bcee4c754b401636754e6e4db49aa01b99f0b5da99d51fdadf89acbbb849ad",
+  "notes": "初始化按需更新，保留自定义配置；失败项单独重试，原资料与 Work 连接接着用。完善代理继承、操作日志和高缩放界面。"
 }

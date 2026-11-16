@@ -1,5 +1,8 @@
 ﻿[CmdletBinding()]
-param([string]$Executable)
+param(
+    [string]$Executable,
+    [string]$Notes='初始化按需更新，保留自定义配置；失败项单独重试，原资料与 Work 连接接着用。完善代理继承、操作日志和高缩放界面。'
+)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 if(-not $Executable){$Executable=Join-Path $root 'build\desktop\CodexInitKit.exe'}
@@ -14,7 +17,7 @@ $manifest=[ordered]@{
     version=$version
     url=('https://github.com/BerryFuwawa/codex-init-kit/releases/download/v'+$version+'/CodexInitKit.exe')
     sha256=$hash
-    notes='新增代理端口预设和已有端口继承，初始化与浏览器连接页共用紧凑端口选择。火绒检测待官方复核，详见发布说明。'
+    notes=$Notes
 }
 [IO.File]::WriteAllText((Join-Path $root 'desktop-update.json'),($manifest|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path (Split-Path $Executable -Parent) 'SHA256SUMS.txt'),($hash+'  CodexInitKit.exe'+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))

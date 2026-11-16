@@ -5,6 +5,7 @@ using System.Windows.Threading;
 
 namespace CodexKit {
 // Keep text/caret layout changes separate from the reader's scrolling intent.
+internal sealed class LogReadingPosition {internal bool Following=true;internal double Vertical,Horizontal;internal int SelectionStart,SelectionLength;}
 internal sealed class LogViewport {
     readonly TextBox view;
     DispatcherOperation pending;
@@ -42,6 +43,8 @@ internal sealed class LogViewport {
             start=Math.Min(start,text.Length);view.Select(start,Math.Min(length,text.Length-start));
         }finally{restoring=false;}
     }
+    internal LogReadingPosition Capture(){return new LogReadingPosition{Following=Following,Vertical=vertical,Horizontal=horizontal,SelectionStart=view.SelectionStart,SelectionLength=view.SelectionLength};}
+    internal void Load(LogReadingPosition value){Cancel();Following=value.Following;vertical=value.Vertical;horizontal=value.Horizontal;restoring=true;try{view.Select(Math.Min(value.SelectionStart,view.Text.Length),Math.Min(value.SelectionLength,Math.Max(0,view.Text.Length-value.SelectionStart)));}finally{restoring=false;}Schedule();}
     internal void Latest(){Following=true;Schedule();}
     void Schedule(){if(attached&&pending==null)pending=view.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,new Action(()=>{pending=null;Restore();}));}
     void Restore() {

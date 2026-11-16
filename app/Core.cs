@@ -65,7 +65,7 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"websocketRepair",true},{"wsProxyHost",""},{"wsProxyPort",""},{"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"restoreDesktopProfile",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"websocketRepair",true},{"wsProxyHost",""},{"wsProxyPort",""},{"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
@@ -111,6 +111,11 @@ public static class Core {
         if(source.ContainsKey("retryStages"))normalized["retryStages"]=ReadOptionString(source,"retryStages","");
         if(source.ContainsKey("closeApprovedProcesses"))
             normalized["closeApprovedProcesses"]=ReadOptionString(source,"closeApprovedProcesses","");
+        if(source.ContainsKey("desktopProfileRecord"))
+            normalized["desktopProfileRecord"]=ReadOptionString(source,"desktopProfileRecord","");
+        if(source.ContainsKey("observedDesktopProfile"))
+            normalized["observedDesktopProfile"]=ReadOptionString(source,"observedDesktopProfile","");
+        normalized["restoreDesktopProfile"]=ReadOptionBoolean(source,"restoreDesktopProfile",false);
         normalized["memories"]=ReadOptionBoolean(source,"memories",true);
         normalized["githubMirrorEnabled"]=ReadOptionBoolean(source,"githubMirrorEnabled",true);
         object customMirror;

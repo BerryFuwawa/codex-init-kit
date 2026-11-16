@@ -87,7 +87,7 @@ public partial class MainWindow : Window {
         folderManagement.IsChecked=false;subagents.IsChecked=false;cuaRepair.IsChecked=false;guard.IsChecked=false;settings=Options();if((bool)settings["folderManagement"]||(bool)settings["subagents"]||(bool)settings["cuaRepair"]||childModel.IsEnabled||childEffort.IsEnabled||!parentModel.IsEnabled||!parentEffort.IsEnabled||Convert.ToString(settings["childEffort"])!="high")throw new InvalidOperationException("Optional setup switches failed");
         subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled||Convert.ToString(childModel.SelectedItem)!="gpt-5.5")throw new InvalidOperationException("Re-enabling subagents lost custom selection");
         parentModel.SelectedItem="gpt-6.1-sol";childModel.SelectedItem="gpt-6.1-sol";parentEffort.SelectedItem="medium";childEffort.SelectedItem="medium";folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
-        var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as StackPanel;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||completionPanel.Children.OfType<Button>().Count()!=1||!completionPanel.Children.OfType<TextBlock>().Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion dialog is not themed or single-action");
+        var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as Grid;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||InitializationFlowTests.Descendants<Button>(completionPanel).Count()!=1||!InitializationFlowTests.Descendants<TextBlock>(completionPanel).Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion dialog is not themed or single-action");
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"runtimeModeDetail","桌面应用自带 CLI"},{"currentCliPath",""},{"protectionInstalled",false}};Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("DesktopNative","由桌面应用自动选择");status["runtimeMode"]="OfficialStandalone";status["runtimeModeDetail"]="官方独立 CLI";status["currentCliPath"]="C:\\Users\\Test\\.codex\\bin\\codex.exe";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("OfficialStandalone","C:\\Users\\Test\\.codex\\bin\\codex.exe");status["runtimeMode"]="Unknown";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("Unknown","C:\\Users\\Test\\.codex\\bin\\codex.exe");status=null;
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="CLI 管理"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
@@ -188,7 +188,7 @@ public partial class MainWindow : Window {
         var network=new GitHubNetworkOptions();if(!preview)try{network=GitHubNetworkOptions.Load(Core.NetworkSettingsPath);}catch(Exception ex){networkSettingsError="下载设置未能读取，请重新保存："+ex.Message;}
         githubMirrors.IsChecked=network.githubMirrorEnabled;githubCustomMirror.Text=network.customGithubMirror;githubCustomMirror.IsEnabled=network.githubMirrorEnabled;
         githubMirrors.Checked+=(a,b)=>githubCustomMirror.IsEnabled=true;githubMirrors.Unchecked+=(a,b)=>githubCustomMirror.IsEnabled=false;
-        githubLogView.IsReadOnly=true;githubLogView.TextWrapping=TextWrapping.Wrap;githubLogView.Height=150;githubLogView.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;githubLogView.Background=B("#101620");githubLogView.Foreground=TextBrush;githubLogView.BorderThickness=new Thickness(0);githubLogView.Padding=new Thickness(10);
+        githubLogView.IsReadOnly=true;githubLogView.TextWrapping=TextWrapping.Wrap;githubLogView.Height=150;githubLogView.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;githubLogView.Background=B("#101620");githubLogView.Foreground=TextBrush;githubLogView.BorderThickness=new Thickness(0);githubLogView.Padding=new Thickness(10);githubViewport=new LogViewport(githubLogView);
         proxyEnabled.Checked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=false;};
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
         var effortText=new FrameworkElementFactory(typeof(TextBlock));effortText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding{Converter=new EffortLabels()});var effortTemplate=new DataTemplate{VisualTree=effortText};parentEffort.ItemTemplate=effortTemplate;childEffort.ItemTemplate=effortTemplate;
@@ -211,9 +211,10 @@ public partial class MainWindow : Window {
     static Brush B(string hex) { return MorandiTheme.Legacy(hex); }
     void LoadCurrentProxyPort() {
         try {
-            var saved=ProxyPortSettings.Load(CurrentModelSettings.CodexHome());
-            var preset=ProxyPortSettings.Presets.FirstOrDefault(item=>item.Port==saved);
-            if(preset==null){customProxyPort=saved.ToString();preset=ProxyPortSettings.Presets.Last();}
+            var saved=ProxyPortSettings.LoadAddress(CurrentModelSettings.CodexHome());
+            proxyHost.Text=saved.Host==Core.DefaultProxyHost?"":saved.Host;
+            var preset=ProxyPortSettings.Presets.FirstOrDefault(item=>item.Port==saved.Port);
+            if(preset==null){customProxyPort=saved.Port.ToString();preset=ProxyPortSettings.Presets.Last();}
             proxyPortPreset.SelectedItem=preset;
         } catch(Exception ex) {
             proxyPortPreset.SelectedItem=ProxyPortSettings.Presets.Last();
@@ -256,10 +257,10 @@ public partial class MainWindow : Window {
         parent.Children.Add(new Border{Background=B("#151C28"),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,10),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { pageScroll.StopAnimation();logViewport.Detach();foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,websocketEnabled,websocketRepair,wsProxyHost,wsProxyPort,wsEffective,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
+    void Navigate(string name) { RememberReading();pageScroll.StopAnimation();logViewport.Detach();if(githubViewport!=null)githubViewport.Detach();wizardActions.Children.Clear();wizardActions.Visibility=Visibility.Collapsed;foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,websocketEnabled,websocketRepair,wsProxyHost,wsProxyPort,wsEffective,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
         foreach(var section in navigationSections.Values.Distinct())section.Foreground=navigationSections.ContainsKey(name)&&navigationSections[name]==section?Accent:TextBrush;
         if(name=="概览")Overview();else if(name=="初始化")Wizard();else if(name=="连接与修复")RepairPage();else if(name=="CLI 管理")CliPage();else if(name=="备份与回滚")BackupPage();else if(name=="更新与下载")Updates();else LogsPage();
-        if(log.Parent!=null)logViewport.Attach();Motion.Enter(content,preview,220);
+        if(log.Parent!=null){UpdateLogView();logViewport.Attach();}if(githubLogView.Parent!=null&&githubViewport!=null)githubViewport.Attach();UpdateBusyControls();ApplyCompactLayout();Motion.Enter(content,preview,220);
     }
     static string Format(object value) { if(value==null)return "未检测"; if(value is bool)return (bool)value?"是":"否"; var text=Convert.ToString(value);if(text=="healthy")return "完整";if(text=="missing")return "未找到";if(text=="incomplete")return "组件不完整";return text; }
     static string RuntimeMode(object value) { var text=Convert.ToString(value);if(text=="DesktopNative")return "桌面原生";if(text=="OfficialStandalone")return "官方独立 CLI";return "需要检查"; }
@@ -313,10 +314,10 @@ public partial class MainWindow : Window {
     }
     async Task<Dictionary<string,object>> ReadInitializationPreflight(Dictionary<string,object> options) {
         var id=Guid.NewGuid().ToString("N");var path=OperationLogPath(id);
-        using(var process=StartOperation("initialize-preflight",id,options.ContainsKey("retryContext")?lastInitializationDrive:Drive(),options.ContainsKey("retryContext")?lastInitializationPort:Port(),false,options)){
+        using(var process=StartOperation("initialize-preflight",id,initializationRequest.Drive,initializationRequest.Port,false,options)){
             while(!process.HasExited)await Task.Delay(100);
             var lines=File.Exists(path)?File.ReadAllLines(path,Encoding.UTF8):new string[0];
-            if(process.ExitCode!=0)throw new InvalidDataException("初始化前检查未完成。\n"+DesktopLocalization.TranslateText(String.Join("\n",lines)));
+            if(process.ExitCode!=0)throw new InvalidDataException(DesktopProfile.FailureMessage(String.Join("\n",lines),"初始化前检查未完成。\n"+DesktopLocalization.TranslateText(String.Join("\n",lines))));
             var line=lines.LastOrDefault(x=>x.StartsWith("@@INIT_PREFLIGHT@@"));
             if(line==null)throw new InvalidDataException("未收到初始化前检查结果，请重试。");
             return Core.ReadJson(line.Substring("@@INIT_PREFLIGHT@@".Length));
@@ -324,14 +325,9 @@ public partial class MainWindow : Window {
     }
     bool allowInitializationCloseDeferral;
     Window CreateAppCloseDialog(int count) {
-        var dialog=new Window{Title="关闭 ChatGPT／Codex",Width=560,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=BackgroundBrush,Foreground=TextBrush,ShowInTaskbar=false};if(IsVisible)dialog.Owner=this;
-        var panel=new StackPanel{Margin=new Thickness(25)};
-        panel.Children.Add(T("是否允许关闭 ChatGPT／Codex 并继续初始化？",18,TextBrush));
-        panel.Children.Add(T("检测到桌面应用或关联运行时仍在运行（"+count+" 个进程）。\n\n请先保存工作。关闭会中断正在执行的任务。程序将先请求正常退出，再结束仍存在的相关进程。\n\n"+initializationCloseImpact,14,TextBrush));
-        var buttons=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,18,0,0)};
-        var allow=Button("关闭并继续",()=>Motion.Close(dialog,true,preview),true);allow.IsDefault=false;
-        var cancel=Button("取消",()=>Motion.Close(dialog,false,preview),false);cancel.IsDefault=true;cancel.IsCancel=true;
-        buttons.Children.Add(allow);if(allowInitializationCloseDeferral)buttons.Children.Add(Button("先处理无需关闭的项目",()=>{deferInitializationClose=true;Motion.Close(dialog,false,preview);},false));buttons.Children.Add(cancel);panel.Children.Add(buttons);dialog.Content=panel;Motion.Dialog(dialog,preview);return dialog;
+        var dialog=CreateActionDialog("关闭 ChatGPT／Codex","初始化需要先关闭 Codex。\n\n这会中断当前桌面中的全部对话和 Work 连接，请先保存工作。\n\n本次将保留现有资料和连接设置。未结束的远程请求可能在恢复连接后继续执行。"+(allowInitializationCloseDeferral?"\n\n"+initializationCloseImpact:""),true);
+        var accept=InitializationFlowTests.Descendants<Button>((DependencyObject)dialog.Content).Single(b=>Convert.ToString(b.Content)=="确认并继续");accept.Content="关闭并继续";
+        if(allowInitializationCloseDeferral)((Panel)accept.Parent).Children.Insert(1,Button("先处理无需关闭的项目",()=>{deferInitializationClose=true;Motion.Close(dialog,false,preview);},false));return dialog;
     }
     async Task BeginInitialization() {
         if(busy)return;
@@ -339,8 +335,9 @@ public partial class MainWindow : Window {
         bool proceed=false,allowClose=false;deferInitializationClose=false;
         Dictionary<string,object> options=null;
         try {
-            options=pendingInitializationRetry??Options();pendingInitializationRetry=null;allowInitializationCloseDeferral=Core.Value(options,"retryStages","").Length>0;options.Remove("allowCloseRunningApp");options.Remove("closeApprovedProcesses");initializationSummary="";initializationState="";initializationProgress.Reset(options,guard.IsChecked==true);initializationProgress.Apply(new Dictionary<string,object>{{"stageId","preflight"},{"state","running"},{"detail","正在检查应用状态"}});
+            options=pendingInitializationRetry??Options();pendingInitializationRetry=null;initializationRequest=new InitializationRequest(options.ContainsKey("retryContext")?lastInitializationDrive:Drive(),options.ContainsKey("retryContext")?lastInitializationPort:Port(),options.ContainsKey("retryContext")?lastInitializationGuard:guard.IsChecked==true,options);UpdateBusyControls();allowInitializationCloseDeferral=Core.Value(options,"retryStages","").Length>0;options.Remove("allowCloseRunningApp");options.Remove("closeApprovedProcesses");options.Remove("desktopProfileRecord");initializationSummary="";initializationState="";initializationProgress.Reset(options,initializationRequest.Guard);initializationProgress.Apply(new Dictionary<string,object>{{"stageId","preflight"},{"state","running"},{"detail","正在检查应用状态"}});
             var report=InitializationPreflight==null?await ReadInitializationPreflight(options):await InitializationPreflight();
+            var desktopProfile=DesktopProfile.FromReport(report);if(desktopProfile!=null)options["desktopProfileRecord"]=Core.Json.Serialize(desktopProfile);
             object value;if(!report.TryGetValue("processes",out value)||!(value is System.Collections.IList))throw new InvalidDataException("初始化进程检查结果无效，请重试。");
             initializationCloseImpact="";object reasonValues;if(report.TryGetValue("reasons",out reasonValues)&&reasonValues is System.Collections.IEnumerable)initializationCloseImpact=String.Join("\n",((System.Collections.IEnumerable)reasonValues).Cast<object>().Select(Convert.ToString));
             int count=((System.Collections.IList)value).Count;
@@ -355,8 +352,8 @@ public partial class MainWindow : Window {
             proceed=count==0||allowClose||(allowInitializationCloseDeferral&&deferInitializationClose);
             if(!proceed)banner.Text="已取消本次初始化，配置尚未修改。";
         } catch(Exception ex){if(preview){banner.Text=DesktopLocalization.ExceptionText(ex);}else Error(ex);}
-        finally {busy=false;activeOperation="";}
-        if(!proceed){wizard=1;Navigate("初始化");return;}
+        finally {busy=false;activeOperation="";UpdateBusyControls();}
+        if(!proceed){initializationRequest=null;wizard=1;Navigate("初始化");return;}
         wizard=2;Navigate("初始化");
         options["allowCloseRunningApp"]=allowClose;
         await Run("initialize","初始化",false,options);
@@ -378,7 +375,7 @@ public partial class MainWindow : Window {
             if(id.Length==0)return;
             var count=Core.Value(status,"rollbackDeleteCount","0");
             await Run("rollback-delete-all","删除所有回滚",true,new Dictionary<string,object>{{"rollbackId",id}},
-                "将永久删除当前列表中 "+count+" 项可清理的初始化备份或独立 CLI 历史缓存。保留当前及被引用的 CLI、当前配置、对话和项目文件。删除后无法从这些备份回滚。涉及 CLI 缓存时请先退出 Codex。");
+                "将永久删除当前列表中 "+count+" 项可清理的初始化备份或独立 CLI 历史缓存。保留 "+Core.Value(status,"rollbackProtectedCount","0")+" 项受保护的 CLI，以及当前配置、对话和项目文件。运行中的 CLI 不清理。删除后无法从这些备份回滚。");
         },false);
         rollbackList.SelectionChanged+=(s,e)=>{selectedRollbackId=Core.Value(SelectedRollbackEntry(),"id","");UpdateRollbackActions();};
         UpdateRollbackActions();
@@ -435,7 +432,7 @@ public partial class MainWindow : Window {
         settings.Children.Add(proxyEnabled);settings.Children.Add(ProxyPortRow());settings.Children.Add(proxyPortNotice);
         settings.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",12,MutedBrush));
         settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(proxyHost);
-        Row(settings,Button("修复并启动 Codex",async()=>await Run("browser-start-prepare","修复并启动 Codex",true),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",async()=>await CopyText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。","已复制 · 重启 Codex 后在新对话中运行测试"),false));
+        Row(settings,Button("修复并启动 Codex",async()=>await StartCodex(null,true,false),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",async()=>await CopyText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。","已复制 · 重启 Codex 后在新对话中运行测试"),false));
         Row(settings,Button("仅保存代理配置",async()=>await Run("proxy","更新代理",true),false),Link("微软商店 ↗",()=>Open("ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS")));
         settings.Children.Add(T("通过此按钮启动时会先检查并按需修复；原来的 Codex 图标不会经过此检查。",12,MutedBrush));
         settings.Children.Add(T("修复前请保存工作并退出 Codex。保留 Chrome 和用户标签页，修复后重启 Codex 验证。",12,Accent));
@@ -465,7 +462,7 @@ public partial class MainWindow : Window {
     }
     void Updates() {
         subtitle.Text="从项目 GitHub 发现新版本，确认后下载、校验并替换。";
-        var p=Card("当前版本  v"+Core.Version,update==null?"尚未获得更新清单。应用启动时会自动检查，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知"));
+        var p=Card("当前本地版本  v"+OperationRecord.BuildVersion,update==null?"尚未获得更新清单。应用启动时会自动检查，可手动重试。":"GitHub 最新版本  v"+Core.Value(update,"version","未知"));
         Row(p,Button("检查更新",async()=>await CheckUpdates(false),true),Button("打开版本发布页 ↗",()=>Open("https://github.com/"+Core.Repository+"/releases"),false));
         updatePageDescription=p.Children.OfType<TextBlock>().First();updatePageNotes=T("",14,Accent);updatePageDownload=Button("下载并更新",async()=>await InstallUpdate(),true);p.Children.Add(updatePageNotes);p.Children.Add(updatePageDownload);RefreshUpdatePage();
         var networkCard=Card("GitHub 下载加速","自定义镜像留空时跳过。内置镜像并行测速，优先使用最快的有效站点。请求沿用当前 HTTP 代理设置。");
@@ -474,22 +471,22 @@ public partial class MainWindow : Window {
         networkCard.Children.Add(T("内置站点："+GitHubTransfer.BuiltInMirrorNames,12,MutedBrush));
         Row(networkCard,Button("保存下载设置",()=>{try{if(preview){banner.Text="设计预览不会保存下载设置。";return;}NetworkOptions().Save(Core.NetworkSettingsPath);networkSettingsError="";banner.Text="GitHub 下载设置已保存";}catch(Exception ex){Error(ex);}},true));
         if(networkSettingsError.Length>0)networkCard.Children.Add(T(networkSettingsError,12,MutedBrush));
-        githubLogView.Text=githubLogText;networkCard.Children.Add(githubLogView);
+        githubViewport.SetText(githubLogText);var downloadDetails=new StackPanel();downloadDetails.Children.Add(githubLogView);Row(downloadDetails,Button("回到最新下载记录",()=>githubViewport.Latest(),false));networkCard.Children.Add(new Expander{Header="下载与测速记录",Content=downloadDetails,IsExpanded=githubLogText.Length>0});
         Card("更新如何进行","每次启动自动检查 GitHub 新版，右下角显示检查状态，发现更新时显示更新入口。点击后下载并校验，退出后替换同目录、同文件名的 EXE 并重启；更新成功后自动删除旧版本。\n检查失败不影响本地功能。网络请求遵循初始化页面中的代理开关和端口。");
     }
     bool copyingClipboard;
     internal Action<string> ClipboardWriter=text=>Clipboard.SetDataObject(new DataObject(DataFormats.UnicodeText,text),true);
     internal Func<int,Task> ClipboardDelay=Task.Delay;
     async Task CopyText(string text,string success="已复制"){if(copyingClipboard){banner.Text="正在复制，请稍候…";return;}copyingClipboard=true;try{var result=await ClipboardCopy.Copy(text,ClipboardWriter,ClipboardDelay);banner.Text=result.Success?success:result.Message;}finally{copyingClipboard=false;}}
-    void LogsPage() { subtitle.Text="默认跟随底部最新日志；上翻暂停，回到底部恢复。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,LatestLogButton(),Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",async()=>await CopyText(LogToCopy(),"已复制当前显示的日志"),false)); }
+    void LogsPage() { subtitle.Text="默认跟随底部最新日志；上翻暂停，回到底部恢复。"; var viewed=VisibleRecord();var p=Card(viewed!=null?viewed.title:operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); AddLogHistory(p);p.Children.Add(log); Row(p,LatestLogButton(),Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;if(viewedLogRecord!=null)viewedLogRecord.ShowRaw=showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",async()=>await CopyText(LogToCopy(),"已复制当前显示的日志"),false),Button("复制反馈信息",async()=>await CopyText(FeedbackText(),"已复制版本、操作和日志"),false)); }
     Button LatestLogButton(){return Button("回到最新日志",()=>{var expander=log.Parent as Expander;if(expander!=null)expander.IsExpanded=true;logViewport.Latest();},false);}
     string LogToCopy(){return log.Text.Length>0?log.Text:"尚无日志";}
-    void UpdateLogView(){logViewport.SetText(showRawLog?rawLogText:chineseLogText);}
+    void UpdateLogView(){DisplayOperationLog();}
     string TranslateLogLine(string value){string translated;if(!localizedLines.TryGetValue(value,out translated)){translated=DesktopLocalization.TranslateLine(value);localizedLines[value]=translated;}return translated;}
     bool Confirm(string title,string message) { return CreateActionDialog(title,message,true).ShowDialog()==true; }
     void Error(Exception ex) { var message=DesktopLocalization.ExceptionText(ex);banner.Text=message;RecordUiError(ex,true);CreateActionDialog("操作未完成",message,false).ShowDialog(); }
     void RecordUiError(Exception ex,bool select) {
-        try{var path=Path.Combine(Core.Logs,"ui-"+Guid.NewGuid().ToString("N")+".log");File.WriteAllText(path,ex.ToString(),new UTF8Encoding(false));DesktopLocalization.SaveChineseLog(path,DesktopLocalization.ExceptionText(ex));if(select){lastLog=path;rawLogText=File.ReadAllText(path,Encoding.UTF8);rawDiagnosticText=rawLogText;chineseLogText=DesktopLocalization.ExceptionText(ex);showRawLog=false;operationTitle="操作错误";UpdateLogView();}}catch{}
+        try{var path=Path.Combine(Core.Logs,"ui-"+Guid.NewGuid().ToString("N")+".log");File.WriteAllText(path,ex.ToString(),new UTF8Encoding(false));DesktopLocalization.SaveChineseLog(path,DesktopLocalization.ExceptionText(ex));if(select){BeginRecord(Path.GetFileNameWithoutExtension(path),"操作错误",path,false);lastLog=path;rawLogText=File.ReadAllText(path,Encoding.UTF8);rawDiagnosticText=rawLogText;chineseLogText=DesktopLocalization.ExceptionText(ex);showRawLog=false;operationTitle="操作错误";UpdateRecordText();FinishRecord("failed",chineseLogText);UpdateLogView();}}catch{}
     }
     void Open(string target) { try{Process.Start(new ProcessStartInfo(target){UseShellExecute=true});}catch(Exception ex){Error(ex);} }
     string Impact(string op) {
@@ -519,10 +516,12 @@ public partial class MainWindow : Window {
         if(initialize){initializationSummary="";initializationState="";progressReadLine=-1;}
         try {
             var configOperation=op=="config-check"||op=="config-cleanup";var coreOperation=op=="desktop-core-check"||op=="desktop-core-repair";
-            var localOperation=op=="status"||op=="rollback-delete-all"||coreOperation;
-            int proxy=localOperation||configOperation?0:Port(); string disk=op=="initialize"?Drive():Environment.SystemDirectory.Substring(0,1);var options=configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:op=="initialize"?(extraOptions!=null&&extraOptions.ContainsKey("retryContext")?new Dictionary<string,object>(extraOptions):Options()):(localOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions());
+            var localOperation=LocalOperation(op);
+            var request=initialize?(initializationRequest??new InitializationRequest(Drive(),Port(),guard.IsChecked==true,extraOptions??Options())):null;
+            int proxy=initialize?request.Port:localOperation?0:Port();string disk=initialize?request.Drive:Environment.SystemDirectory.Substring(0,1);
+            var options=initialize?request.Options():configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:localOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions();
             if(extraOptions!=null)foreach(var pair in extraOptions)options[pair.Key]=pair.Value;
-            bool initGuard=guard.IsChecked==true;if(initialize){if(options.ContainsKey("retryContext")){proxy=lastInitializationPort;disk=lastInitializationDrive;initGuard=lastInitializationGuard;}else{lastInitializationPort=proxy;lastInitializationDrive=disk;lastInitializationGuard=initGuard;}}
+            bool initGuard=initialize?request.Guard:false;if(initialize){lastInitializationPort=proxy;lastInitializationDrive=disk;lastInitializationGuard=initGuard;}
             if(op=="browser-start-prepare" && Core.Admin)throw new InvalidOperationException("请以普通用户权限打开本工具，再使用修复并启动功能。");
             if(confirm && !Confirm(title,confirmationText??Impact(op)))return;
             if(configOperation)compatibilityAdvice="";
@@ -530,24 +529,20 @@ public partial class MainWindow : Window {
             if(initialize){lastInitializationOptions=new Dictionary<string,object>(options);lastInitializationOptions.Remove("allowCloseRunningApp");lastInitializationOptions.Remove("closeApprovedProcesses");incompleteInitializationStages=new string[0];initBrowserRepair=Convert.ToBoolean(options["browserRepair"]);initializationProgress.Reset(options,initGuard);initializationStarted=DateTime.UtcNow;}
             busy=true; activeOperation=op; operationTitle=title; banner.Text=title+" · 正在启动"; progress.IsIndeterminate=Motion.Enabled(preview);operationActivity.Visibility=Visibility.Visible;operationActivity.State="running";
             if(initialize&&page=="初始化"&&wizard==2)Navigate("初始化");
-            UpdateRollbackActions();
+            UpdateBusyControls();
             if(op=="browser-start-prepare")browserStartTarget=null;
             if(op=="doctor"){diagnosisContext=null;diagnosticAdvice="";}
-            var id=Guid.NewGuid().ToString("N"); lastLog=OperationLogPath(id);rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;logViewport.Reset();
+            var id=Guid.NewGuid().ToString("N"); lastLog=OperationLogPath(id);BeginRecord(id,title,lastLog,initialize);rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;logViewport.Reset();
             using(var process=StartOperation(op,id,disk,proxy,op=="initialize"&&initGuard,options)) {
                 while(!process.HasExited) { await Task.Delay(300); ReadLog();UpdateStageView(); }
-                logInputComplete=true;ReadLog(); progress.IsIndeterminate=false;
+                logInputComplete=true;ReadLog();FinishRecord(process.ExitCode==0?"complete":process.ExitCode==2?"partial":"failed",initialize?initializationSummary:chineseLogText); progress.IsIndeterminate=false;
                 if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=chineseLogText;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;repairTab=4;Navigate("连接与修复");}
                 else if(coreOperation){if(desktopCoreAdvice.Length==0)desktopCoreAdvice=chineseLogText;banner.Text=process.ExitCode==0?"桌面启动组件检查完成 · 请查看结果":"桌面启动检查或修复未完成 · 请查看原因";progress.Value=100;repairTab=3;Navigate("连接与修复");if(process.ExitCode!=0&&!preview)MessageBox.Show(this,desktopCoreAdvice,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
                 else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,rawDiagnosticText);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(rawDiagnosticText);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;repairTab=0;Navigate("连接与修复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
                 else if(op=="browser-start-prepare"){
                     if(process.ExitCode!=0){banner.Text="浏览器准备未完成 · 请查看日志中的原因";progress.Value=100;Navigate("连接与修复");if(!preview)MessageBox.Show(this,banner.Text+"\n\n"+chineseLogText,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
                     else {
-                        if(browserStartTarget==null)throw new InvalidDataException("未收到经过校验的桌面应用身份。");
-                        var current=await VerifyBrowserStartTarget();
-                        var uri=Core.BrowserLaunchUri(browserStartTarget,current);
-                        var launch=new ProcessStartInfo("explorer.exe",uri){UseShellExecute=true,WindowStyle=ProcessWindowStyle.Hidden};Process.Start(launch);
-                        var reach=Core.Value(browserStartTarget,"reachability","");banner.Text=reach.Contains("不可达")?"已请求启动 Codex · 代理端口不可达，请检查代理":"已请求启动 Codex · 真实浏览器连接仍需验证";progress.Value=100;Navigate("连接与修复");
+                        banner.Text="浏览器入口准备已完成，请使用修复并启动入口继续。";progress.Value=100;Navigate("连接与修复");
                     }
                 }
                 else if(op.StartsWith("ws-")){banner.Text=process.ExitCode==0?"WebSocket 检查或准备已完成 · 请查看分项结果":"WebSocket 线路检查未完成 · 请查看原因";progress.Value=100;repairTab=0;Navigate("连接与修复");}
@@ -557,15 +552,15 @@ public partial class MainWindow : Window {
                 else {progress.Value=100;banner.Text=title+"完成 · 日志已保存"; if(op=="status" && (page=="概览"||page=="CLI 管理"))Navigate(page); if(!preview&&(op.StartsWith("guard-")||op=="desktop-update"||op=="official-cli-update"))refreshStatus=true;}
             }
         } catch(System.ComponentModel.Win32Exception ex) {
-            if(ex.NativeErrorCode==1223){banner.Text="已取消管理员授权，未开始执行。";if(initialize){initCancelled=true;showInitializationResult=true;}}
+            if(ex.NativeErrorCode==1223){FinishRecord("cancelled","已取消管理员授权，未开始执行。");banner.Text="已取消管理员授权，未开始执行。";if(initialize){initCancelled=true;showInitializationResult=true;}}
             else if(initialize){initError=DesktopLocalization.ExceptionText(ex);banner.Text="初始化未完成 · 请查看日志";RecordUiError(ex,false);showInitializationResult=true;}
-            else Error(ex);
+            else {FinishRecord("failed",DesktopLocalization.ExceptionText(ex));Error(ex);}
         } catch(Exception ex) {
             if(initialize){initError=DesktopLocalization.ExceptionText(ex);banner.Text="初始化未完成 · 请查看日志";RecordUiError(ex,false);showInitializationResult=true;}
-            else Error(ex);
+            else {FinishRecord("failed",DesktopLocalization.ExceptionText(ex));Error(ex);}
         }
-        finally {busy=false;activeOperation="";operationActivity.State="pending";operationActivity.Visibility=Visibility.Collapsed;progress.IsIndeterminate=false;if(op=="status"&&status==null){cliDetectionComplete=true;UpdateCliDetectionHint();}UpdateRollbackActions();}
-        if(showInitializationResult){initializationProgress.Stopped(initExitCode,initError,initCancelled);initializationState=initCancelled?"cancelled":initExitCode==0?"complete":initExitCode==2?"partial":"failed";wizard=2;Navigate("初始化");RestoreInitializationWindow();ShowInitializationResult(initExitCode,initError,initCancelled,initBrowserRepair);RestoreInitializationWindow();}
+        finally {busy=false;activeOperation="";operationActivity.State="pending";operationActivity.Visibility=Visibility.Collapsed;progress.IsIndeterminate=false;if(op=="status"&&status==null){cliDetectionComplete=true;UpdateCliDetectionHint();}if(initialize)initializationRequest=null;UpdateBusyControls();}
+        if(showInitializationResult){if(!initCancelled&&initExitCode==0&&initializationProgress.Outcome.Length==0){initExitCode=2;initError="未收到完整的执行摘要，未确认的步骤需检查后重试。";}RecoverInitializationResult(initExitCode,initError,initCancelled);initializationState=initCancelled?"cancelled":initExitCode==0?"complete":initExitCode==2?"partial":"failed";FinishRecord(initializationState,String.IsNullOrWhiteSpace(initError)?initializationSummary:initError);wizard=2;Navigate("初始化");RestoreInitializationWindow();ShowInitializationResult(initExitCode,initError,initCancelled,initBrowserRepair);RestoreInitializationWindow();}
         if(refreshStatus && !preview) await RefreshStatusQuietly();
         if((op=="rollback-selected"||op=="rollback-delete-all")&&!preview){await RefreshStatusQuietly();if(page=="备份与回滚")Navigate(page);}
     }
@@ -582,12 +577,12 @@ public partial class MainWindow : Window {
             else if(line.StartsWith("@@DESKTOP_CORE@@")){try{var report=Core.ReadJson(line.Substring("@@DESKTOP_CORE@@".Length).Trim());desktopCoreAdvice=DesktopLocalization.TranslateText(Core.Value(report,"summary",""),true)+"\n桌面版本："+Core.Value(report,"version","未检测")+"\n近期日志："+DesktopLocalization.TranslateText(Core.Value(report,"signal","未检查"))+"\n组件目录："+Core.Value(report,"target","未检测");display.AppendLine(desktopCoreAdvice);}catch{display.AppendLine("桌面启动检查结果无法读取，请查看详细日志。");}}
             else if(line.StartsWith("@@STATUS@@")) {try{status=Core.ReadJson(line.Substring(10).Trim());ApplyCliDetection(status);}catch{display.AppendLine("状态输出格式无效，请查看原始日志。");} }
             else if(line.StartsWith("@@DIAGNOSIS@@")){try{diagnosisContext=Core.ReadJson(line.Substring(13).Trim());}catch{display.AppendLine("未能读取组件检查结果；建议将依据诊断输出生成。");}}
-            else if(line.StartsWith("@@PROGRESS@@")) {try{var p=Core.ReadJson(line.Substring(12).Trim());if(index>progressReadLine){initializationProgress.Apply(p);progressReadLine=index;}banner.Text=ProgressTitle(Core.Value(p,"title",operationTitle));int step,total;if(int.TryParse(Core.Value(p,"step","0"),out step)&&int.TryParse(Core.Value(p,"total","0"),out total)&&total>1){progress.IsIndeterminate=false;progress.Value=100.0*Math.Max(0,step-1)/total;}display.AppendLine(banner.Text);}catch{display.AppendLine("阶段输出格式无效，请查看原始日志。");} }
+            else if(line.StartsWith("@@PROGRESS@@")) {try{var p=Core.ReadJson(line.Substring(12).Trim());if(activeOperation=="initialize"&&index>progressReadLine){initializationProgress.Apply(p);progressReadLine=index;}banner.Text=ProgressTitle(Core.Value(p,"title",operationTitle));int step,total;if(int.TryParse(Core.Value(p,"step","0"),out step)&&int.TryParse(Core.Value(p,"total","0"),out total)&&total>1){progress.IsIndeterminate=false;progress.Value=100.0*Math.Max(0,step-1)/total;}display.AppendLine(banner.Text);}catch{display.AppendLine("阶段输出格式无效，请查看原始日志。");} }
             else {diagnostic.AppendLine(line.TrimEnd('\r'));display.AppendLine(TranslateLogLine(line.TrimEnd('\r')));}
         }
         rawDiagnosticText=diagnostic.ToString();chineseLogText=display.ToString();
         try{DesktopLocalization.SaveChineseLog(lastLog,chineseLogText);}catch{if(!preview)banner.Text="中文日志暂时无法保存；原始日志仍可查看。";}
-        UpdateLogView();UpdateStageView();
+        UpdateRecordText();UpdateLogView();UpdateStageView();
     }
     void VerifyChineseLogs(){
         var directory=Path.Combine(Path.GetTempPath(),"CodexKit-log-ui-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
@@ -707,15 +702,9 @@ public partial class MainWindow : Window {
         var detail=cancelled?"已取消管理员授权，未开始执行初始化。":exitCode==0?"所选配置已检查或保存，组件检查已结束。具体生效方式见结果页；保存成功不代表当前运行实例已采用。":(exitCode==2?"部分项目未完成，请查看下方日志并重试。":"初始化未完成，请查看下方日志了解原因。");
         var summary=String.IsNullOrWhiteSpace(error)?initializationSummary:error;
         if(!cancelled&&exitCode!=0&&!String.IsNullOrWhiteSpace(summary))detail+="\n\n"+summary;
-        var dialog=new Window{Title=title,Width=520,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,WindowStyle=WindowStyle.None,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush,FontFamily=FontFamily};if(IsVisible)dialog.Owner=this;
-        var panel=new StackPanel{Margin=new Thickness(30)};panel.Children.Add(T(title,24,TextBrush));panel.Children.Add(new ScrollViewer{Content=T(detail,14,MutedBrush),MaxHeight=320,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});
-        var confirm=Button("确认",()=>dialog.DialogResult=true,true);confirm.IsDefault=true;confirm.HorizontalAlignment=HorizontalAlignment.Right;confirm.Margin=new Thickness(0,16,0,0);panel.Children.Add(confirm);
-        dialog.Content=new Border{Background=PanelBrush,BorderBrush=B("#39465D"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(14),Child=panel};Motion.Dialog(dialog,preview);return dialog;
+        var dialog=CreateActionDialog(title,detail,false);var confirm=InitializationFlowTests.Descendants<Button>((DependencyObject)dialog.Content).Single(b=>Convert.ToString(b.Content)=="知道了");confirm.Content="确认";return dialog;
     }
-    Window CreateDiagnosticDialog(){
-        var dialog=new Window{Title="诊断建议",Width=660,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush,FontFamily=FontFamily,FontSize=14};if(IsVisible)dialog.Owner=this;foreach(var dictionary in Resources.MergedDictionaries)dialog.Resources.MergedDictionaries.Add(dictionary);
-        var panel=new StackPanel{Margin=new Thickness(26)};panel.Children.Add(T("诊断助手",24,TextBrush));panel.Children.Add(new SmoothScrollViewer{Content=T(diagnosticAdvice,14,TextBrush),MaxHeight=380,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});Row(panel,Button("查看详细日志",()=>{dialog.Close();Navigate("日志");},false),Button("知道了",()=>dialog.Close(),true));dialog.Content=new Border{Background=PanelBrush,Child=panel};return dialog;
-    }
+    Window CreateDiagnosticDialog(){var dialog=CreateActionDialog("诊断建议",diagnosticAdvice,false);var accept=InitializationFlowTests.Descendants<Button>((DependencyObject)dialog.Content).Single(b=>Convert.ToString(b.Content)=="知道了");((Panel)accept.Parent).Children.Insert(0,Button("查看详细日志",()=>{dialog.Close();Navigate("日志");},false));return dialog;}
     void RestoreInitializationWindow(){
         if(WindowState==WindowState.Minimized)WindowState=WindowState.Normal;
         if(BringInitializationWindowForward!=null){BringInitializationWindowForward();return;}
@@ -734,8 +723,8 @@ public partial class MainWindow : Window {
         catch(Exception ex){updateStatus.Text="更新检查未完成";updateStatus.ToolTip=DesktopLocalization.ExceptionText(ex);RecordUiError(ex,false);if(page=="更新与下载"&&updatePageDescription!=null)updatePageDescription.Text="检查未完成，可在下载记录中查看原因后重试。";}
         finally {checkingUpdate=false;}
     }
-    void ResetGitHubLog(){githubLogText="";githubLogView.Text="";}
-    void GitHubLog(string message){Dispatcher.BeginInvoke(new Action(()=>{githubLogText+=message+Environment.NewLine;githubLogView.AppendText(message+Environment.NewLine);githubLogView.ScrollToEnd();}));}
+    void ResetGitHubLog(){githubLogText="";githubViewport.Reset();}
+    void GitHubLog(string message){Dispatcher.BeginInvoke(new Action(()=>{githubLogText+=message+Environment.NewLine;githubViewport.SetText(githubLogText);}));}
     void ApplyUpdateState() {
         var newer=update!=null && new Version(Core.Value(update,"version","0.0.0"))>new Version(Core.Version);
         updateNotice.Visibility=newer?Visibility.Visible:Visibility.Collapsed;updateNotice.ToolTip=newer?"更新到 v"+Core.Value(update,"version",""):null;
