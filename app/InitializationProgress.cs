@@ -9,10 +9,13 @@ internal sealed class InitializationStage {
 }
 internal sealed class InitializationProgress {
     internal readonly List<InitializationStage> Stages=new List<InitializationStage>();
+    internal readonly List<ConfigurationEffect> Effects=new List<ConfigurationEffect>();
+    internal bool EffectsKnown;
     internal string Outcome="",Summary="";
     internal DateTime Started=DateTime.UtcNow;
     internal void Reset(Dictionary<string,object> options,bool protection){
         var previous=Stages.ToDictionary(x=>x.Id,x=>new InitializationStage(x.Id,x.Title){State=x.State,Detail=x.Detail});
+        if(Core.Value(options,"retryStages","").Length==0){Effects.Clear();EffectsKnown=false;}
         Stages.Clear();Outcome="";Summary="";Started=DateTime.UtcNow;
         Stages.Add(new InitializationStage("preflight","前置检查"));
         if(Convert.ToBoolean(options["desktopUpdate"]))Stages.Add(new InitializationStage("desktop","更新桌面版"));
@@ -32,6 +35,7 @@ internal sealed class InitializationProgress {
     internal void Finish(Dictionary<string,object> record){
         Outcome=Core.Value(record,"state","failed");Summary=DesktopLocalization.TranslateText(Core.Value(record,"summary",""),true);
         object entries;
+        if(record.TryGetValue("effects",out entries)&&entries is System.Collections.IEnumerable){EffectsKnown=true;foreach(var item in (System.Collections.IEnumerable)entries){var entry=item as Dictionary<string,object>;if(entry==null)continue;var effect=ConfigurationEffect.Read(entry);if(effect.id.Length==0)continue;Effects.RemoveAll(x=>x.id==effect.id);Effects.Add(effect);}}
         if(record.TryGetValue("steps",out entries)&&entries is System.Collections.IEnumerable)foreach(var item in (System.Collections.IEnumerable)entries){
             var entry=item as Dictionary<string,object>;if(entry==null)continue;
             var id=Core.Value(entry,"stageId","");var stage=Stages.FirstOrDefault(x=>x.Id==id);

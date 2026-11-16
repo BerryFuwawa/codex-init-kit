@@ -29,7 +29,7 @@ public partial class MainWindow {
     }
     WebSocketSettings CurrentWebSocketSettings(){return new WebSocketSettings{websocketRepair=websocketRepair.IsChecked==true,wsProxyHost=wsProxyHost.Text.Trim(),wsProxyPort=wsProxyPort.Text.Trim(),httpHost=ProxyHost(),httpPort=Port()};}
     Dictionary<string,object> WebSocketOptions(){return WebSocketSettings.Options(CurrentWebSocketSettings());}
-    void UpdateWebSocketControls(){if(loadingWebSocketSettings)return;bool independent=wsProxyHost.Text.Trim().Length>0&&wsProxyPort.Text.Trim().Length>0;websocketRepair.IsEnabled=websocketEnabled.IsEnabled=proxyEnabled.IsChecked==true||independent;try{var settings=CurrentWebSocketSettings();wsEffective.Text=settings.websocketRepair?"当前使用："+settings.Description:"WebSocket 线路修复已关闭；仍可检查连接";wsEffective.Foreground=Accent;}catch(Exception ex){wsEffective.Text=ex.Message;wsEffective.Foreground=MorandiTheme.Warning;}}
+    void UpdateWebSocketControls(){if(loadingWebSocketSettings)return;bool independent=wsProxyHost.Text.Trim().Length>0&&wsProxyPort.Text.Trim().Length>0;websocketRepair.IsEnabled=websocketEnabled.IsEnabled=proxyEnabled.IsChecked==true||independent;try{var settings=CurrentWebSocketSettings();wsEffective.Text=settings.websocketRepair?"本次拟用线路："+settings.Description:"WebSocket 线路修复已关闭；仍可检查连接";wsEffective.Foreground=Accent;}catch(Exception ex){wsEffective.Text=ex.Message;wsEffective.Foreground=MorandiTheme.Warning;}}
     void AddWebSocketSettings(StackPanel panel){
         panel.Children.Add(websocketEnabled);panel.Children.Add(T("帮助 Dot 等远程连接使用代理。默认沿用 HTTP 地址，也可单独设置。",12,MutedBrush));
         var advanced=new StackPanel();

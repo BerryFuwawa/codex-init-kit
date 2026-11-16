@@ -99,8 +99,8 @@ public partial class MainWindow : Window {
             throw new InvalidOperationException("Command-line preference was not independent or missing from confirmation");
         commandLineFirst.IsChecked=true;
         Navigate("初始化");var featurePanel=(StackPanel)((Border)content.Children[1]).Child;var featureChoices=InitializationFlowTests.Descendants<CheckBox>(featurePanel).ToArray();if(featureChoices[0]!=folderManagement||featureChoices[1]!=antiOverDefense||featureChoices[2]!=workJournal||featureChoices[3]!=commandLineFirst||featureChoices[4]!=memories||workJournal.IsChecked!=true||commandLineFirst.IsChecked!=true||memories.IsChecked!=true||featureChoices[featureChoices.Length-2]!=desktopUpdate||featureChoices.Last()!=subagents||antiOverDefense.IsChecked!=true||subagents.IsChecked!=false)throw new InvalidOperationException("Initialization checkbox order or defaults changed");
-        var cliChoices=featurePanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<RadioButton>()).ToArray();if(!cliChoices.SequenceEqual(new[]{cliNative,cliStandalone})||cliNative.IsChecked!=true||cliStandalone.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("初始化后使用的 CLI：桌面版原生 CLI"))throw new InvalidDataException("Detected native CLI choice or confirmation is incorrect");
-        ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliStandalone.IsChecked!=true||cliNative.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("初始化后使用的 CLI：官方独立 CLI"))throw new InvalidDataException("Detected standalone CLI was not selected automatically");
+        var cliChoices=featurePanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<RadioButton>()).ToArray();if(!cliChoices.SequenceEqual(new[]{cliNative,cliStandalone})||cliNative.IsChecked!=true||cliStandalone.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("本次保存的 CLI 选择：桌面版原生 CLI"))throw new InvalidDataException("Detected native CLI choice or confirmation is incorrect");
+        ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliStandalone.IsChecked!=true||cliNative.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("本次保存的 CLI 选择：官方独立 CLI"))throw new InvalidDataException("Detected standalone CLI was not selected automatically");
         cliNative.IsChecked=true;ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliNative.IsChecked!=true||Convert.ToString(Options()["cliMode"])!="desktop-native")throw new InvalidDataException("Status refresh replaced the manual CLI choice");Navigate("概览");Navigate("初始化");if(cliNative.IsChecked!=true)throw new InvalidDataException("Navigation lost the selected CLI");
         cliChoiceManual=false;ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","Unknown"}});rejected=false;try{RequireCliChoice();}catch(InvalidOperationException){rejected=true;}if(!rejected||cliNative.IsChecked==true||cliStandalone.IsChecked==true)throw new InvalidDataException("Unknown CLI mode silently selected a default");cliStandalone.IsChecked=true;RequireCliChoice();if(Convert.ToString(Options()["cliMode"])!="official-standalone")throw new InvalidDataException("Manual selection after unknown detection failed");ResetCliChoice();
         repairTab=1;Navigate("连接与修复");var browserSettings=(StackPanel)((Border)content.Children[1]).Child;var browserButtons=browserSettings.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<Button>()).Select(x=>Convert.ToString(x.Content)).ToArray();if(!browserButtons.Contains("修复并启动 Codex")||!browserSettings.IsAncestorOf(port)||!browserSettings.IsAncestorOf(proxyPortPreset))throw new InvalidOperationException("Browser startup entry or proxy inputs are missing");proxyHost.Text="192.168.5.8";proxyPortPreset.SelectedIndex=5;if(ProxyHost()!="192.168.5.8"||Port()!=7890||!port.IsReadOnly)throw new InvalidOperationException("Browser proxy settings did not synchronize");proxyEnabled.IsChecked=false;if(port.IsEnabled||proxyPortPreset.IsEnabled)throw new InvalidOperationException("Browser proxy switch did not disable its inputs");proxyEnabled.IsChecked=true;proxyHost.Text="";proxyPortPreset.SelectedIndex=0;
@@ -274,8 +274,8 @@ public partial class MainWindow : Window {
     }
     void UpdateCliDetectionHint() {
         if(cliChoiceManual)cliDetectionHint.Text="已手动选择 CLI，本次初始化将按所选模式执行。";
-        else if(detectedCliMode=="DesktopNative"||detectedCliMode=="OfficialStandalone")cliDetectionHint.Text="已检测到当前模式；初始化开始前将再次检测并自动沿用，也可手动切换。";
-        else cliDetectionHint.Text=cliDetectionComplete?"未能识别当前 CLI 模式，请手动选择，或到维护恢复检查。":"正在检测当前 CLI 模式；也可手动选择。";
+        else if(detectedCliMode=="DesktopNative"||detectedCliMode=="OfficialStandalone")cliDetectionHint.Text="已读取保存的 CLI 选择；开始前复核并沿用，也可手动选择。当前实例未核验。";
+        else cliDetectionHint.Text=cliDetectionComplete?"未能识别保存的 CLI 选择，请手动选择，或到维护恢复检查。":"正在检测保存的 CLI 选择；也可手动选择。";
     }
     void ResetCliChoice() {
         cliChoiceManual=false;
@@ -285,7 +285,7 @@ public partial class MainWindow : Window {
     }
     void RequireCliChoice() {
         if(busy&&activeOperation=="status")throw new InvalidOperationException("正在读取当前状态，请稍候再继续。");
-        if(!cliChoiceManual&&detectedCliMode!="DesktopNative"&&detectedCliMode!="OfficialStandalone")throw new InvalidOperationException("尚未识别当前 CLI 模式，请手动选择，或到维护恢复检查后重试。");
+        if(!cliChoiceManual&&detectedCliMode!="DesktopNative"&&detectedCliMode!="OfficialStandalone")throw new InvalidOperationException("尚未识别保存的 CLI 选择，请手动选择，或到维护恢复检查后重试。");
     }
     string CliChoiceSummary() {
         var name=cliStandalone.IsChecked==true?"官方独立 CLI":cliNative.IsChecked==true?"桌面版原生 CLI":"尚未识别";
@@ -307,7 +307,7 @@ public partial class MainWindow : Window {
     string ModelChecks(Dictionary<string,object> options){return EffortLabels.InText(modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。");}
     string ProxySummary(){var value=Port();if(value==0)return "关闭（不写入本地 HTTP 代理）";var host=ProxyHost();if(host.Contains(":")&&!host.StartsWith("["))host="["+host+"]";return "http://"+host+":"+value;}
     string Drive() { if(drive.SelectedItem==null)throw new InvalidOperationException("请选择可用的工作盘。"); return Convert.ToString(drive.SelectedItem); }
-    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+EffortLabels.Display(Convert.ToString(options["parentEffort"]))+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])):"关闭，不写入子代理规则；保留模型设置 "+options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])))+"\n初始化后使用的 CLI："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\nWebSocket 线路修复："+(websocketRepair.IsChecked==true?CurrentWebSocketSettings().Description+"；启动后验证":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"最后执行，真实连接需重启后验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器修复 → WebSocket 线路准备。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、设备登记、授权与连接数据保留。变更前备份；运行时文件需要替换时单独确认关闭，未完成项可单独重试。";}
+    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+EffortLabels.Display(Convert.ToString(options["parentEffort"]))+"\n子代理："+(subagents.IsChecked==true?options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])):"关闭，不写入子代理规则；保留模型设置 "+options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])))+"\n本次保存的 CLI 选择："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\nWebSocket 线路修复："+(websocketRepair.IsChecked==true?CurrentWebSocketSettings().Description+"；启动后验证":"跳过")+"\n浏览器链接修复："+(browserRepair.IsChecked==true?"按需更新入口，新组件与真实连接另行验证":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器修复 → WebSocket 线路准备。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、设备登记、授权与连接数据保留。变更前备份；运行时文件需要替换时单独确认关闭，未完成项可单独重试。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
@@ -423,13 +423,13 @@ public partial class MainWindow : Window {
             else {officialSwitch.Background=Accent;officialSwitch.Foreground=B("#101B31");officialSwitch.ToolTip="请点击此按钮检查并切换官方独立 CLI";}
     }
     void BrowserConnection(){
-        subtitle.Text="检查浏览器运行时与代理，准备修复，再重启验证真实连接。";
+        subtitle.Text="检查浏览器入口与代理；文件、隔离探针和真实连接分别验证。";
         if(browserReport==null&&!preview){try{var file=Path.Combine(Core.Root,"BrowserConnection","last-check.json");if(File.Exists(file))browserReport=Core.ReadJson(File.ReadAllText(file,Encoding.UTF8));}catch{}}
         var environment=Card("浏览器连接状态","");
         Pair(environment,"桌面版",Core.Value(status,"desktopVersion","未检测"));Pair(environment,"补丁状态",DesktopLocalization.TranslateText(Core.Value(browserReport,"patch","尚未检查")));
         if(browserReport!=null&&status!=null&&Core.Value(browserReport,"desktopVersion","")!=Core.Value(status,"desktopVersion",""))environment.Children.Add(T("桌面版本已变化，请重新检查。",12,B("#E9C779")));
-        var detail=new StackPanel();foreach(var item in new[]{new[]{"runtime","控制运行时"},new[]{"proxy","检查代理"},new[]{"checkedAt","检查时间"},new[]{"integrity","组件完整性"},new[]{"reachability","代理可达性"},new[]{"environment","环境继承"},new[]{"connection","真实连接"}})Pair(detail,item[1],DesktopLocalization.TranslateText(Core.Value(browserReport,item[0],item[0]=="connection"?"待重启后验证":"未检查")));
-        detail.Children.Add(T("HTTP 403 仅表示服务可达，真实连接需重启后运行测试。桌面版升级后请重新检查。",12,MutedBrush));environment.Children.Add(new Expander{Header="分项验证与检查详情",Content=detail});
+        var detail=new StackPanel();foreach(var item in new[]{new[]{"runtime","控制运行时"},new[]{"proxy","检查代理"},new[]{"checkedAt","检查时间"},new[]{"integrity","组件完整性"},new[]{"reachability","代理可达性"},new[]{"environment","环境继承"},new[]{"connection","真实连接"}})Pair(detail,item[1],DesktopLocalization.TranslateText(Core.Value(browserReport,item[0],item[0]=="connection"?"当前组件与真实连接待验证":"未检查")));
+        detail.Children.Add(T("HTTP 403 仅表示服务可达，不能证明 Chrome 连接成功。入口变更由新组件读取；是否需退出桌面另行确认。",12,MutedBrush));environment.Children.Add(new Expander{Header="分项验证与检查详情",Content=detail});
         var settings=Card("代理设置","与初始化页面同步。使用代理软件提供的 HTTP／混合端口；关闭代理后，修复操作会恢复本工具管理的入口为直连。");
         settings.Children.Add(proxyEnabled);settings.Children.Add(ProxyPortRow());settings.Children.Add(proxyPortNotice);
         settings.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",12,MutedBrush));
@@ -501,7 +501,7 @@ public partial class MainWindow : Window {
             case "guard-native":return "恢复桌面应用自带 CLI，并清理保护器拥有的覆盖配置。请先关闭 Codex 桌面应用。";
             case "guard-rollback":return "将保护器管理的 CLI 恢复到备份版本。请先关闭 Codex 桌面应用。";
             case "guard-current":return "先检查官方独立 CLI，缺失或不完整时从官方渠道准备，再切换。请先退出 Codex。";
-            case "official-cli-update":return "更新官方独立 CLI 组件，保留当前 CLI 模式；不安装启动保护或登录任务。请先退出 Codex。";
+            case "official-cli-update":return "更新官方独立 CLI 组件，保留保存的 CLI 选择；不安装启动保护或登录任务。请先退出 Codex。";
             case "desktop-update":return "通过 winget 更新官方 Microsoft Store 桌面版（含原生 CLI），最长等待 20 分钟；不自动重启。请先退出 Codex。";
             case "desktop-core-repair":return "请先保存工作并彻底退出 Codex。将核对当前官方桌面版，若当前版本的用户目录缺失，则复制并逐项校验四个启动组件。若目录已有异常文件、版本变化或无法识别，操作会停止，不会强制结束任务或覆盖已有目录。完成后仍需启动 Codex 验证。";
             case "browser-check":return "只读校验 CUA、代理端口及 Node 环境继承探针。真实 Chrome 连接需重启后测试。";
@@ -550,7 +550,7 @@ public partial class MainWindow : Window {
                     }
                 }
                 else if(op.StartsWith("ws-")){banner.Text=process.ExitCode==0?"WebSocket 检查或准备已完成 · 请查看分项结果":"WebSocket 线路检查未完成 · 请查看原因";progress.Value=100;repairTab=0;Navigate("连接与修复");}
-                else if(op.StartsWith("browser-")){banner.Text=process.ExitCode==0?"浏览器检查或修复已准备 · 真实连接需重启后验证":"浏览器操作未完成 · 可查看原因后单独重试";progress.Value=100;Navigate("连接与修复");}
+                else if(op.StartsWith("browser-")){banner.Text=process.ExitCode==0?"浏览器入口已检查或准备 · 当前组件与真实连接待验收":"浏览器操作未完成 · 可查看原因后单独重试";progress.Value=100;Navigate("连接与修复");}
                 else if(initialize){initExitCode=process.ExitCode;showInitializationResult=true;banner.Text=initExitCode==0?"初始化完成 · 日志已保存":initExitCode==2?"初始化部分完成 · 请重试未完成项目":"初始化未完成 · 请查看日志";if(initExitCode==0||initExitCode==2)progress.Value=100;refreshStatus=true;}
                 else if(process.ExitCode!=0) { banner.Text=title+"未完成 · 退出码 "+process.ExitCode+" · 查看日志了解原因"; if(op!="status")MessageBox.Show(this,banner.Text,title,MessageBoxButton.OK,MessageBoxImage.Warning); }
                 else {progress.Value=100;banner.Text=title+"完成 · 日志已保存"; if(op=="status" && (page=="概览"||page=="CLI 管理"))Navigate(page); if(!preview&&(op.StartsWith("guard-")||op=="desktop-update"||op=="official-cli-update"))refreshStatus=true;}
@@ -703,7 +703,7 @@ public partial class MainWindow : Window {
     Window CreateInitializationCompletedDialog(){return CreateInitializationResultDialog(0,"",false,browserRepair.IsChecked==true);}
     Window CreateInitializationResultDialog(int exitCode,string error,bool cancelled,bool browserSelected) {
         var title=cancelled?"已取消初始化":exitCode==0?"已完成初始化":exitCode==2?"初始化部分完成":"初始化未完成";
-        var detail=cancelled?"已取消管理员授权，未开始执行初始化。":exitCode==0?"所选配置已准备，组件检查已结束。"+(browserSelected?"浏览器修复已准备，真实连接仍需重启 Codex 后验证。":""):(exitCode==2?"部分项目未完成，请查看下方日志并重试。":"初始化未完成，请查看下方日志了解原因。");
+        var detail=cancelled?"已取消管理员授权，未开始执行初始化。":exitCode==0?"所选配置已检查或保存，组件检查已结束。具体生效方式见结果页；保存成功不代表当前运行实例已采用。":(exitCode==2?"部分项目未完成，请查看下方日志并重试。":"初始化未完成，请查看下方日志了解原因。");
         var summary=String.IsNullOrWhiteSpace(error)?initializationSummary:error;
         if(!cancelled&&exitCode!=0&&!String.IsNullOrWhiteSpace(summary))detail+="\n\n"+summary;
         var dialog=new Window{Title=title,Width=520,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,WindowStyle=WindowStyle.None,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush,FontFamily=FontFamily};if(IsVisible)dialog.Owner=this;
