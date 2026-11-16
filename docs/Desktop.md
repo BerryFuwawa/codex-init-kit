@@ -1,5 +1,7 @@
 # Codex Init Kit Desktop 2.3.1
 
+> 本地原生构建正在验证初始化改进：先检查差异，保留自定义配置，结果页可仅重试未完成项。下述正式版说明中的“完整重建”和“开始前关闭”不适用于这个本地候选；请参阅[本地初始化策略](NativeInitializationReconcile.md)。
+
 原生 WPF 中文桌面工具，集中管理 Codex 初始化、浏览器连接、组件修复、CLI 和备份。默认窗口约 1000 × 740，最小 800 × 540；小屏幕可滚动查看，支持 Windows 缩放。
 
 当前版本为 v2.3.1。更新清单绑定正式 EXE 的 SHA-256。[公开版本](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [v2.3.1 更新说明](Release-2.3.1.md)

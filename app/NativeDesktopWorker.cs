@@ -7,7 +7,7 @@ internal static class NativeDesktopWorker {
     internal static int Run(string operation,string drive,int port,bool guard,Dictionary<string,object> supplied,Action<string> log){
         NativeRuntime.Configure();var p=NativePaths.Current();p.EntryPrefix="--native ";p.Workspace=drive+@":\Codex";var settings=Core.NormalizeOptions(supplied);var services=Services(p,settings,port,log);var options=NativeDesktopWorkflow.Options(settings,port);var components=new NativeDesktopComponents(p,services,settings,port,log);
         try{
-            if(operation=="initialize-preflight"){log("@@INIT_PREFLIGHT@@"+Core.Json.Serialize(NativeDesktopWorkflow.Preflight(p,services)));return 0;}
+            if(operation=="initialize-preflight"){log("@@INIT_PREFLIGHT@@"+Core.Json.Serialize(NativeDesktopWorkflow.Preflight(p,services,options,settings)));return 0;}
             if(operation=="status"){log("@@STATUS@@"+Core.Json.Serialize(NativeDesktopState.Status(p,services,components)));return 0;}
             if(operation=="initialize"){
                 using(var mutex=new Mutex(false,"Local\\CodexInitNative-"+Core.Sid)){bool owned=false;try{try{owned=mutex.WaitOne(0);}catch(AbandonedMutexException){owned=true;}if(!owned)throw new IOException("另一个初始化操作正在运行，请等待完成。");return new NativeDesktopWorkflow(p,services,settings,components,log).Run(options,guard);}finally{if(owned)mutex.ReleaseMutex();}}
@@ -21,7 +21,7 @@ internal static class NativeDesktopWorker {
             if(operation=="guard-native"){components.SelectCli("desktop-native");components.VerifyCli("desktop-native");return 0;}
             if(operation=="guard-current"){components.OfficialCli(true);components.SelectCli("official-standalone");components.VerifyCli("official-standalone");return 0;}
             if(operation=="browser-repair"){components.Browser();return 0;}
-            if(operation=="proxy"){var result=new NativeInitializer(p,services).Run("proxy",options,null);foreach(var step in result.steps)log(step.name+"："+step.message);return result.state=="complete"?0:1;}
+            if(operation=="proxy"){var result=new NativeDesktopReconcile(p,services,options).Run(true);foreach(var step in result.steps)log(step.name+"："+step.message);return result.state=="complete"?0:1;}
             if(operation=="cua-check"||operation=="cua-repair"){var result=new NativeCua(p,services).Run(operation=="cua-repair",Path.Combine(p.BackupRoot,"CUA_"+DateTime.Now.ToString("yyyyMMdd-HHmmss")));log("CUA 组件："+(result.Passed?result.Changed?"已修复并校验":"完整，无需修复":"不完整，请选择修复"));log("运行时目录："+result.Target);return result.Passed?0:1;}
             throw new ArgumentException("未支持的原生桌面操作。");
         }catch(Exception ex){log("操作未完成："+ex.GetBaseException().Message);if(operation=="initialize")log("@@INIT_RESULT@@"+Core.Json.Serialize(new{state="failed",summary="初始化未完成："+ex.GetBaseException().Message,steps=new object[0]}));return 1;}

@@ -15,7 +15,7 @@ public sealed class WebSocketSettings {
     public static string SettingsPath {get{return Path.Combine(Core.Root,"websocket.json");}}
     internal static string StatePath {get{return Path.Combine(Core.Root,"websocket-launch.json");}}
     public static WebSocketSettings Load(string path){if(!File.Exists(path))return new WebSocketSettings();var result=new JavaScriptSerializer().Deserialize<WebSocketSettings>(File.ReadAllText(path));if(result==null)throw new InvalidDataException("WebSocket 代理设置无法读取。");result.wsProxyHost=(result.wsProxyHost??"").Trim();result.wsProxyPort=(result.wsProxyPort??"").Trim();return result;}
-    public void Save(string path){Resolve();Directory.CreateDirectory(Path.GetDirectoryName(path));var temp=path+".new";File.WriteAllText(temp,new JavaScriptSerializer().Serialize(this),new System.Text.UTF8Encoding(false));if(File.Exists(path))File.Replace(temp,path,path+".previous");else File.Move(temp,path);}
+    public void Save(string path){Resolve();Directory.CreateDirectory(Path.GetDirectoryName(path));var text=new JavaScriptSerializer().Serialize(this);if(File.Exists(path)&&File.ReadAllText(path)==text)return;var temp=path+".new";File.WriteAllText(temp,text,new System.Text.UTF8Encoding(false));if(File.Exists(path))File.Replace(temp,path,path+".previous");else File.Move(temp,path);}
     internal Uri HttpProxy {get{return httpPort>0?Address(httpHost,httpPort):null;}}
     internal Uri Resolve(){
         if(!websocketRepair)return null;

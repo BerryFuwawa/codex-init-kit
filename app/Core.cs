@@ -108,6 +108,7 @@ public static class Core {
         normalized["workJournal"]=ReadOptionBoolean(source,"workJournal",true);
         normalized["commandLineFirst"]=ReadOptionBoolean(source,"commandLineFirst",true);
         normalized["allowCloseRunningApp"]=ReadOptionBoolean(source,"allowCloseRunningApp",false);
+        if(source.ContainsKey("retryStages"))normalized["retryStages"]=ReadOptionString(source,"retryStages","");
         if(source.ContainsKey("closeApprovedProcesses"))
             normalized["closeApprovedProcesses"]=ReadOptionString(source,"closeApprovedProcesses","");
         normalized["memories"]=ReadOptionBoolean(source,"memories",true);

@@ -12,6 +12,7 @@ internal sealed class InitializationProgress {
     internal string Outcome="",Summary="";
     internal DateTime Started=DateTime.UtcNow;
     internal void Reset(Dictionary<string,object> options,bool protection){
+        var previous=Stages.ToDictionary(x=>x.Id,x=>new InitializationStage(x.Id,x.Title){State=x.State,Detail=x.Detail});
         Stages.Clear();Outcome="";Summary="";Started=DateTime.UtcNow;
         Stages.Add(new InitializationStage("preflight","前置检查"));
         if(Convert.ToBoolean(options["desktopUpdate"]))Stages.Add(new InitializationStage("desktop","更新桌面版"));
@@ -21,6 +22,7 @@ internal sealed class InitializationProgress {
         Stages.Add(new InitializationStage("cli","应用所选 CLI"));
         if(Convert.ToBoolean(options["browserRepair"]))Stages.Add(new InitializationStage("browser","浏览器连接修复"));
         if(options.ContainsKey("websocketRepair")&&Convert.ToBoolean(options["websocketRepair"]))Stages.Add(new InitializationStage("websocket","WebSocket 线路修复"));
+        var retry=Core.Value(options,"retryStages","");if(retry.Length>0)foreach(var stage in Stages.Where(x=>x.Id!="preflight"&&!retry.Split(',').Contains(x.Id))){InitializationStage old;if(previous.TryGetValue(stage.Id,out old)){stage.State=old.State;stage.Detail=old.Detail;}else{stage.State="skipped";stage.Detail="本次仅重试所选项目，此项未执行。";}}
     }
     internal void Apply(Dictionary<string,object> record){
         var id=Core.Value(record,"stageId","");var stage=Stages.FirstOrDefault(x=>x.Id==id);
