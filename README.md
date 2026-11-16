@@ -168,3 +168,5 @@ Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。
 ## 本地原生初始化迁移
 
 本地迁移版保留雾夜蓝图形界面，初始化按钮已接入 C# 原生后台。仅分发一个 `CodexInitKit.exe`，无需额外 CLI、DLL 或脚本文件。配置、中文规则、RTK、CUA、CLI 选择、浏览器与 WebSocket 准备沿用原有选项和进度页。此构建尚未发布，不改变当前公开版本。[单文件桌面版与验证范围](docs/NativeDesktop.md) · [独立 CLI](docs/NativeInitializer.md) · [逐项验收标准](native/验收计划.md)
+
+本地 2.3.1.2 修复了关闭应用时偶发“找不到”、初始化无法继续的问题。[修复与验证说明](docs/NativeProcessCloseFix.md)

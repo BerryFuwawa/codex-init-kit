@@ -46,6 +46,7 @@ public sealed class NativeGitHubDownloads:INativeDownloads {
     public void File(string url,string target,Action<string> validate){transfer.Download(url,target,validate);}
 }
 public sealed class WindowsNativeProcesses:INativeProcesses {
+    internal Func<ManagementObject,ProcessIdentity> ReadIdentity=Entry;
     static readonly HashSet<string> ChildNames=new HashSet<string>(new[]{"ChatGPT","Codex","codex-latest","node","node_repl","cua_node","cua-helper","codex-computer-use-swift","codex-code-mode-host","codex-command-runner","codex-windows-sandbox-setup"},StringComparer.OrdinalIgnoreCase);
     static ProcessIdentity Entry(ManagementObject p){var owner=p.InvokeMethod("GetOwnerSid",null,null);if(Convert.ToUInt32(owner["ReturnValue"])!=0)throw new UnauthorizedAccessException("无法核验进程所属用户。");return new ProcessIdentity{Id=Convert.ToInt32(p["ProcessId"]),ParentId=Convert.ToInt32(p["ParentProcessId"]),SessionId=Convert.ToInt32(p["SessionId"]),Path=Convert.ToString(p["ExecutablePath"]),Name=Path.GetFileNameWithoutExtension(Convert.ToString(p["Name"])),Owner=Convert.ToString(owner["Sid"]),Started=ManagementDateTimeConverter.ToDateTime(Convert.ToString(p["CreationDate"])).ToUniversalTime().Ticks};}
     static bool Gone(int id){try{using(var p=Process.GetProcessById(id))return p.HasExited;}catch(ArgumentException){return true;}}
@@ -57,17 +58,25 @@ public sealed class WindowsNativeProcesses:INativeProcesses {
             var ids=new HashSet<int>();bool changed;
             do{changed=false;foreach(var p in candidates){int id=Convert.ToInt32(p["ProcessId"]);if(ids.Contains(id))continue;var path=Convert.ToString(p["ExecutablePath"]);var name=Path.GetFileNameWithoutExtension(Convert.ToString(p["Name"]));bool pathMatch=roots.Any(root=>!String.IsNullOrEmpty(path)&&NativeData.Inside(path,root));bool child=ids.Contains(Convert.ToInt32(p["ParentProcessId"]))&&ChildNames.Contains(name);
                 if(!pathMatch&&!child){if(String.IsNullOrEmpty(path)&&(name.Equals("ChatGPT",StringComparison.OrdinalIgnoreCase)||name.Equals("Codex",StringComparison.OrdinalIgnoreCase))&&!Gone(id))throw new UnauthorizedAccessException("无法读取正在运行的 "+name+"（PID "+id+"）路径，初始化未开始。");continue;}
-                ProcessIdentity entry;try{entry=Entry(p);}catch{if(Gone(id))continue;throw;}
+                ProcessIdentity entry;try{entry=ReadIdentity(p);}catch{if(Gone(id))continue;throw;}
                 if(entry.Owner==own){ids.Add(id);result.Add(entry);changed=true;}
             }}while(changed);return result;
         }finally{foreach(var p in candidates)p.Dispose();}
     }
+    static bool ConfirmExited(Process process){try{return process.WaitForExit(500);}catch(Win32Exception){return false;}catch(InvalidOperationException){return false;}}
+    static InvalidOperationException CloseFailure(ProcessIdentity process,bool force,Exception error){var wmi=error as ManagementException;var windows=error as Win32Exception;var detail=wmi!=null?"WMI 错误 "+wmi.ErrorCode+"（0x"+unchecked((uint)(int)wmi.ErrorCode).ToString("X8")+"）":windows!=null?"Windows 错误码 "+windows.NativeErrorCode:error.GetType().Name;return new InvalidOperationException((force?"结束残留进程":"请求正常退出")+"未完成："+process.Name+"（PID "+process.Id+"）；"+detail+"："+error.Message.Trim()+"。尚未确认该进程退出，初始化已停止。",error);}
     public void RequestExit(ProcessIdentity expected,bool force){
         Process p;try{p=Process.GetProcessById(expected.Id);}catch(ArgumentException){return;}
-        using(p){if(p.HasExited)return;var handle=p.Handle;using(var query=new ManagementObjectSearcher("SELECT * FROM Win32_Process WHERE ProcessId="+expected.Id))using(var values=query.Get()){
-            if(p.HasExited)return;var rows=values.Cast<ManagementObject>().ToArray();if(rows.Length!=1)throw new InvalidOperationException("仍在运行，无法核验进程身份：PID "+expected.Id);
-            using(var row=rows[0]){var current=Entry(row);if(p.HasExited)return;if(current.Started!=expected.Started||current.SessionId!=expected.SessionId||current.Owner!=expected.Owner||!String.Equals(current.Path,expected.Path,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("进程已变化，停止关闭："+expected.Name+"（PID "+expected.Id+"）。");}
-        }if(p.HasExited)return;if(force)p.Kill();else p.CloseMainWindow();}
+        using(p)try{
+            if(p.HasExited)return;var handle=p.Handle;
+            using(var query=new ManagementObjectSearcher("SELECT * FROM Win32_Process WHERE ProcessId="+expected.Id))using(var values=query.Get()){
+                if(p.HasExited)return;var rows=values.Cast<ManagementObject>().ToArray();
+                if(rows.Length!=1){foreach(var row in rows)row.Dispose();if(ConfirmExited(p))return;throw new InvalidOperationException("仍在运行，无法核验进程身份："+expected.Name+"（PID "+expected.Id+"）。初始化已停止。");}
+                using(var row=rows[0]){var current=ReadIdentity(row);if(p.HasExited)return;if(current.Started!=expected.Started||current.SessionId!=expected.SessionId||current.Owner!=expected.Owner||!String.Equals(current.Path,expected.Path,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("进程已变化，停止关闭："+expected.Name+"（PID "+expected.Id+"）。");}
+            }
+            if(p.HasExited)return;if(force)p.Kill();else p.CloseMainWindow();
+        }catch(ManagementException ex){if(!ConfirmExited(p))throw CloseFailure(expected,force,ex);}
+        catch(Win32Exception ex){if(!ConfirmExited(p))throw CloseFailure(expected,force,ex);}
     }
     public List<ProcessIdentity> Wait(NativePaths p,OfficialDesktop app,int timeoutMs){var timer=Stopwatch.StartNew();do{var current=List(p,app);if(current.Count==0||timer.ElapsedMilliseconds>=timeoutMs)return current;Thread.Sleep(100);}while(true);}
 }
