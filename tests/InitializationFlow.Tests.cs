@@ -202,23 +202,21 @@ public static class InitializationFlowTests {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
         var root=Path.Combine(Path.GetTempPath(),"CodexKit-preflight-ui-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
         try {
-            Assert(Convert.ToString(Call(window,"InitSummary")).Contains("原有权限、自定义配置、设备登记、授权与连接数据保留"),"Confirmation did not explain preserved settings");
+            Assert(Convert.ToString(Call(window,"InitSummary")).Contains("原有权限、自定义配置、登录和用户资料保留"),"Confirmation did not explain preserved settings");
             var response=new TaskCompletionSource<Dictionary<string,object>>();int checks=0,dialogs=0,workers=0;
-            var profile=new DesktopProfileRecord{path=Path.Combine(root,"observed-profile"),capturedUtc=DateTime.UtcNow.ToString("o"),packageFamily=DesktopProfile.PackageFamily,processes=new[]{"123:639298120645079230"}};
             window.InitializationPreflight=()=>{checks++;return response.Task;};
             window.PresentAppCloseDialog=dialog=>{dialogs++;return AppCloseDialog(dialog,accept);};
             window.OperationLogPath=id=>Path.Combine(root,"init.log");
             window.StartOperation=(op,id,drive,port,guard,options)=>{
                 Assert(op=="initialize"&&(bool)options["allowCloseRunningApp"]==(running&&accept),"One-time close authorization was missing or persisted incorrectly");workers++;
                 Assert(running&&accept?Core.Value(options,"closeApprovedProcesses","")=="123:639298120645079230":!options.ContainsKey("closeApprovedProcesses"),"Close approval did not name the detected process instance");
-                Assert(running?DesktopProfile.Parse(Core.Value(options,"desktopProfileRecord","")).path==profile.path:!options.ContainsKey("desktopProfileRecord"),"Confirmed profile was lost or invented");
                 return Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"),"/d /c exit 0"){UseShellExecute=false,CreateNoWindow=true});
             };
             Set(window,"wizard",1);Navigate(window,"初始化");
             var task=(Task)Call(window,"BeginInitialization");Pump((Task)Call(window,"BeginInitialization"));
             Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");Navigate(window,"概览");
             if(fail)response.SetException(new InvalidDataException("fixture permission read failure"));
-            else response.SetResult(new Dictionary<string,object>{{"desktopProfile",running?profile:null},{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
+            else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
             Pump(task);
             bool started=!fail&&(!running||accept);
             Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");

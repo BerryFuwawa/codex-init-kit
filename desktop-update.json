@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.1",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.1/CodexInitKit.exe",
-  "sha256": "15bcee4c754b401636754e6e4db49aa01b99f0b5da99d51fdadf89acbbb849ad",
-  "notes": "初始化按需更新，保留自定义配置；失败项单独重试，原资料与 Work 连接接着用。完善代理继承、操作日志和高缩放界面。"
+  "version": "2.3.2",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.2/CodexInitKit.exe",
+  "sha256": "4d1c1f5af0a67f81f93806d4d1c2edfd9b79dbf5ff1ce808efe614ab0323f732",
+  "notes": "初始化回归简单：保留登录和用户资料，电脑名称与允许控制手动设置。保留按需配置、失败重试、代理、CLI 和连接修复。"
 }

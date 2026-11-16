@@ -22,11 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.1.md">v2.3.1</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.2.md">v2.3.2</a></sub></p>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> **v2.3.1：初始化更省心，原连接接着用。** 保留自定义配置，已有内容按需更新；失败项单独重试，结果与日志按操作保存。启动沿用原资料和已确认的 Work 连接设置，代理 IP、端口和 CLI 选择保持一致。[看看这次更新了什么](docs/Release-2.3.1.md) · [验证范围](docs/Validation-2.3.1.md)
+> **v2.3.2：初始化回归简单。** 配置按需更新，保留登录和用户资料；电脑名称和允许控制在 Codex/Work 中手动设置。初始化不再受桌面资料目录读取限制，代理、CLI、失败项重试和操作日志继续保留。[看看这次更新了什么](docs/Release-2.3.2.md) · [验证范围](docs/Validation-2.3.2.md)
 
 > **你的对话和项目文件会保留。** 初始化先备份需要修改的配置，再合并所选功能管理的内容。原有权限、未知配置和未管理的自定义规则保留；只需要排查某个问题时，可运行单项检查或修复。
 
@@ -37,7 +37,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
 | **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「连接与修复」→「浏览器」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
-| **🔌 Codex 的 Dot / Remote 一直连接中，WebSocket 连不上？** | v2.3.1 提供「WebSocket 线路修复」，分开检查代理、持续 WS 通信和真实远程连接；无需把代理改写成 ws://。[查看使用方法与验证范围](docs/WebSocket.md) |
+| **🔌 Codex 的 Dot / Remote 一直连接中，WebSocket 连不上？** | 工具提供「WebSocket 线路修复」，分开检查代理、持续 WS 通信和真实远程连接；无需把代理改写成 ws://。[查看使用方法与验证范围](docs/WebSocket.md) |
 | **🖥️ Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
 | **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「连接与修复」→「电脑操作」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
@@ -48,7 +48,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
 | **⌨️ 能用命令完成，却经常要你配合点界面？** | v2.2.9 的「优先使用命令行」引导 Codex 在授权范围内用 CLI 或 PowerShell 直接执行并核验。[查看初始化选项](docs/Settings.md#优先使用命令行) |
 
-组件检查通过或启动准备完成，只说明对应步骤成功。本版通过 166 项隔离回归，并在同一台电脑的两次受控启动中确认原资料和 Work 连接保持一致；完整初始化、所有按钮完整流程及恢复后的 Dot 发送尚未实测。[查看验证范围](docs/Validation-2.3.1.md)
+组件检查通过或启动准备完成，只说明对应步骤成功。本版通过 132 项原生隔离回归、界面及模拟 WebSocket 检查；故障机离线，本轮未执行真实初始化或启动验收。[查看验证范围](docs/Validation-2.3.2.md)
 
 工作规则用于引导 Codex 的行为，实际效果还会受到具体任务、用户指令和项目规则的影响。
 
@@ -69,32 +69,32 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「连接与修复」→「浏览器」或「CLI 管理」。
 3. **需要初始化时**：保存工作并退出 Codex，选择工作盘、代理和功能，在确认页核对模型及 CLI 模式后执行。v2.2.9 默认沿用检测到的 CLI 类型，也可手动选择。
 
-初始化完成后会显示实际结果。部分步骤未完成时，可查看中文日志，再点“仅重试未完成项”。需要启动时，点击“启动 Codex（使用本次设置）”，沿用已确认的原资料。
+初始化完成后会显示实际结果。部分步骤未完成时，可查看中文日志，再点“仅重试未完成项”。需要启动时，点击“启动 Codex（使用本次设置）”，使用本次代理和 CLI 选择。电脑名称与允许控制可在 Codex/Work 中手动设置。
 
 <details>
 <summary><strong>使用前：备份、数据与下载校验</strong></summary>
 
 - 初始化不会清除已有对话记录或项目文件，也不会自动搬移已有工作文件。
-- 完整初始化会备份并重建当前用户配置与全局 `AGENTS.md`。旧的全局自定义内容保存在本次备份中，不会自动写回；项目目录内的 `AGENTS.md` 不受这项全局重置影响。
+- 完整初始化会先备份需要变更的内容，再合并本次所选功能管理的配置和全局 `AGENTS.md` 规则，保留已有自定义内容；项目目录内的 `AGENTS.md` 不受全局规则更新影响。
 - 可在「备份与回滚」选择初始化备份或保护器 CLI 版本回滚。浏览器补丁、CUA 备份和启动保护各有单独的恢复范围。[查看恢复说明](docs/Desktop.md)
 - 发布页提供 `SHA256SUMS.txt`。发布 EXE 当前未签名；请从本仓库的 [Releases](https://github.com/BerryFuwawa/codex-init-kit/releases) 获取并核对文件。
 
 </details>
 
-## v2.3.1 界面预览
+## v2.3.2 界面预览
 
 全新的雾夜蓝深色界面，常用功能按用途分好，想找什么更直观。初始化时能看清当前步骤和完成进度，需要排查时再展开日志。页面切换、弹窗和滚动也更自然流畅。
 
-![Codex Init Kit 2.3.1 概览，雾夜蓝界面与分类导航](assets/screenshots/v2.3.1/overview.png)
+![Codex Init Kit 2.3.2 概览，雾夜蓝界面与分类导航](assets/screenshots/v2.3.2/overview.png)
 
-![WebSocket 线路检查、代理设置与远程连接分项状态](assets/screenshots/v2.3.1/connection-check.png)
+![WebSocket 线路检查、代理设置与远程连接分项状态](assets/screenshots/v2.3.2/connection-check.png)
 
-![Codex 初始化阶段时间线与真实步骤进度](assets/screenshots/v2.3.1/initialization-progress.png)
+![Codex 初始化阶段时间线与真实步骤进度](assets/screenshots/v2.3.2/initialization-progress.png)
 
 <table>
   <tr>
-    <td width="50%"><strong>初始化</strong><br>按需要选择代理、功能、CLI 和模型。<br><a href="assets/screenshots/v2.3.1/settings.png"><img src="assets/screenshots/v2.3.1/settings-scroll.png" alt="Codex Init Kit 初始化界面，显示功能选择和模型设置"></a></td>
-    <td width="50%"><strong>浏览器连接</strong><br>检查环境，修复后再验证真实连接。<br><a href="assets/screenshots/v2.3.1/browser-connection.png"><img src="assets/screenshots/v2.3.1/browser-connection.png" alt="Codex 浏览器连接页面，显示代理设置、修复操作和分项验证"></a></td>
+    <td width="50%"><strong>初始化</strong><br>按需要选择代理、功能、CLI 和模型。<br><a href="assets/screenshots/v2.3.2/settings.png"><img src="assets/screenshots/v2.3.2/settings-scroll.png" alt="Codex Init Kit 初始化界面，显示功能选择和模型设置"></a></td>
+    <td width="50%"><strong>浏览器连接</strong><br>检查环境，修复后再验证真实连接。<br><a href="assets/screenshots/v2.3.2/browser-connection.png"><img src="assets/screenshots/v2.3.2/browser-connection.png" alt="Codex 连接状态页面，显示代理设置、修复操作和分项验证"></a></td>
   </tr>
 </table>
 
@@ -103,15 +103,15 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 **CLI 管理**：切换 CLI，分别更新两类组件，并管理启动保护。
 
-![Codex Init Kit 维护恢复页面](assets/screenshots/v2.3.1/maintenance.png)
+![Codex Init Kit 维护恢复页面](assets/screenshots/v2.3.2/maintenance.png)
 
 **更新与下载**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
 
-![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/v2.3.1/updates.png)
+![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/v2.3.2/updates.png)
 
 **日志**：中文说明与原始输出可切换，按需复制和查看。
 
-![Codex Init Kit 中文日志页面](assets/screenshots/v2.3.1/logs.png)
+![Codex Init Kit 中文日志页面](assets/screenshots/v2.3.2/logs.png)
 
 </details>
 
@@ -167,4 +167,4 @@ Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。
 
 ## 原生初始化与验证
 
-v2.3.1 的初始化、组件准备、备份和启动使用单文件原生后台，继续提供现有中文界面。无需另行下载 CLI 或旁置脚本；部分维护入口保留已有实现。[实现与构建](docs/NativeDesktop.md) · [按需初始化与失败重试](docs/NativeInitializationReconcile.md) · [配置何时生效](docs/ConfigurationEffects.md) · [原连接接续](docs/DesktopProfile.md)
+v2.3.2 的初始化、组件准备、备份和启动使用单文件原生后台，继续提供现有中文界面。无需另行下载 CLI 或旁置脚本；部分维护入口保留已有实现。[实现与构建](docs/NativeDesktop.md) · [按需初始化与失败重试](docs/NativeInitializationReconcile.md) · [配置何时生效](docs/ConfigurationEffects.md) · [用户资料与 Work 设置](docs/DesktopProfile.md)
