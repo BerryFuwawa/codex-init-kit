@@ -7,6 +7,7 @@ internal static class NativeDesktopWorker {
     internal static int Run(string operation,string drive,int port,bool guard,Dictionary<string,object> supplied,Action<string> log){
         NativeRuntime.Configure();var p=NativePaths.Current();p.EntryPrefix="--native ";p.Workspace=drive+@":\Codex";var settings=Core.NormalizeOptions(supplied);var services=Services(p,settings,port,log);var options=NativeDesktopWorkflow.Options(settings,port);var components=new NativeDesktopComponents(p,services,settings,port,log);
         try{
+            if(operation=="ws-start-info"){log("@@WS_APP@@"+Core.Json.Serialize(NativeDesktopWorkflow.WebSocketInfo(p,services,options)));return 0;}
             if(operation=="initialize-preflight"){log("@@INIT_PREFLIGHT@@"+Core.Json.Serialize(NativeDesktopWorkflow.Preflight(p,services,options,settings)));return 0;}
             if(operation=="status"){log("@@STATUS@@"+Core.Json.Serialize(NativeDesktopState.Status(p,services,components)));return 0;}
             if(operation=="initialize"){

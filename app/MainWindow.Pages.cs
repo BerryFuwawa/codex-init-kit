@@ -111,9 +111,11 @@ public partial class MainWindow {
         if(completed&&!String.IsNullOrWhiteSpace(initializationSummary))p.Children.Add(T(initializationSummary,12,MutedBrush));
         if(completed){if(initializationProgress.Effects.Count>0){p.Children.Add(T("本次变更何时生效",17,TextBrush));foreach(var effect in initializationProgress.Effects){p.Children.Add(T(effect.name,14,TextBrush));p.Children.Add(T(effect.Detail,12,MutedBrush));}}else if(initializationProgress.EffectsKnown)p.Children.Add(T(initializationState=="complete"?"本次没有记录到配置或组件变更，无需为本次检查重启。已有连接是否正常仍以实际验收为准。":"本次没有记录到已保存的变更；未完成项目和生效状态请查看步骤详情。",12,MutedBrush));}
         log.Height=230;var details=new Expander{Header="执行详情",IsExpanded=!logViewport.Following,Content=log,Margin=new Thickness(0,9,0,7)};p.Children.Add(details);details.Expanded+=(s,e)=>{Dispatcher.BeginInvoke(new Action(()=>logViewport.Attach()));};
+        if(completed&&InitializationProxyStartupReady()){Row(p,Button("启动 Codex（使用本次代理）",async()=>await StartWebSocketRepair(WebSocketSettings.FromOptions(lastInitializationOptions,lastInitializationPort)),true));p.Children.Add(T("通过本工具启动才会传入 WebSocket 代理环境；当前仍有 Codex 进程时会再次询问关闭，未结束的远程请求请先确认处理。",12,MutedBrush));}
         if(completed&&incompleteInitializationStages.Length>0&&lastInitializationOptions!=null)Row(p,Button("仅重试未完成项",async()=>await RetryIncompleteInitialization(),true));
         var reset=Button("重新设置",()=>{if(!busy){ResetCliChoice();configurationTab=0;wizard=0;Navigate("初始化");}},false);reset.IsEnabled=!busy;Row(p,LatestLogButton(),Button("查看全部日志",()=>Navigate("日志"),false),reset);if(completed)Row(p,Button("打开备份目录",()=>{var path=Core.Value(status,"backupPath","");if(Directory.Exists(path))Open(path);else Navigate("备份与回滚");},false),Button("返回概览",()=>Navigate("概览"),true));UpdateStageView();
     }
+    bool InitializationProxyStartupReady(){return lastInitializationOptions!=null&&initializationProgress.Stages.Any(x=>x.Id=="websocket"&&x.State=="complete")&&WebSocketSettings.FromOptions(lastInitializationOptions,lastInitializationPort).Resolve()!=null;}
     void UpdateStageView(){
         if(page!="初始化"||wizard!=2||stageProgress==null)return;
         var active=initializationProgress.Stages.FirstOrDefault(x=>x.State=="running");
