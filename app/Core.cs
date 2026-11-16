@@ -16,12 +16,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.3.0";
+    public const string Version = "2.3.1";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","ws-start-info","ws-model-check","ws-check","ws-start-prepare","ws-start-verify","ws-rollback"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -53,7 +53,7 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
+    public static bool NeedsAdmin(string operation) { return !operation.StartsWith("ws-",StringComparison.Ordinal) && operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
 
     public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
         const string family="OpenAI.Codex_2p2nqsd0c76g0";
@@ -65,7 +65,7 @@ public static class Core {
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"websocketRepair",true},{"wsProxyHost",""},{"wsProxyPort",""},{"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
@@ -119,7 +119,7 @@ public static class Core {
         }
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
-        foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
+        foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate","websocketRepair"})normalized[key]=ReadOptionBoolean(source,key,true);
         var cliMode=ReadOptionString(source,"cliMode","auto");
         if(cliMode!="auto"&&cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
         normalized["cliMode"]=cliMode;
@@ -128,6 +128,7 @@ public static class Core {
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);
         normalized["childEffort"]=ReadOptionString(source,"childEffort",DefaultChildEffort);
         normalized["proxyHost"]=ReadProxyHost(source);
+        foreach(var key in new[]{"wsProxyHost","wsProxyPort","desktopInstallLocation","modelCliPath"}){object value;if(source.TryGetValue(key,out value)){if(value!=null&&!(value is string))throw new ArgumentException(key+" 必须为文本。");normalized[key]=(value as string??"").Trim();}}
         object projectPath;
         if(source.TryGetValue("projectPath",out projectPath)) {
             if(projectPath!=null && !(projectPath is string))throw new ArgumentException("项目路径必须为文本。");
@@ -161,6 +162,12 @@ public static class Core {
         var log=Path.Combine(Logs,args[2]+".log");
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
         if(NeedsAdmin(args[1]) && !Admin) return 66;
+        if(args[1].StartsWith("ws-",StringComparison.Ordinal)&&(args[1]!="ws-start-info"||options==null||!Convert.ToBoolean(options["allowCloseRunningApp"]))){
+            try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;Action<string> emit=value=>writer.WriteLine(value);var settings=WebSocketSettings.FromOptions(options??NormalizeOptions(null),port);Dictionary<string,object> report;
+                switch(args[1]){case "ws-start-info":var installed=WebSocketApp.Discover();writer.WriteLine("@@WS_APP@@"+Json.Serialize(new {installLocation=installed.InstallLocation,version=installed.Version,launchAlias=installed.LaunchAlias}));return 0;case "ws-model-check":report=WebSocketStartup.ModelCheck(settings,Value(options,"modelCliPath",""));emit(Value(report,"modelState",""));break;case "ws-check":report=WebSocketStartup.Check(settings,emit);break;case "ws-start-prepare":report=WebSocketStartup.Prepare(settings,Value(options,"desktopInstallLocation",""),emit);break;case "ws-start-verify":report=WebSocketStartup.Verify();emit(Value(report,"summary",""));break;default:WebSocketStartup.Rollback(emit);report=new Dictionary<string,object>{{"state","restored"},{"summary","WebSocket 启动准备已撤销"}};break;}
+                writer.WriteLine("@@WS_RESULT@@"+Json.Serialize(report));return report.ContainsKey("passed")&&!(bool)report["passed"]?1:0;}}
+            catch(Exception ex){File.AppendAllText(log,"WebSocket 线路操作未完成："+ex.Message+Environment.NewLine,new UTF8Encoding(false));return 1;}
+        }
         var job=NeedsAdmin(args[1])?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"CodexInitKit-privileged-"+Guid.NewGuid().ToString("N")):Path.Combine(Root,"Jobs",args[2]);
         try {
             var payload=Extract(job,NeedsAdmin(args[1]));
@@ -170,7 +177,7 @@ public static class Core {
                 var psi=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe"));
                 psi.UseShellExecute=false; psi.CreateNoWindow=true; psi.RedirectStandardOutput=true; psi.RedirectStandardError=true;
                 psi.StandardOutputEncoding=Encoding.UTF8; psi.StandardErrorEncoding=Encoding.UTF8;
-                var optionsArgument=options==null?"":" -OptionsBase64 "+Quote(EncodeOptions(options));
+                var optionsArgument=(options==null?"":" -OptionsBase64 "+Quote(EncodeOptions(options)))+" -ToolkitExe "+Quote(Exe);
                 psi.Arguments="-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Quote(Path.Combine(payload,"Backend.ps1"))+" -Operation "+Quote(args[1])+" -PayloadRoot "+Quote(payload)+" -Drive "+Quote(args[3])+" -ProxyPort "+port+(args[1]=="initialize"&&args[5]=="1"?" -InstallProtection":"")+optionsArgument;
                 using(var process=new Process()) {
                     process.StartInfo=psi;

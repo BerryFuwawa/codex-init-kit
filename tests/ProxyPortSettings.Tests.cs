@@ -92,11 +92,11 @@ public static class ProxyPortSettingsTests {
             Assert(port.Text=="7890"&&port.IsReadOnly&&Convert.ToString(Call(preview,"InitSummary")).Contains("127.0.0.1:7890"),"Confirmation lost the selected proxy port.");
             foreach(var page in new[]{"初始化","连接与修复"}){
                 Call(preview,"Navigate",page);
-                foreach(var width in new[]{800.0,900.0}){
+                foreach(var width in new[]{640.0,800.0,900.0}){
                     preview.Width=width;
                     var view=(FrameworkElement)preview.Content;
                     view.Measure(new Size(width,1200));view.Arrange(new Rect(0,0,width,1200));view.UpdateLayout();
-                    var row=(Grid)combo.Parent;var hint=row.Children.OfType<Border>().SingleOrDefault(x=>x.Name=="ProxyPresetHint");Assert(row.Children.OfType<TextBlock>().Any(x=>x.Text=="阁下的代理端口：")&&hint!=null&&InitializationFlowTests.Descendants<TextBlock>(hint).Any(x=>x.Text=="常用端口预设")&&Convert.ToString(hint.ToolTip).Contains("自定义代理端口")&&Grid.GetColumn(port)==1&&Grid.GetColumn(combo)==2,"Proxy row labels or control order changed.");var content=(FrameworkElement)Field<StackPanel>(preview,"content");
+                    var row=(Panel)combo.Parent;var hint=row.Children.OfType<Border>().SingleOrDefault(x=>x.Name=="ProxyPresetHint");Assert(row.Children.OfType<TextBlock>().Any(x=>x.Text=="阁下的代理端口：")&&hint!=null&&InitializationFlowTests.Descendants<TextBlock>(hint).Any(x=>x.Text=="常用端口预设")&&Convert.ToString(hint.ToolTip).Contains("自定义代理端口")&&row.Children.IndexOf(port)==1&&row.Children.IndexOf(combo)==2,"Proxy row labels or control order changed.");var content=(FrameworkElement)Field<StackPanel>(preview,"content");
                     Assert(row.ActualWidth<=content.ActualWidth-32&&Math.Abs(combo.ActualHeight-port.ActualHeight)<1&&Math.Abs(port.ActualWidth-90)<1,"Proxy row layout at "+width+": row "+row.ActualWidth+", content "+content.ActualWidth+", heights "+combo.ActualHeight+"/"+port.ActualHeight+", port "+port.ActualWidth);
                 }
             }

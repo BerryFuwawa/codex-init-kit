@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.0",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.0/CodexInitKit.exe",
-  "sha256": "58b8a0738921ed7e8c7c2cbe64ad851430ff9d507af8103d3b30515dbbdd396e",
-  "notes": "雾夜蓝界面与两级导航；初始化阶段进度；连续平滑滚动、更新页位置保持及统一图标；代理端口提示优化。火绒已确认此前检测为误报，病毒库更新后生效。"
+  "version": "2.3.1",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.1/CodexInitKit.exe",
+  "sha256": "27714a216ac0e31ce20218ccc0ec968389d3a8b07437a75cd40d9f6b129d3613",
+  "notes": "新增 WebSocket 线路修复，浏览器、模型与 Dot 连接分开检查；支持共用或独立代理。矢量 Logo 更清晰，进度使用真实旋转动画。"
 }

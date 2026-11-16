@@ -9,7 +9,7 @@ $scratch=Join-Path $env:TEMP ('CodexKit-220-tests-'+[guid]::NewGuid().ToString('
 $scratch=[IO.Path]::GetFullPath($scratch)
 [void][IO.Directory]::CreateDirectory($scratch)
 $functions=@{}
-foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Get-ReadOnlyDesktopInfo','Get-ReadOnlyRuntimeModeInfo','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command','Stop-InitializationApps')){
+foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProxy','Test-BrowserEnvironment','Assert-DesktopStopped','Get-OfficialDesktopPackage','Get-ReadOnlyDesktopInfo','Get-ReadOnlyRuntimeModeInfo','Assert-DesktopReady','Invoke-BoundedProcess','Invoke-DesktopUpdate','Invoke-OfficialCliUpdate','Invoke-InitOperation','Invoke-GuardOperation','Invoke-BrowserOperation','Get-InitializationCliSnapshot','Restore-InitializationCliSnapshot','Set-InitializationCliMode','Assert-InitializationCliMode','Get-Command','Stop-InitializationApps','Write-BackendLine')){
     if(Test-Path ('Function:'+ $name)){$functions[$name]=(Get-Item ('Function:'+$name)).ScriptBlock}
 }
 try {
@@ -39,7 +39,7 @@ try {
     function Test-BrowserProxy {return 'fixture TCP reachable'}
     function Test-BrowserEnvironment {return 'fixture env passed'}
     $opts=Convert-BackendOptions @{proxyHost='192.168.50.4'}
-    foreach($key in @('browserRepair','officialCliUpdate','desktopUpdate')){Assert220 $opts[$key] ('New option default: '+$key)}
+    foreach($key in @('browserRepair','officialCliUpdate','desktopUpdate','websocketRepair')){Assert220 $opts[$key] ('New option default: '+$key)}
     $originalHash=(Get-FileDigest $launcher).Hash
     $rc=Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts
     Assert220 ($rc -eq 0) 'First browser patch failed.'
@@ -216,7 +216,7 @@ try {
     function Restore-InitializationCliSnapshot {$calls.Add('restore')}
     function Set-InitializationCliMode {param($Mode,$PayloadRoot) $calls.Add('cli:'+ $Mode);if($switchFails){throw 'fixture CLI unavailable'};return $Mode}
     function Assert-InitializationCliMode {param($Mode) $calls.Add('verify:'+ $Mode);if($finalFails){throw 'fixture mode changed'};return $Mode}
-    $inputData=[pscustomobject]@{PayloadRoot=$PayloadRoot;Drive='D';ProxyPort=10808;Options=(Convert-BackendOptions $null);InstallProtection=$true}
+    $inputData=[pscustomobject]@{PayloadRoot=$PayloadRoot;Drive='D';ProxyPort=10808;Options=(Convert-BackendOptions @{websocketRepair=$false});InstallProtection=$true}
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Detected native CLI was not applied and verified after guard.'
     $calls.Clear();$script:fixtureMode='OfficialStandalone'
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:official-standalone,browser,verify:official-standalone') 'Detected standalone CLI was not retained after guard.'
@@ -238,6 +238,19 @@ try {
     Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,browser,verify:official-standalone,restore') 'Changed final CLI mode was not reported and restored.'
     $calls.Clear();$finalFails=$false;$baseFails=$true
     Assert220 ((Invoke-Initialize220 $inputData) -eq 1 -and ($calls -join ',') -eq 'preflight,snapshot,base,restore,browser') 'Failed base initialization did not restore CLI or report failure.'
+    $calls.Clear();$baseFails=$false;$finalFails=$false;$switchFails=$false;$inputData.Options.browserRepair=$false;$inputData.Options.websocketRepair=$true
+    function Initialize-WebSocketRoute {$calls.Add('websocket')}
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,websocket,verify:official-standalone') 'WS preparation was not ordered after CLI selection.'
+    $calls.Clear();function Initialize-WebSocketRoute {$calls.Add('websocket');throw 'fixture WS unavailable'}
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,websocket,verify:official-standalone') 'WS failure did not produce a partial result.'
+    $calls.Clear();$inputData.ProxyPort=0;$inputData.Options.wsProxyHost='';$inputData.Options.wsProxyPort=''
+    $directLines=[Collections.Generic.List[string]]::new()
+    function Write-BackendLine {param([string]$Text) $directLines.Add($Text)}
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and -not $calls.Contains('websocket')) 'Direct mode should skip proxy repair without failing initialization.'
+    $summaryLine=$directLines|Where-Object {$_ -like '@@INIT_RESULT@@*'}|Select-Object -Last 1
+    $directSummary=$summaryLine.Substring('@@INIT_RESULT@@'.Length)|ConvertFrom-Json
+    $wsSteps=@($directSummary.steps|Where-Object {$_.stageId -eq 'websocket'})
+    Assert220 ($wsSteps.Count -eq 1 -and $wsSteps[0].state -eq 'skipped') 'Direct WS stage was duplicated or reported complete.'
     Write-Output 'PASS: browser variables, allowlist, inheritance, idempotency, proxy off, exact rollback, unknown structure, hashes, app identity, CUA compatibility, winget results, initialization order and partial continuation. No live updates performed.'
 } finally {
     foreach($name in $functions.Keys){Set-Item ('Function:'+$name) $functions[$name]}

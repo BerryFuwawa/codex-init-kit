@@ -14,6 +14,7 @@ internal static class MorandiTheme {
     internal static readonly Brush Group=Solid("#2A3A4C");
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
     internal static void StyleWindow(Window window){
+        window.UseLayoutRounding=true;window.SnapsToDevicePixels=true;window.FontFamily=new FontFamily("Microsoft YaHei UI");System.Windows.Media.TextOptions.SetTextFormattingMode(window,TextFormattingMode.Display);
         var handle=new WindowInteropHelper(window).Handle;int dark=1;
         DwmSetWindowAttribute(handle,20,ref dark,4);
         var background=((SolidColorBrush)Canvas).Color;int caption=background.R|(background.G<<8)|(background.B<<16);

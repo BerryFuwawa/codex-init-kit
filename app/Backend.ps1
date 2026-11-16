@@ -13,7 +13,8 @@ param(
     [int]$ProxyPort = 10808,
     [switch]$InstallProtection,
     [string]$JobFile,
-    [string]$OptionsBase64
+    [string]$OptionsBase64,
+    [string]$ToolkitExe
 )
 
 $script:BackendVersion = '1.0.0'
@@ -35,6 +36,9 @@ $script:DefaultOptions = [ordered]@{
     customGithubMirror = ''
     subagents = $false
     cuaRepair = $true
+    websocketRepair = $true
+    wsProxyHost = ''
+    wsProxyPort = ''
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
@@ -131,7 +135,8 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','websocketRepair','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach($key in @('wsProxyHost','wsProxyPort')){$value=& $get $key;if($null -ne $value -and $value -isnot [string]){throw ($key+' 必须为文本。')};$normalized[$key]=if($null -eq $value){''}else{$value.Trim()}}
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $approvedProcesses=& $get 'closeApprovedProcesses'
     if($null -ne $approvedProcesses){
@@ -622,6 +627,7 @@ function New-InitAdapter {
     $rulesMatch = [regex]::Match($sourceText,'(?m)^set "CODEX_INIT_RULES_B64=([A-Za-z0-9+/=]+)"\r?$')
     if (-not $rulesMatch.Success) { throw '找不到基础工作规则。' }
     $rules = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($rulesMatch.Groups[1].Value))
+    $rules = $rules.Replace('持续到请求的结果真正完真正完成。','持续到请求的结果真正完成。')
     if (-not $subagentsEnabled) { $rules = [regex]::Replace($rules,'(?ms)^SUBAGENTS\r?\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)','') }
     $headings=[ordered]@{GOAL='目标';AUTONOMY='自主推进';PRIORITY='指令优先级';STYLE='表达风格';DONE='完成条件';APPROVAL='授权';VERIFY='验证';SUBAGENTS='子代理'}
     foreach($key in $headings.Keys){$rules=[regex]::Replace($rules,('(?m)^'+$key+'(?=\r?$)'),$headings[$key])}
@@ -655,7 +661,7 @@ if /i "%~1"=="--codex-gui-rollback" (
 )
 '@
     $sourceText = $sourceText.Replace($marker, $guiEntry + [Environment]::NewLine + $marker)
-    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.3.0')
+    $sourceText = $sourceText.Replace(') > "%SESSION_DIR%\session.meta"', ') > "%SESSION_DIR%\session.meta"' + [Environment]::NewLine + '> "%SESSION_DIR%\desktop-version.txt" echo 2.3.1')
     $folderRuleCheck=@'
 $text=[IO.File]::ReadAllText($env:AGENTS_FILE,[Text.Encoding]::UTF8)
 if($text.IndexOf($env:EXPECTED_CODEX_ROOT,[StringComparison]::OrdinalIgnoreCase) -lt 0){
@@ -1419,8 +1425,9 @@ function Invoke-BackendMain {
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -notin @('status','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
+        if ($input.Operation -notin @('status','ws-start-info','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
+            'ws-start-info' { if($input.Options.allowCloseRunningApp){Stop-InitializationApps $input.PayloadRoot $true ([string]$input.Options.closeApprovedProcesses)};$package=Get-OfficialDesktopPackage;Assert-DesktopReady $package;Write-BackendLine ('@@WS_APP@@'+(@{installLocation=$package.InstallLocation;version=[string]$package.Version}|ConvertTo-Json -Compress));return 0 }
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
             'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot)|ConvertTo-Json -Compress -Depth 8)); return 0 }
             'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }

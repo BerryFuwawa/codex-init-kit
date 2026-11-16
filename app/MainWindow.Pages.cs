@@ -15,20 +15,21 @@ public partial class MainWindow {
     readonly SmoothScrollViewer pageScroll=new SmoothScrollViewer();
     readonly Dictionary<string,TextBlock> navigationSections=new Dictionary<string,TextBlock>();
     readonly InitializationProgress initializationProgress=new InitializationProgress();
+    readonly Dictionary<string,ActivityIndicator> stageIndicators=new Dictionary<string,ActivityIndicator>();
     readonly Dictionary<string,TextBlock[]> stageLabels=new Dictionary<string,TextBlock[]>();
     System.Windows.Shapes.Path pageHeadingIcon;
     ProgressBar stageProgress;
     TextBlock stageHeading,stageCounter,stageElapsed;
-    int configurationTab,repairTab=1,progressReadLine=-1;
+    int configurationTab,repairTab=0,progressReadLine=-1;
     string initializationState="";
     DateTime initializationStarted;
 
     void BuildShell(){
-        Title="Codex Init Kit "+Core.Version;Width=900;Height=660;MinWidth=Math.Min(800,SystemParameters.WorkArea.Width);MinHeight=Math.Min(540,SystemParameters.WorkArea.Height);
+        Title="Codex Init Kit "+Core.Version;Width=1000;Height=740;MinWidth=Math.Min(800,SystemParameters.WorkArea.Width);MinHeight=Math.Min(540,SystemParameters.WorkArea.Height);
         Width=Math.Min(Width,SystemParameters.WorkArea.Width);Height=Math.Min(Height,SystemParameters.WorkArea.Height);FontSize=13;
         var layout=new Grid{Background=MorandiTheme.Canvas};layout.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(164)});layout.ColumnDefinitions.Add(new ColumnDefinition());Content=layout;
         var rail=new Grid{Background=MorandiTheme.Rail};rail.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});rail.RowDefinitions.Add(new RowDefinition());rail.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});layout.Children.Add(rail);
-        var brand=new StackPanel{Margin=new Thickness(17,20,12,14)};var logoRow=new StackPanel{Orientation=Orientation.Horizontal};logoRow.Children.Add(new Image{Source=Brand.Logo(),Width=29,Height=29,Margin=new Thickness(0,0,8,0)});logoRow.Children.Add(new TextBlock{Text="Codex Init Kit",FontSize=13,FontWeight=FontWeights.SemiBold,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});brand.Children.Add(logoRow);rail.Children.Add(brand);
+        var brand=new StackPanel{Margin=new Thickness(17,20,12,14)};var logoRow=new StackPanel{Orientation=Orientation.Horizontal};logoRow.Children.Add(new Image{Source=Brand.VectorLogo,Width=32,Height=32,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,8,0)});logoRow.Children.Add(new TextBlock{Text="Codex Init Kit",FontSize=13,FontWeight=FontWeights.SemiBold,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});brand.Children.Add(logoRow);rail.Children.Add(brand);
         var nav=new StackPanel{Margin=new Thickness(10,0,10,0)};var navScroll=new SmoothScrollViewer{Content=nav,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(navScroll,1);rail.Children.Add(navScroll);
         var groups=new[]{new[]{"开始","概览","初始化"},new[]{"维护","连接与修复","CLI 管理","备份与回滚"},new[]{"工具","更新与下载","日志"}};
         foreach(var group in groups){
@@ -50,7 +51,7 @@ public partial class MainWindow {
         Grid.SetRow(pageNavigation,1);main.Children.Add(pageNavigation);
         pageScroll.Content=content;pageScroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;pageScroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;Grid.SetRow(pageScroll,2);main.Children.Add(pageScroll);
         var bottom=new StackPanel{Margin=new Thickness(0,9,0,0)};var line=new Grid();line.ColumnDefinitions.Add(new ColumnDefinition());line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-        banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");line.Children.Add(banner);
+        banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");var statusLine=new DockPanel();operationActivity.Visibility=Visibility.Collapsed;statusLine.Children.Add(operationActivity);statusLine.Children.Add(banner);line.Children.Add(statusLine);
         var updates=new StackPanel{HorizontalAlignment=HorizontalAlignment.Right};updateNotice=Button("检测到更新，点击更新",async()=>await InstallUpdate(),false);updateNotice.Visibility=Visibility.Collapsed;updateNotice.Margin=new Thickness(0);updateNotice.Padding=new Thickness(8,3,8,3);updates.Children.Add(updateNotice);updateStatus.FontSize=11;updateStatus.Foreground=MutedBrush;updateStatus.Text="自动检查更新";updates.Children.Add(updateStatus);Grid.SetColumn(updates,1);line.Children.Add(updates);bottom.Children.Add(line);
         progress.Style=(Style)Resources["KitProgress"];progress.Height=3;progress.Maximum=100;progress.Margin=new Thickness(0,7,0,0);bottom.Children.Add(progress);Grid.SetRow(bottom,3);main.Children.Add(bottom);
     }
@@ -95,6 +96,7 @@ public partial class MainWindow {
         if(wizard==0){
             Tabs(new[]{"工作区与网络","功能选择","模型设置"},configurationTab,index=>{configurationTab=index;Navigate("初始化");});
             var network=Card("工作目录与网络","已有项目文件保留在原位置。");network.Children.Add(T("工作盘",12,MutedBrush));network.Children.Add(drive);network.Children.Add(T("网络代理",15,TextBrush));network.Children.Add(proxyEnabled);network.Children.Add(ProxyPortRow());network.Children.Add(proxyPortNotice);network.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));network.Children.Add(proxyHost);network.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",11,MutedBrush));Row(network,Button("返回概览",()=>Navigate("概览"),false),Button("下一步：功能选择 →",()=>{Port();configurationTab=1;Navigate("初始化");},true));((Border)network.Parent).Visibility=configurationTab==0?Visibility.Visible:Visibility.Collapsed;
+            var wsConfig=FeatureGroup("WebSocket 线路修复设置");((StackPanel)wsConfig.Child).Children.Add(T("独立地址留空时沿用 HTTP 代理；修复选项位于功能选择中。",12,MutedBrush));AddWebSocketSettings((StackPanel)wsConfig.Child);network.Children.Insert(network.Children.Count-1,wsConfig);
             var features=Card("选择要启用的功能","按用途选择，确认后统一执行。");FeatureGroups(features);features.Children.Add(T("初始化后使用的 CLI",13,TextBrush));Row(features,cliNative,cliStandalone);features.Children.Add(cliDetectionHint);Row(features,Button("上一步",()=>{configurationTab=0;Navigate("初始化");},false),Button("下一步：模型设置 →",()=>{configurationTab=2;Navigate("初始化");},true));((Border)features.Parent).Visibility=configurationTab==1?Visibility.Visible:Visibility.Collapsed;
             var models=Card("模型设置","沿用当前全局设置，也可直接更换。");ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);Row(models,Button("检查所选配置",CheckModels,false),Button("上一步",()=>{configurationTab=1;Navigate("初始化");},false),Button("查看变更 →",()=>{try{Port();Drive();RequireCliChoice();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}},true));((Border)models.Parent).Visibility=configurationTab==2?Visibility.Visible:Visibility.Collapsed;
         }else if(wizard==1){
@@ -103,9 +105,9 @@ public partial class MainWindow {
         }else ExecutionPage();
     }
     void ExecutionPage(){
-        stageLabels.Clear();var completed=!busy;var p=Card(completed?initializationState=="partial"?"配置已完成，有项目待处理":initializationState=="complete"?"初始化已完成":initializationState=="failed"?"初始化未完成":initializationState=="cancelled"?"已取消初始化":"初始化结果":"正在初始化",completed?"完成情况与后续操作见下方。":"处理中，请保留窗口。");
+        stageLabels.Clear();stageIndicators.Clear();var completed=!busy;var p=Card(completed?initializationState=="partial"?"配置已完成，有项目待处理":initializationState=="complete"?"初始化已完成":initializationState=="failed"?"初始化未完成":initializationState=="cancelled"?"已取消初始化":"初始化结果":"正在初始化",completed?"完成情况与后续操作见下方。":"处理中，请保留窗口。");
         stageHeading=T("正在准备初始化…",16,TextBrush);stageCounter=T("",12,MutedBrush);stageElapsed=T("",11,MutedBrush);p.Children.Add(stageHeading);stageProgress=new ProgressBar{Height=9,Maximum=100,Style=(Style)Resources["KitProgress"],Margin=new Thickness(0,7,0,8)};p.Children.Add(stageProgress);p.Children.Add(stageCounter);p.Children.Add(stageElapsed);
-        foreach(var stage in initializationProgress.Stages){var row=new Grid{Margin=new Thickness(0,4,0,4)};row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(23)});row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(100)});var icon=T("○",14,MutedBrush);var title=T(stage.Title,13,TextBrush);var state=T("待执行",12,MutedBrush);Grid.SetColumn(title,1);Grid.SetColumn(state,2);row.Children.Add(icon);row.Children.Add(title);row.Children.Add(state);p.Children.Add(row);stageLabels[stage.Id]=new[]{icon,title,state};}
+        foreach(var stage in initializationProgress.Stages){var row=new Grid{Margin=new Thickness(0,4,0,4)};row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(23)});row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(100)});var icon=new ActivityIndicator{Width=18,Height=18,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,1,0,0),AllowMotion=!preview};var title=T(stage.Title,13,TextBrush);var state=T("待执行",12,MutedBrush);Grid.SetColumn(title,1);Grid.SetColumn(state,2);row.Children.Add(icon);row.Children.Add(title);row.Children.Add(state);p.Children.Add(row);stageIndicators[stage.Id]=icon;stageLabels[stage.Id]=new[]{title,state};}
         if(completed&&!String.IsNullOrWhiteSpace(initializationSummary))p.Children.Add(T(initializationSummary,12,MutedBrush));
         log.Height=230;var details=new Expander{Header="执行详情",IsExpanded=!logViewport.Following,Content=log,Margin=new Thickness(0,9,0,7)};p.Children.Add(details);details.Expanded+=(s,e)=>{Dispatcher.BeginInvoke(new Action(()=>logViewport.Attach()));};
         var reset=Button("重新设置",()=>{if(!busy){ResetCliChoice();configurationTab=0;wizard=0;Navigate("初始化");}},false);reset.IsEnabled=!busy;Row(p,LatestLogButton(),Button("查看全部日志",()=>Navigate("日志"),false),reset);if(completed)Row(p,Button("打开备份目录",()=>{var path=Core.Value(status,"backupPath","");if(Directory.Exists(path))Open(path);else Navigate("备份与回滚");},false),Button("返回概览",()=>Navigate("概览"),true));UpdateStageView();
@@ -117,10 +119,11 @@ public partial class MainWindow {
         stageCounter.Text="已处理 "+initializationProgress.Finished+" / "+initializationProgress.Stages.Count+" 项 · 已完成 "+initializationProgress.Complete+" 项";
         var elapsed=DateTime.UtcNow-initializationProgress.Started;stageElapsed.Text="已用时 "+elapsed.ToString(@"mm\:ss");stageProgress.IsIndeterminate=busy&&initializationProgress.Stages.Count==0;
         if(Math.Abs(stageProgress.Value-initializationProgress.Value)>.01){if(!preview&&SystemParameters.ClientAreaAnimation)stageProgress.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty,new DoubleAnimation(initializationProgress.Value,TimeSpan.FromMilliseconds(220)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut}},HandoffBehavior.SnapshotAndReplace);else stageProgress.Value=initializationProgress.Value;}
-        foreach(var stage in initializationProgress.Stages){TextBlock[] parts;if(!stageLabels.TryGetValue(stage.Id,out parts))continue;parts[0].Text=stage.State=="complete"?"✓":stage.State=="running"?"◌":stage.State=="incomplete"?"!":"○";parts[0].Foreground=stage.State=="complete"?MorandiTheme.Accent:stage.State=="incomplete"?B("#E9C779"):MutedBrush;parts[2].Text=stage.State=="complete"?"完成":stage.State=="incomplete"?"未完成":stage.State=="running"?"正在处理":stage.State=="skipped"?"已跳过":"待执行";parts[2].Foreground=parts[0].Foreground;parts[1].ToolTip=stage.Detail;}
+        foreach(var stage in initializationProgress.Stages){TextBlock[] parts;if(!stageLabels.TryGetValue(stage.Id,out parts))continue;stageIndicators[stage.Id].State=stage.State;parts[1].Text=stage.State=="complete"?"完成":stage.State=="incomplete"?"未完成":stage.State=="running"?"正在处理":stage.State=="skipped"?"已跳过":"待执行";parts[1].Foreground=stage.State=="incomplete"?MorandiTheme.Warning:MutedBrush;parts[0].ToolTip=stage.Detail;}
     }
     void RepairPage(){
-        Tabs(new[]{"诊断","浏览器","电脑操作","桌面启动","配置检查"},repairTab,index=>{repairTab=index;Navigate("连接与修复");});
+        Tabs(new[]{"连接检查","浏览器","电脑操作","桌面启动","配置检查"},repairTab,index=>{repairTab=index;Navigate("连接与修复");});
+        if(repairTab==0){ConnectionOverview();return;}
         if(repairTab==1){BrowserConnection();return;}
         subtitle.Text="先检查，再按需修复。修改前会说明影响范围。";
         if(repairTab==0){var p=Card("诊断助手","检查 CLI 与桌面组件，给出后续建议。");p.Children.Add(T(diagnosticAdvice.Length>0?diagnosticAdvice:"诊断只读取状态，不自动执行修复。",13,MutedBrush));Row(p,Button("开始诊断",async()=>await Run("doctor","诊断助手",false),true),Button("查看详细日志",()=>Navigate("日志"),false));}

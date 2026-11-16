@@ -20,6 +20,7 @@ internal sealed class InitializationProgress {
         if(protection)Stages.Add(new InitializationStage("guard","安装启动保护"));
         Stages.Add(new InitializationStage("cli","应用所选 CLI"));
         if(Convert.ToBoolean(options["browserRepair"]))Stages.Add(new InitializationStage("browser","浏览器连接修复"));
+        if(options.ContainsKey("websocketRepair")&&Convert.ToBoolean(options["websocketRepair"]))Stages.Add(new InitializationStage("websocket","WebSocket 线路修复"));
     }
     internal void Apply(Dictionary<string,object> record){
         var id=Core.Value(record,"stageId","");var stage=Stages.FirstOrDefault(x=>x.Id==id);

@@ -22,11 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.0.md">v2.3.0</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.1.md">v2.3.1</a></sub></p>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> **v2.3.0：全新界面，更好看，也更好用。** 初始化进度一目了然，菜单更好找，滚动更顺滑。已有版本可在工具内检查更新。[看看这次更新了什么](docs/Release-2.3.0.md)
+> **v2.3.1：Dot 连接更顺畅，进度看得更清楚。** 新增 WebSocket 线路修复与分项检查；支持共用或独立代理，Logo 更清晰，加载进度真正动起来。[看看这次更新了什么](docs/Release-2.3.1.md)
 
 > **你的对话和项目文件会保留。** 完整初始化会先备份，再重建用户配置和全局 `AGENTS.md`，并按选择修改代理、目录与 CLI 设置。旧的全局自定义规则保存在备份中；只需要排查某个问题时，无需完整初始化。
 
@@ -37,6 +37,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
 | **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「连接与修复」→「浏览器」，检查组件、代理和环境继承，按需修复并在重启后测试。[查看浏览器连接指南](docs/BrowserConnection.md) |
+| **🔌 Codex 的 Dot / Remote 一直连接中，WebSocket 连不上？** | v2.3.1 提供「WebSocket 线路修复」，分开检查代理、持续 WS 通信和真实远程连接；无需把代理改写成 ws://。[查看使用方法与验证范围](docs/WebSocket.md) |
 | **🖥️ Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
 | **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「连接与修复」→「电脑操作」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
@@ -47,7 +48,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
 | **⌨️ 能用命令完成，却经常要你配合点界面？** | v2.2.9 的「优先使用命令行」引导 Codex 在授权范围内用 CLI 或 PowerShell 直接执行并核验。[查看初始化选项](docs/Settings.md#优先使用命令行) |
 
-组件检查通过或补丁准备完成，只说明对应检查或准备步骤成功。浏览器需要重启 Codex 后实际打开并读取测试页面；账号权限、服务端和代理服务本身的问题也需分别排查。本版本开发时未完成真实 Chrome 连接验收，使用后请按步骤自行验证。[查看验证边界](docs/BrowserConnection.md#本次验证边界)
+组件检查通过或补丁准备完成，只说明对应检查或准备步骤成功。浏览器需要重启 Codex 后实际打开并读取测试页面；账号权限、服务端和代理服务本身的问题也需分别排查。本版已在本机通过真实 Chrome 测试页及 Dot 原生只读验收，其他环境仍请按步骤验证。[查看验证边界](docs/BrowserConnection.md#本次验证边界)
 
 工作规则用于引导 Codex 的行为，实际效果还会受到具体任务、用户指令和项目规则的影响。
 
@@ -80,18 +81,20 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 </details>
 
-## v2.3.0 界面预览
+## v2.3.1 界面预览
 
 全新的雾夜蓝深色界面，常用功能按用途分好，想找什么更直观。初始化时能看清当前步骤和完成进度，需要排查时再展开日志。页面切换、弹窗和滚动也更自然流畅。
 
-![Codex Init Kit 2.3.0 概览，雾夜蓝界面与分类导航](assets/screenshots/overview.png)
+![Codex Init Kit 2.3.1 概览，雾夜蓝界面与分类导航](assets/screenshots/v2.3.1/overview.png)
 
-![Codex 初始化阶段时间线与真实步骤进度](assets/screenshots/initialization-progress.png)
+![WebSocket 线路检查、代理设置与远程连接分项状态](assets/screenshots/v2.3.1/connection-check.png)
+
+![Codex 初始化阶段时间线与真实步骤进度](assets/screenshots/v2.3.1/initialization-progress.png)
 
 <table>
   <tr>
-    <td width="50%"><strong>初始化</strong><br>按需要选择代理、功能、CLI 和模型。<br><a href="assets/screenshots/settings.png"><img src="assets/screenshots/settings-scroll.png" alt="Codex Init Kit 初始化界面，显示功能选择和模型设置"></a></td>
-    <td width="50%"><strong>浏览器连接</strong><br>检查环境，修复后再验证真实连接。<br><a href="assets/screenshots/browser-connection.png"><img src="assets/screenshots/browser-connection.png" alt="Codex 浏览器连接页面，显示代理设置、修复操作和分项验证"></a></td>
+    <td width="50%"><strong>初始化</strong><br>按需要选择代理、功能、CLI 和模型。<br><a href="assets/screenshots/v2.3.1/settings.png"><img src="assets/screenshots/v2.3.1/settings-scroll.png" alt="Codex Init Kit 初始化界面，显示功能选择和模型设置"></a></td>
+    <td width="50%"><strong>浏览器连接</strong><br>检查环境，修复后再验证真实连接。<br><a href="assets/screenshots/v2.3.1/browser-connection.png"><img src="assets/screenshots/v2.3.1/browser-connection.png" alt="Codex 浏览器连接页面，显示代理设置、修复操作和分项验证"></a></td>
   </tr>
 </table>
 
@@ -100,15 +103,15 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 **CLI 管理**：切换 CLI，分别更新两类组件，并管理启动保护。
 
-![Codex Init Kit 维护恢复页面](assets/screenshots/maintenance.png)
+![Codex Init Kit 维护恢复页面](assets/screenshots/v2.3.1/maintenance.png)
 
 **更新与下载**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
 
-![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/updates.png)
+![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/v2.3.1/updates.png)
 
 **日志**：中文说明与原始输出可切换，按需复制和查看。
 
-![Codex Init Kit 中文日志页面](assets/screenshots/logs.png)
+![Codex Init Kit 中文日志页面](assets/screenshots/v2.3.1/logs.png)
 
 </details>
 

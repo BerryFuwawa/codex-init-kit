@@ -11,8 +11,26 @@ using System.Windows.Media.Imaging;
 namespace CodexKit {
 public static class Program {
     [STAThread] public static int Main(string[] args) {
+        if(args.Length==2&&args[0]=="--verify-backend220"){
+            var verifyRoot=Path.Combine(Path.GetFullPath(args[1]),"payload-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(Path.GetDirectoryName(verifyRoot));try{Core.Extract(verifyRoot);var ps=Path.Combine(Environment.SystemDirectory,"WindowsPowerShell","v1.0","powershell.exe");var command=VerificationScript(verifyRoot,"$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);try{& '"+Path.Combine(verifyRoot,"Backend220.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+verifyRoot.Replace("'","''")+"';exit 0}catch{$_|Out-String|Write-Output;exit 1}");var info=new ProcessStartInfo(ps,command){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};info.EnvironmentVariables["CODEX_HOME"]=Path.Combine(verifyRoot,"isolated-home");using(var process=Process.Start(info)){var output=ReadProcessOutput(process);File.WriteAllText(Path.Combine(args[1],"result.json"),Core.Json.Serialize(new {passed=process.ExitCode==0,exitCode=process.ExitCode,output=output}));return process.ExitCode;}}catch(Exception ex){File.WriteAllText(Path.Combine(args[1],"result.json"),Core.Json.Serialize(new {passed=false,error=ex.ToString()}));return 1;}
+        }
+        if(args.Length==2&&args[0]=="--verify-ui"){
+            Directory.CreateDirectory(args[1]);var uiRoot=Path.Combine(args[1],"run-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(uiRoot);try{var uiApp=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};var uiWindow=new MainWindow(true);uiWindow.VerifyPages();uiWindow.Close();CurrentModelSettingsTests.Run(uiRoot);CurrentModelSettingsTests.VerifyWindow(uiRoot);ProxyPortSettingsTests.Run(uiRoot);ProxyPortSettingsTests.VerifyWindow(uiRoot);ScrollingTests.Run();InitializationFlowTests.Run();InitializationProgressTests.Run();WebSocketTests.VerifyWindow();File.WriteAllText(Path.Combine(args[1],"result.json"),Core.Json.Serialize(new {passed=true}));return 0;}catch(Exception ex){File.WriteAllText(Path.Combine(args[1],"result.json"),Core.Json.Serialize(new {passed=false,error=ex.ToString()}));return 1;}
+        }
+        if(args.Length==2&&args[0]=="--verify-ws"){
+            var target=Path.GetFullPath(args[1]);Directory.CreateDirectory(target);try{WebSocketTests.Run(target);var testApp=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};WebSocketTests.Visual(target);WebSocketTests.RecordInitialization(target);File.WriteAllText(Path.Combine(target,"result.json"),Core.Json.Serialize(new {passed=true}));return 0;}catch(Exception ex){File.WriteAllText(Path.Combine(target,"result.json"),Core.Json.Serialize(new {passed=false,error=ex.ToString()}));return 1;}
+        }
+        if(args.Length==3&&args[0]=="--inspect-ws-app"){
+            try{var inspectedApp=args[1]=="auto"?WebSocketApp.Discover():WebSocketApp.Inspect(args[1]);File.WriteAllText(args[2],Core.Json.Serialize(new {passed=true,version=inspectedApp.Version,executable=inspectedApp.Executable,dotHost=inspectedApp.DotHost}));return 0;}catch(Exception ex){File.WriteAllText(args[2],Core.Json.Serialize(new {passed=false,error=ex.Message}));return 1;}
+        }
+        if(args.Length==1&&args[0]=="--ws-fixture-owner"){System.Threading.Thread.Sleep(2500);return 0;}
+        if(args.Length==1&&args[0]=="--ws-relay")return WebSocketStartup.RelayMain();
+        if(args.Length==4&&args[0]=="--ws-prepare"){
+            try{var options=Core.NormalizeOptions(Core.ReadJson(Encoding.UTF8.GetString(Convert.FromBase64String(args[1]))));var settings=WebSocketSettings.FromOptions(options,Int32.Parse(args[2]));WebSocketStartup.Prepare(settings,args[3],Console.WriteLine);return 0;}catch(Exception ex){Console.WriteLine("WebSocket 线路修复未完成："+ex.Message);return 1;}
+        }
         if(args.Length>0 && args[0]=="--worker") return Core.Worker(args);
         if(args.Length==2 && args[0]=="--verify") return Verify(args[1]);
+        if(args.Length==2 && args[0]=="--verify-desktop") return Verify(args[1],true);
         if(args.Length==2 && args[0]=="--status-json") return Status(args[1]);
         if(args.Length==2 && args[0]=="--render-preview") {var previewApp=new Application();var previewWindow=new MainWindow(true);previewWindow.RenderPages(Path.GetFullPath(args[1]));previewWindow.Close();return 0;}
         if(args.Length==2 && args[0]=="--check-update-json") {
@@ -44,7 +62,8 @@ public static class Program {
         var stdout=process.StandardOutput.ReadToEndAsync();var stderr=process.StandardError.ReadToEndAsync();
         process.WaitForExit();return stdout.GetAwaiter().GetResult()+stderr.GetAwaiter().GetResult();
     }
-    static int Verify(string reportPath) {
+    static string VerificationScript(string directory,string text){var path=Path.Combine(directory,"verify-"+Guid.NewGuid().ToString("N")+".ps1");File.WriteAllText(path,text,new UTF8Encoding(true));return "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Core.Quote(path);}
+    static int Verify(string reportPath,bool desktopRuntimeOnly=false) {
         var checks=new Dictionary<string,object>(); var errors=new System.Collections.Generic.List<string>();
         var dir=Path.Combine(Path.GetTempPath(),"CodexKit-verify-"+Guid.NewGuid().ToString("N"));
         try {
@@ -53,44 +72,45 @@ public static class Program {
             GitHubTransportTests.Run(dir);checks["github_mirror_transport"]=true;
             CurrentModelSettingsTests.Run(dir);checks["current_model_settings"]=true;
             ProxyPortSettingsTests.Run(dir);checks["proxy_port_settings"]=true;
+            WebSocketTests.Run(dir);checks["websocket_settings_and_independent_routing"]=true;
             var logo=Brand.Logo();if(logo.PixelWidth!=512||logo.PixelHeight!=512)throw new InvalidDataException("Invalid logo resource");checks["logo_resource"]=true;
             foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","ConfigCompatibility.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","InitConfigAdapter.Tests.ps1","Backend220.ps1","Backend.Tests.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","RtkRules.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}){if(new FileInfo(Path.Combine(dir,name)).Length<100)throw new InvalidDataException("Empty payload: "+name);checks[name]=new{bytes=new FileInfo(Path.Combine(dir,name)).Length,sha256=Core.Hash(Path.Combine(dir,name))};}
             var ps=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe");
             var script="$e=$null;$t=$null;[System.Management.Automation.Language.Parser]::ParseFile('"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"',[ref]$t,[ref]$e)|Out-Null;if($e.Count){$e|Out-String|Write-Output;exit 1};exit 0";
-            var info=new ProcessStartInfo(ps,"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(script))){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
+            var info=new ProcessStartInfo(ps,VerificationScript(dir,script)){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
             info.StandardOutputEncoding=Encoding.UTF8;info.StandardErrorEncoding=Encoding.UTF8;
             var verificationHome=Path.Combine(dir,"isolated-codex-home");
             Directory.CreateDirectory(verificationHome);
             info.EnvironmentVariables["CODEX_HOME"]=verificationHome;
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_syntax"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
-            var testScript="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"' -BackendPath '"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
-            info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(testScript));
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_syntax"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
+            var testScript="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"' -BackendPath '"+Path.Combine(dir,"Backend.ps1").Replace("'","''")+"'"+(desktopRuntimeOnly?" -DesktopRuntimeOnly":"")+";exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
+            info.Arguments=VerificationScript(dir,testScript);
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["backend_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             var test220="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"Backend220.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
-            info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(test220));
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_and_update_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            info.Arguments=VerificationScript(dir,test220);
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_and_update_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Core.Quote(Path.Combine(dir,"DesktopUpdate225.Tests.ps1"))+" -PayloadRoot "+Core.Quote(dir);
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["desktop_update_permissions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["desktop_update_permissions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Core.Quote(Path.Combine(dir,"InitializationPreflight.Tests.ps1"))+" -PayloadRoot "+Core.Quote(dir);
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["initialization_preflight"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["initialization_preflight"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "+Core.Quote(Path.Combine(dir,"InitConfigAdapter.Tests.ps1"))+" -PayloadRoot "+Core.Quote(dir);
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["init_config_adapter"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["init_config_adapter"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             var startTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"BrowserStartup.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
-            info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(startTests));
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_startup_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            info.Arguments=VerificationScript(dir,startTests);
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["browser_startup_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             var coreTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"DesktopCoreRecovery.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
-            info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(coreTests));
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["desktop_core_recovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            info.Arguments=VerificationScript(dir,coreTests);
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["desktop_core_recovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             var discoveryTests="$ErrorActionPreference='Stop';try { & '"+Path.Combine(dir,"RuntimeDiscovery.Tests.ps1").Replace("'","''")+"' -PayloadRoot '"+dir.Replace("'","''")+"';exit 0 } catch { $_|Out-String|Write-Output;exit 1 }";
-            info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(discoveryTests));
-            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["runtime_discovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add(output);}
+            info.Arguments=VerificationScript(dir,discoveryTests);
+            using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);checks["runtime_discovery_regressions"]=proc.ExitCode==0;if(proc.ExitCode!=0)errors.Add("后台验证退出码："+proc.ExitCode+"\n"+output);}
             var target=new Dictionary<string,object>{{"packageFullName","OpenAI.Codex_26.1.0.0_x64__2p2nqsd0c76g0"},{"packageFamilyName","OpenAI.Codex_2p2nqsd0c76g0"},{"appId","App"}};if(!Core.BrowserLaunchUri(target,target).EndsWith("!App"))throw new InvalidDataException("Official app target failed");var changed=new Dictionary<string,object>(target);changed["packageFullName"]="OpenAI.Codex_26.2.0.0_x64__2p2nqsd0c76g0";bool raceRejected=false;try{Core.BrowserLaunchUri(target,changed);}catch(InvalidDataException){raceRejected=true;}if(!raceRejected)throw new InvalidDataException("App version race accepted");checks["browser_start_target_validation"]=true;
             foreach(var field in new[]{"appId","packageFamilyName","packageFullName"}){var bad=new Dictionary<string,object>(target);bad[field]="invalid & app";bool rejected=false;try{Core.BrowserLaunchUri(bad,bad);}catch(InvalidDataException){rejected=true;}if(!rejected)throw new InvalidDataException("Invalid application target accepted: "+field);}
             var catalog=ModelCatalog.Parse("{\"models\":[{\"slug\":\"fixture-model\",\"default_reasoning_level\":\"high\",\"supported_reasoning_levels\":[{\"effort\":\"high\"},{\"effort\":\"low\"}]}]}");
             if(!catalog.Check("fixture-model","high").Contains("核对通过")||catalog.Models["fixture-model"].Efforts[0]!="high")throw new InvalidDataException("Model catalog validation or ordering failed");
             foreach(var bad in new[]{"display name","bad;model","fixture-model\n"})if(ModelCatalog.ValidId(bad))throw new InvalidDataException("Unsafe model catalog ID accepted");
             bool unsupported=false;try{catalog.Check("fixture-model","ultra");}catch(InvalidOperationException){unsupported=true;}if(!unsupported)throw new InvalidDataException("Unsupported model effort accepted");unsupported=false;try{catalog.Check("vendor/custom:v1","max");}catch(InvalidOperationException){unsupported=true;}if(!unsupported)throw new InvalidDataException("Unlisted model accepted");var preset=ModelCatalog.Preset();if(preset.Models.Count!=9||!preset.Models.ContainsKey("gpt-6.1-terra")||!preset.Models["gpt-6.1-terra"].Efforts.Contains("max")||preset.Models["gpt-5.6-luna"].Efforts.Contains("ultra"))throw new InvalidDataException("Preset model choices changed");checks["model_catalog_validation"]=true;
-            var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown}; var window=new MainWindow(true);window.VerifyPages(); checks["pages_and_navigation"]=true;CurrentModelSettingsTests.VerifyWindow(dir);checks["model_settings_startup"]=true;ProxyPortSettingsTests.VerifyWindow(dir);checks["proxy_port_selection_and_startup"]=true;ScrollingTests.Run();checks["smooth_scrolling"]=true;checks["update_page_scroll_stability"]=true;InitializationFlowTests.Run();checks["initialization_navigation_and_dialogs"]=true;InitializationProgressTests.Run();checks["initialization_stage_progress_and_motion"]=true;DiagnosticAdvice.Verify();checks["diagnostic_advice"]=true; window.Close();
+            var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};WebSocketTests.Visual(dir);checks["vector_logo_spinner_and_dpi"]=true; var window=new MainWindow(true);window.VerifyPages(); checks["pages_and_navigation"]=true;CurrentModelSettingsTests.VerifyWindow(dir);checks["model_settings_startup"]=true;ProxyPortSettingsTests.VerifyWindow(dir);checks["proxy_port_selection_and_startup"]=true;ScrollingTests.Run();checks["smooth_scrolling"]=true;checks["update_page_scroll_stability"]=true;InitializationFlowTests.Run();checks["initialization_navigation_and_dialogs"]=true;InitializationProgressTests.Run();checks["initialization_stage_progress_and_motion"]=true;WebSocketTests.VerifyWindow();checks["websocket_ui_and_shared_settings"]=true;DiagnosticAdvice.Verify();checks["diagnostic_advice"]=true; window.Close();
             checks["worker_rejects_invalid_operation"]=Core.Worker(new[]{"--worker","invalid",Guid.NewGuid().ToString("N"),"D","10808","0",Core.Sid})==64;
             checks["worker_rejects_invalid_drive"]=Core.Worker(new[]{"--worker","status",Guid.NewGuid().ToString("N"),"&","10808","0",Core.Sid})==64;
             var options=Core.NormalizeOptions(new Dictionary<string,object>{{"folderManagement",false},{"antiOverDefense",false},{"subagents",false},{"cuaRepair",false},{"parentModel","custom-parent"},{"childModel","custom-child"}});if((bool)options["antiOverDefense"]||(bool)options["folderManagement"]||(bool)options["subagents"]||(bool)options["cuaRepair"]||Convert.ToString(options["parentModel"])!="custom-parent")throw new InvalidDataException("Setup options were not preserved");checks["setup_options"]=true;
@@ -117,7 +137,7 @@ public static class Program {
                 if(scenario=="restart_failed")replacement=replacement.Replace("Start-Process -FilePath $target -WorkingDirectory ([IO.Path]::GetDirectoryName($target)) | Out-Null;","throw 'Simulated restart failure';");
                 if(scenario=="cleanup_locked")replacement=replacement.Replace("Remove-UpdateFile $backup","throw [UnauthorizedAccessException]::new('模拟备份文件被占用')");
                 if(scenario=="recovery_retained")replacement=replacement.Replace("$replaced=$true;","$replaced=$true;[IO.File]::WriteAllText($target,'changed');");
-                info.Arguments="-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "+Convert.ToBase64String(Encoding.Unicode.GetBytes(replacement));
+                info.Arguments=VerificationScript(dir,replacement);
                 using(var proc=Process.Start(info)){var output=ReadProcessOutput(proc);if((proc.ExitCode==0)!=success)throw new IOException("Updater exit status: "+scenario+" "+output);}
                 var expected=success?"new":scenario=="target_changed"||scenario=="recovery_retained"?"changed":"old";
                 if(File.ReadAllText(current)!=expected||File.Exists(next)||Directory.GetFiles(fixture,"*.tmp").Length!=0||!File.Exists(updateLog))throw new IOException("Updater regression: "+scenario);
@@ -135,7 +155,7 @@ public static class Program {
             }
         }catch(Exception ex){errors.Add(ex.ToString());}
         finally {if(Directory.Exists(dir))Directory.Delete(dir,true);}
-        var report=new Dictionary<string,object>{{"version",Core.Version},{"passed",errors.Count==0},{"checks",checks},{"errors",errors.ToArray()}};
+        var report=new Dictionary<string,object>{{"version",Core.Version},{"scope",desktopRuntimeOnly?"desktop-exe":"all-components"},{"standaloneRuntimeExecuted",!desktopRuntimeOnly},{"passed",errors.Count==0},{"checks",checks},{"errors",errors.ToArray()}};
         File.WriteAllText(Path.GetFullPath(reportPath),Core.Json.Serialize(report),new UTF8Encoding(false));return errors.Count==0?0:1;
     }
 }

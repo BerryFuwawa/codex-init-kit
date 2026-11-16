@@ -2,7 +2,8 @@
 # mutating init, CUA repair, Guard update, or process termination operation.
 param(
     [string]$PayloadRoot,
-    [string]$BackendPath
+    [string]$BackendPath,
+    [switch]$DesktopRuntimeOnly
 )
 # Backend.ps1 has matching parameter names. Preserve the test harness values
 # before dot-sourcing because its parameter binding would otherwise overwrite
@@ -840,12 +841,29 @@ END CODEX LUNA PROMPT V1.3
         CODEX_TEST_HOME = $writeHomePath; CODEX_TEST_AGENTS = $writeAgentsPath
         CODEX_TEST_RTK = $writeRtkPath; CODEX_TEST_FOLDER = '1'; CODEX_TEST_SUBAGENTS = '1'
     }
+    if($DesktopRuntimeOnly){
+        $desktopWrite=[regex]::Match($enabledFeatureText,'(?ms)^:WRITE_AGENTS_RULES\r?\n.*?(?=^:REBUILD_AGENTS_FILE\r?$)').Value
+        $desktopRebuild=[regex]::Match($enabledFeatureText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
+        Assert ($desktopWrite.Contains('-File "') -and $desktopRebuild.Contains('-File "') -and ($desktopWrite+$desktopRebuild) -notmatch '-EncodedCommand') 'Desktop rules execution did not use readable files.'
+        $desktopFixture=Join-Path $writeFixtureRoot 'desktop-write-agents-flow.cmd'
+        [IO.File]::WriteAllText($desktopFixture,$writeHeader+"`r`n"+$desktopWrite+$desktopRebuild,$script:InputEncoding)
+        $desktopResult=Invoke-ChildProcess $desktopFixture @() $writeFixtureRoot $writeEnvironment $script:InputEncoding
+        Assert ($desktopResult.ExitCode -eq 0) ('Desktop WRITE_AGENTS_RULES failed: '+$desktopResult.Error)
+        $desktopExpected=(Read-AdapterWorkRules $enabledFeatureAdapter).TrimEnd([char[]]@([char]13,[char]10))+"`n"
+        $desktopActual=[IO.File]::ReadAllText($writeAgentsPath,[Text.Encoding]::UTF8)
+        if($desktopActual -ne $desktopExpected){
+            $difference=0;while($difference -lt [Math]::Min($desktopActual.Length,$desktopExpected.Length) -and $desktopActual[$difference] -ceq $desktopExpected[$difference]){$difference++}
+            throw ('Desktop rule mismatch at '+$difference+'; actual length '+$desktopActual.Length+' expected '+$desktopExpected.Length+'; actual '+($desktopActual.Substring([Math]::Max(0,$difference-20),[Math]::Min(100,$desktopActual.Length-[Math]::Max(0,$difference-20)))|ConvertTo-Json -Compress)+'; expected '+($desktopExpected.Substring([Math]::Max(0,$difference-20),[Math]::Min(100,$desktopExpected.Length-[Math]::Max(0,$difference-20)))|ConvertTo-Json -Compress))
+        }
+        Write-Output 'PASS desktop WRITE_AGENTS_RULES through actual adapter; standalone encoded runtime not executed.'
+    }else{
     $writeResult = Invoke-ChildProcess $writeFixturePath @() $writeFixtureRoot $writeEnvironment $script:InputEncoding
     Assert ($writeResult.ExitCode -eq 0) ('WRITE_AGENTS_RULES base-only fixture failed: ' + $writeResult.Error)
     $writeResultText = [IO.File]::ReadAllText($writeAgentsPath,[Text.Encoding]::UTF8)
     $expectedWriteText = '@' + $writeRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
     Assert ($writeResultText -eq $expectedWriteText) ('WRITE_AGENTS_RULES output differs. Actual: '+$writeResultText+' Expected: '+$expectedWriteText)
     Assert ($writeResultText -notmatch 'BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT PROMPT|old global content') 'WRITE_AGENTS_RULES installed or retained optional/legacy blocks during the base stage.'
+    }
 
     # The real backup label preserves exact bytes, including a UTF-8 BOM, and
     # the FULL_INIT gate stops before rebuilding when that backup fails.
@@ -894,6 +912,7 @@ END CODEX LUNA PROMPT V1.3
         CODEX_TEST_RTK_EXE = $backupExePath; CODEX_TEST_BACKUP = $backupDir
         CODEX_TEST_RULES_B64 = $rulesB64; CODEX_TEST_HOME=$backupFixtureRoot
     }
+    if(-not $DesktopRuntimeOnly){
     $backupResult = Invoke-ChildProcess $backupFixturePath @() $backupFixtureRoot $backupEnvironment $script:InputEncoding
     Assert ($backupResult.ExitCode -eq 0) ('Actual backup/rebuild fixture failed: ' + $backupResult.Error)
     Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupDir 'AGENTS.md'))) -eq $backupAgentsBytesB64) 'BACKUP_AGENTS_AND_RTK did not preserve AGENTS.md bytes exactly.'
@@ -901,6 +920,7 @@ END CODEX LUNA PROMPT V1.3
     Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupDir 'rtk\rtk.exe'))) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($backupExePath))) 'BACKUP_AGENTS_AND_RTK did not preserve rtk.exe bytes exactly.'
     $expectedBackupRebuildText = '@' + $backupRtkPath + "`n`n" + $baselineRules.TrimEnd([char[]]@([char]13,[char]10)) + "`n"
     Assert ([IO.File]::ReadAllText($backupAgentsPath,[Text.Encoding]::UTF8) -eq $expectedBackupRebuildText) 'FULL_INIT did not rebuild AGENTS.md after a successful backup.'
+    }else{Write-Output 'Standalone encoded backup/rebuild runtime not executed; desktop selected-rule backups follow.'}
 
     # Run the actual backup and base-rebuild labels with the adapter's selected
     # rules. Each initialization gets a new backup session, as in production.
