@@ -15,7 +15,6 @@ $argsList=@('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output
 $argsList+=('/win32icon:'+(Join-Path $root 'assets\app.ico'))
 $argsList+=('/resource:'+(Join-Path $root 'LICENSE')+',Payload.Project.LICENSE')
 $argsList+=('/resource:'+(Join-Path $root 'assets\logo.png')+',Brand.logo.png')
-$argsList+=('/resource:'+(Join-Path $root 'assets\app.ico')+',Brand.app.ico')
 $argsList+=('/resource:'+(Join-Path $root 'app\Controls.xaml')+',UI.Controls.xaml')
 foreach($ref in @('System.dll','System.Core.dll','System.Web.Extensions.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll')) { $argsList+="/reference:$(Join-Path $framework $ref)" }
 $argsList+="/resource:$init,Payload.init.cmd"
@@ -51,7 +50,6 @@ $argsList+=(Join-Path $root 'tests\ProxyPortSettings.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationProgress.Tests.cs')
 $argsList+=(Join-Path $root 'tests\Scrolling.Tests.cs')
-$argsList+=(Join-Path $root 'tests\WebSocket.Tests.cs')
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

@@ -34,7 +34,7 @@
         <Border x:Name="Box" Width="20" Height="20" CornerRadius="5" Background="#1C2937" BorderBrush="#AFBED0" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
           <Path x:Name="Tick" Data="M 4,9 L 8,13 L 15,5" Stroke="#172535" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
         </Border>
-        <TextBlock Grid.Column="1" Text="{TemplateBinding Content}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+        <ContentPresenter Grid.Column="1" VerticalAlignment="Center" RecognizesAccessKey="True"/>
       </Grid>
       <ControlTemplate.Triggers>
         <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#9DAFC4"/><Setter TargetName="Box" Property="BorderBrush" Value="#9DAFC4"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
