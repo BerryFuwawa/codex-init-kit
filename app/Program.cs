@@ -12,6 +12,7 @@ namespace CodexKit {
 public static class Program {
     [STAThread] public static int Main(string[] args) {
         Native.NativeRuntime.Configure();
+        if(args.Length==3&&args[0]=="--register-native-guard")return NativeTaskRegistration.Complete(args[1],args[2]);
         if(args.Length==2&&args[0]=="--verify-native-desktop-readonly")return NativeDesktopTests.ReadOnlyInspection(args[1]);
         if(args.Length==2&&args[0]=="--verify-native-desktop")return NativeDesktopTests.Run(args[1]);
         if(args.Length==1&&args[0]=="--native-guard")return NativeDesktopWorker.Maintain();

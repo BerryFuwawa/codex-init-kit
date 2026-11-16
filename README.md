@@ -172,3 +172,5 @@ Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。
 本地 2.3.1.2 修复了关闭应用时偶发“找不到”、初始化无法继续的问题。[修复与验证说明](docs/NativeProcessCloseFix.md)
 
 本地 2.3.1.3 修复了复制日志弹窗、RTK 已有配置被误判，以及启动保护 XML 和中文输出编码问题。[修复与验证说明](docs/NativeIntegrationFix.md)
+
+本地 2.3.1.4 在更新独立 CLI 前先核对版本，已最新不再重复下载；修复启动保护任务访问被拒绝，按需请求一次管理员授权。[修复与验证说明](docs/NativeUpdateTaskFix.md)
