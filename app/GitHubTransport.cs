@@ -168,6 +168,7 @@ public sealed class GitHubTransfer {
             }
             validate(path);Write("GitHub 下载及校验完成："+new Uri(url).Host);return null;
         }catch(Exception ex){
+            if(ex is UnauthorizedAccessException||ex is FileNotFoundException||ex is DirectoryNotFoundException)throw new IOException("本地下载文件无法读取或写入，已停止本次下载："+ex.Message,ex);
             if(File.Exists(path))File.Delete(path);
             var failure=Failure(ex);
             Write("当前下载未完成："+new Uri(url).Host+" · "+failure+"。如有下一候选，将切换。");

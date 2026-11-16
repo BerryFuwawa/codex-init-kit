@@ -17,7 +17,7 @@ $argsList+=('/resource:'+(Join-Path $root 'LICENSE')+',Payload.Project.LICENSE')
 $argsList+=('/resource:'+(Join-Path $root 'assets\logo.png')+',Brand.logo.png')
 $argsList+=('/resource:'+(Join-Path $root 'assets\app.ico')+',Brand.app.ico')
 $argsList+=('/resource:'+(Join-Path $root 'app\Controls.xaml')+',UI.Controls.xaml')
-foreach($ref in @('System.dll','System.Core.dll','System.Web.Extensions.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll')) { $argsList+="/reference:$(Join-Path $framework $ref)" }
+foreach($ref in @('System.dll','System.Management.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll','System.Core.dll','System.Web.Extensions.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll')) { $argsList+="/reference:$(Join-Path $framework $ref)" }
 $argsList+="/resource:$init,Payload.init.cmd"
 $argsList+="/resource:$guard,Payload.guard.cmd"
 $argsList+="/resource:$(Join-Path $scriptRoot 'Codex_CUA_Repair.cmd'),Payload.cua.cmd"
@@ -52,6 +52,8 @@ $argsList+=(Join-Path $root 'tests\InitializationFlow.Tests.cs')
 $argsList+=(Join-Path $root 'tests\InitializationProgress.Tests.cs')
 $argsList+=(Join-Path $root 'tests\Scrolling.Tests.cs')
 $argsList+=(Join-Path $root 'tests\WebSocket.Tests.cs')
+$argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'native') -Filter '*.cs' | ForEach-Object FullName)
+foreach($data in Get-ChildItem -LiteralPath (Join-Path $root 'native\Data') -File){$argsList+=('/resource:'+$data.FullName+',Native.'+$data.Name)}
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

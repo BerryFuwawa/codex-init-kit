@@ -1,0 +1,4 @@
+// Codex Init Kit managed browser proxy v1. Original import and launch are retained.
+const codexInitKitBrowserProxy = __VALUES__;
+Object.assign(process.env, codexInitKitBrowserProxy);
+process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST = [...new Set((process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST || "").split(",").filter(Boolean).concat(Object.keys(codexInitKitBrowserProxy)))].join(",");

@@ -1,0 +1,50 @@
+using File=CodexKit.Native.NativeFile;
+using Directory=CodexKit.Native.NativeDirectory;
+using FileInfo=CodexKit.Native.NativeFileInfo;
+using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Text;using System.Threading;
+namespace CodexKit.Native {
+public sealed class NativeInitializer {
+    readonly NativePaths paths;readonly NativeServices services;
+    public NativeInitializer(NativePaths p,NativeServices s){paths=p;services=s;}
+    OfficialDesktop DesktopOptional(){try{return services.Desktop.Discover();}catch(FileNotFoundException){return null;}}
+    public object Status(){paths.Validate();var app=DesktopOptional();return new{version=NativeData.Version,home=paths.Home,config=File.Exists(paths.Config),proxy=File.Exists(paths.Env)?NativeData.Read(paths.Env):null,agents=File.Exists(paths.Agents),rtk=new NativeRtk(paths,services).Find(),desktop=app==null?null:app.FullName,processes=services.Processes.List(paths,app),userCli=services.Registry.Get("CODEX_CLI_PATH"),userHost=services.Registry.Get("CODEX_CODE_MODE_HOST_PATH"),machineCli=services.Registry.GetMachine("CODEX_CLI_PATH"),machineHost=services.Registry.GetMachine("CODEX_CODE_MODE_HOST_PATH")};}
+    public object Preflight(){paths.Validate();var app=DesktopOptional();return new{home=paths.Home,desktop=app==null?null:app.FullName,processes=services.Processes.List(paths,app)};}
+    public static string Config(NativePaths p,NativeOptions o){var lines=new List<string>{"# Codex initialization defaults","model = "+NativeData.Json.Serialize(o.ParentModel),"model_reasoning_effort = "+NativeData.Json.Serialize(o.ParentEffort),"","[desktop]","enabled-reasoning-efforts = [\"low\", \"medium\", \"high\", \"xhigh\", \"max\", \"ultra\"]"};if(o.Folder)lines.Add("projectlessWorkspaceRoot = "+NativeData.Json.Serialize(Path.Combine(p.Workspace,"Conversations")));lines.AddRange(new[]{"","[features]","context_management.experimental_mode = true","multi_agent = "+(o.Subagents?"true":"false")});if(o.Subagents)lines.AddRange(new[]{"","[features.multi_agent_v2]","enabled = false","","[agents]","enabled = true","max_concurrent_threads_per_session = 6","max_depth = 1"});return String.Join("\n",lines)+"\n";}
+    public static string Rules(NativePaths p,NativeOptions o){var baseRules=NativeData.Normalize(NativeData.Resource("BaseRules.md")).Replace("持续到请求的结果真正完真正完成。","持续到请求的结果真正完成。").TrimEnd();var result="@"+p.RtkDoc+"\n\n"+baseRules+"\n";if(o.Folder){var folder=NativeData.Normalize(NativeData.Resource("FolderRules.md")).Trim();var original="<SELECTED_DRIVE>:\\Codex";if(!folder.Contains(original))throw new InvalidDataException("目录规则模板无法识别。");result+="\n"+folder.Replace(original,p.Workspace.TrimEnd('\\','/'))+"\n";}if(o.Subagents)result+="\n"+NativeData.Normalize(NativeData.Resource("SubagentRules.md")).Trim().Replace("model = gpt-6.1-sol","model = "+o.ChildModel).Replace("model_reasoning_effort = high","model_reasoning_effort = "+o.ChildEffort)+"\n";return result;}
+    public static string ProxyText(NativeOptions o){return o.Proxy?"HTTP_PROXY="+o.ProxyUrl+"\nHTTPS_PROXY="+o.ProxyUrl+"\nNO_PROXY=localhost,127.0.0.1,::1\n":"NO_PROXY=localhost,127.0.0.1,::1\n";}
+    void EnsureNoRunning(OfficialDesktop app){if(services.Processes.List(paths,app).Count>0)throw new InvalidOperationException("修改前应用重新启动或仍在运行，已停止。");}
+    public NativeResult Run(string action,NativeOptions options,string sessionRoot){
+        var result=new NativeResult{state="failed"};if(!options.Confirm){result.state="cancelled";result.Add("确认","cancelled","未确认，不修改配置。");return result;}
+        if(action!="init"){options.Folder=false;options.Subagents=false;options.Cua=false;}
+        if(action=="rollback")paths.Validate();else options.Validate(paths);bool initialized=false;NativeSession session=null;OfficialDesktop app=null;
+        string mutexName="Local\\CodexInitNative-"+System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+        using(var mutex=new Mutex(false,mutexName)){bool locked=false;try{
+            try{locked=mutex.WaitOne(0);}catch(AbandonedMutexException){locked=true;}if(!locked)throw new InvalidOperationException("另一个原生初始化操作正在运行。");
+            app=DesktopOptional();NativeProcessWorkflow.EnsureStopped(paths,app,services.Processes,options.AllowClose,options.ApprovedProcesses,services.Log);EnsureNoRunning(app);result.Add("前置检查","complete","应用已退出，初始化目标已确认。");
+            if(action=="rollback"){
+                var root=sessionRoot??NativeSession.Latest(paths);session=NativeSession.Load(root,paths);EnsureNoRunning(app);session.Restore(services.Registry);result.session=root;result.Add("回滚","complete","原文件字节、不存在状态与已记录用户环境已恢复；CUA 和已创建目录不在此回滚范围。");result.state="complete";WriteResult(result);return result;
+            }
+            bool full=action!="proxy";if(action!="init"&&action!="reset"&&action!="proxy")throw new ArgumentException("不支持的初始化操作。");
+            if(full&&app==null)throw new FileNotFoundException("未找到官方 Codex 桌面版；尚未重建配置。");
+            session=NativeSession.Create(paths,services.Registry,full);result.session=session.root;result.Add("完整备份","complete","备份已保存："+session.root);EnsureNoRunning(app);
+            if(!full){NativeData.Write(paths.Env,ProxyText(options));if(NativeData.Read(paths.Env)!=ProxyText(options))throw new IOException("代理文件写入后校验失败。");result.Add("代理配置","complete","仅重建 .env；其他配置保留。");initialized=true;}
+            else {
+                foreach(var key in new[]{"CODEX_CLI_PATH","CODEX_CODE_MODE_HOST_PATH"})services.Registry.Set(key,new RegistryValueState{Exists=false});foreach(var name in NativeSession.LegacyNames){var file=Path.Combine(paths.LegacyCli,name);if(File.Exists(file))File.Delete(file);}
+                NativeData.Write(paths.Config,Config(paths,options));NativeData.Write(paths.Env,ProxyText(options));result.Add("配置重建","complete","配置、代理与用户运行时覆盖已处理。");
+                new NativeRtk(paths,services).Prepare(session.root);result.Add("RTK","complete","组件、匿名统计关闭和实际集成产物已验证。");EnsureNoRunning(app);
+                NativeData.Write(paths.Agents,Rules(paths,options));result.Add("全局规则","complete","全局规则已重建；原始自定义内容保留于备份。");
+                if(options.Folder){foreach(var folder in new[]{"Conversations","Projects","OUT","Temp","Shared","Archive","Config","Docs"})Directory.CreateDirectory(Path.Combine(paths.Workspace,folder));result.Add("文件夹管理","complete","仅补齐缺失目录，已绑定无项目任务目录。");}else result.Add("文件夹管理","skipped","未选择，不写目录规则。");
+                result.Add("子代理",options.Subagents?"complete":"skipped",options.Subagents?"子代理规则与 6 路线程配置已写入。":"未选择，多线程保持关闭。");
+                if(NativeData.Read(paths.Config)!=Config(paths,options)||NativeData.Read(paths.Agents)!=Rules(paths,options)||NativeData.Read(paths.Env)!=ProxyText(options))throw new IOException("初始化生成文件与所选设置不一致。");if(services.Registry.Get("CODEX_CLI_PATH").Exists||services.Registry.Get("CODEX_CODE_MODE_HOST_PATH").Exists)throw new IOException("用户运行时覆盖未清理。");initialized=true;
+                if(options.Cua){var cua=new NativeCua(paths,services).Run(true,Path.Combine(session.root,"CUA"));if(!cua.Passed)throw new IOException("CUA 校验未通过。");result.Add("CUA","complete",cua.Changed?"已修复并校验，原目录备份保留。":"现有组件完整，无需修复。");}else result.Add("CUA","skipped","未选择，不作为失败。");
+                if(File.Exists(Path.Combine(paths.Home,"AGENTS.override.md")))result.Add("规则覆盖提示","warning","检测到 AGENTS.override.md，可能覆盖全局规则；文件已保留。");
+                if(services.Registry.GetMachine("CODEX_CLI_PATH").Exists||services.Registry.GetMachine("CODEX_CODE_MODE_HOST_PATH").Exists)result.Add("机器级运行时覆盖","warning","机器级覆盖仍存在，未越权修改，请核对实际 CLI。");
+            }
+            result.state=result.steps.Any(x=>x.state=="warning")?"partial":"complete";
+        }catch(Exception ex){result.state=initialized?"partial":"failed";result.Add("未完成","failed",ex.GetType().Name+"："+ex.Message);services.Log("操作未完成："+ex.Message);}
+        finally{if(locked)mutex.ReleaseMutex();}}
+        WriteResult(result);return result;
+    }
+    static void WriteResult(NativeResult result){if(String.IsNullOrWhiteSpace(result.session))return;try{NativeData.Write(Path.Combine(result.session,"Native_Result.json"),NativeData.Json.Serialize(result));NativeData.Write(Path.Combine(result.session,"Reset_Result.txt"),"结果："+result.state+"\n"+String.Join("\n",result.steps.Select(x=>x.name+"："+x.state+" — "+x.message))+"\n");}catch(Exception ex){result.state="failed";result.Add("报告","failed","报告保存失败："+ex.Message);}}
+}
+}

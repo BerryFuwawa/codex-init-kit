@@ -164,3 +164,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\Build-Desktop.ps1
 输出为 `build\desktop\CodexInitKit.exe`。命令行验收、组件源码和构建说明见 [桌面版使用手册](docs/Desktop.md#构建与验证边界)与[脚本说明](docs/Scripts.md)。
 
 Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。
+
+## 本地原生初始化迁移
+
+独立初始化已提供 C# 原生 CLI 本地构建，包含备份回滚、RTK、CUA、进程确认和专用更新组件。此构建尚未发布，不改变当前公开版本。[功能、命令与验证边界](docs/NativeInitializer.md) · [逐项验收标准](native/验收计划.md)
