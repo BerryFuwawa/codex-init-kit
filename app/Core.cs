@@ -152,6 +152,7 @@ public static class Core {
         var json=Json.Serialize(NormalizeOptions(options));
         return Convert.ToBase64String(new UTF8Encoding(false).GetBytes(json));
     }
+    internal static bool WorkerNeedsAdmin(string operation,bool guard,Dictionary<string,object> options){var retry=Value(options,"retryStages","");return NeedsAdmin(operation)||operation=="guard-install"||operation=="initialize"&&guard&&(retry.Length==0||retry.Split(',').Contains("guard"));}
     public static int Worker(string[] args) {
         // All executable code comes from this EXE's embedded resources, never a supplied job/script path.
         if((args.Length!=7 && args.Length!=8) || args.Length<2 || !Operations.Contains(args[1])) return 64;
@@ -162,7 +163,7 @@ public static class Core {
         if(args.Length==8) { try { options=DecodeOptions(args[7]); } catch { return 64; } }
         var log=Path.Combine(Logs,args[2]+".log");
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
-        if(NeedsAdmin(args[1]) && !Admin) return 66;
+        if(WorkerNeedsAdmin(args[1],args[5]=="1",options) && !Admin) return 66;
         if(NativeDesktopWorkflow.Handles(args[1])){using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;return NativeDesktopWorker.Run(args[1],args[3],port,args[5]=="1",options,writer.WriteLine);}}
         if(args[1].StartsWith("ws-",StringComparison.Ordinal)&&(args[1]!="ws-start-info"||options==null||!Convert.ToBoolean(options["allowCloseRunningApp"]))){
             try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;Action<string> emit=value=>writer.WriteLine(value);var settings=WebSocketSettings.FromOptions(options??NormalizeOptions(null),port);Dictionary<string,object> report;
@@ -195,15 +196,16 @@ public static class Core {
     public static Process StartWorker(string operation,string id,string drive,int port,bool guard) {
         return StartWorker(operation,id,drive,port,guard,null);
     }
-    public static Process StartWorker(string operation,string id,string drive,int port,bool guard,Dictionary<string,object> options) {
+    public static Process StartWorker(string operation,string id,string drive,int port,bool guard,Dictionary<string,object> options) {return Process.Start(WorkerStartInfo(operation,id,drive,port,guard,options,Admin));}
+    internal static ProcessStartInfo WorkerStartInfo(string operation,string id,string drive,int port,bool guard,Dictionary<string,object> options,bool administrator) {
         if(!Operations.Contains(operation)) throw new ArgumentException("不支持此操作。");
         if(port<0 || port>65535) throw new ArgumentOutOfRangeException("port");
         var args="--worker "+operation+" "+id+" "+drive+" "+port+" "+(guard?"1":"0")+" "+Sid;
         if(options!=null) args+=" "+EncodeOptions(options);
         var info=new ProcessStartInfo(Exe,args);
         info.UseShellExecute=true; info.WindowStyle=ProcessWindowStyle.Hidden;
-        if(NeedsAdmin(operation) && !Admin) info.Verb="runas";
-        return Process.Start(info);
+        if(WorkerNeedsAdmin(operation,guard,options) && !administrator) info.Verb="runas";
+        return info;
     }
     public static Dictionary<string,object> ReadJson(string json) { return Json.Deserialize<Dictionary<string,object>>(json); }
     public static string Value(Dictionary<string,object> obj,string key,string fallback) { return obj!=null && obj.ContainsKey(key) && obj[key]!=null ? Convert.ToString(obj[key]) : fallback; }

@@ -6,8 +6,14 @@ internal static class NativeTaskRegistration {
     static void Release(object target){if(target!=null&&Marshal.IsComObject(target))Marshal.FinalReleaseComObject(target);}
     internal static bool IsAccessDenied(Exception error){while(error is TargetInvocationException&&error.InnerException!=null)error=error.InnerException;return error is UnauthorizedAccessException||error is COMException&&unchecked((uint)error.HResult)==0x80070005;}
     internal static string Security(string sid){var identity=new SecurityIdentifier(sid);return "O:"+identity.Value+"D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;"+identity.Value+")";}
+    internal static void GrantUserManagement(object task,string sid){
+        Call(task,"SetSecurityDescriptor",BindingFlags.InvokeMethod,Security(sid),0);
+        var actual=new System.Security.AccessControl.RawSecurityDescriptor(Convert.ToString(Call(task,"GetSecurityDescriptor",BindingFlags.InvokeMethod,4)));var identity=new SecurityIdentifier(sid);bool allowed=false;
+        if(actual.DiscretionaryAcl!=null)foreach(System.Security.AccessControl.GenericAce item in actual.DiscretionaryAcl){var ace=item as System.Security.AccessControl.CommonAce;if(ace!=null&&ace.SecurityIdentifier.Equals(identity)&&ace.AceQualifier==System.Security.AccessControl.AceQualifier.AccessAllowed&&(ace.AccessMask&0x1f01ff)==0x1f01ff)allowed=true;}
+        if(!allowed)throw new IOException("启动保护任务已写入，但当前用户的管理权限尚未确认；请单独重试启动保护。");
+    }
     internal static void Register(string executable,string sid){
-        object service=null,folder=null,task=null;try{service=Activator.CreateInstance(Type.GetTypeFromProgID("Schedule.Service",true));Call(service,"Connect",BindingFlags.InvokeMethod);folder=Call(service,"GetFolder",BindingFlags.InvokeMethod,@"\");task=Call(folder,"RegisterTask",BindingFlags.InvokeMethod,Name,NativeDesktopComponents.TaskXml(executable,sid),6,sid,null,3,Security(sid));}
+        object service=null,folder=null,task=null;try{service=Activator.CreateInstance(Type.GetTypeFromProgID("Schedule.Service",true));Call(service,"Connect",BindingFlags.InvokeMethod);folder=Call(service,"GetFolder",BindingFlags.InvokeMethod,@"\");task=Call(folder,"RegisterTask",BindingFlags.InvokeMethod,Name,NativeDesktopComponents.TaskXml(executable,sid),6,sid,null,3,Security(sid));GrantUserManagement(task,sid);}
         catch(Exception ex){if(IsAccessDenied(ex))throw new UnauthorizedAccessException("当前启动保护登录任务由管理员保护，需要管理员授权才能更新。",ex);throw new IOException("登录自动维护任务注册失败（0x"+unchecked((uint)ex.GetBaseException().HResult).ToString("X8")+"）："+ex.GetBaseException().Message,ex);}
         finally{Release(task);Release(folder);Release(service);}
     }
