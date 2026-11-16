@@ -53,7 +53,7 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return !operation.StartsWith("ws-",StringComparison.Ordinal) && operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
+    public static bool NeedsAdmin(string operation) { return !NativeDesktopWorkflow.Handles(operation) && !operation.StartsWith("ws-",StringComparison.Ordinal) && operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
 
     public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
         const string family="OpenAI.Codex_2p2nqsd0c76g0";
@@ -162,6 +162,7 @@ public static class Core {
         var log=Path.Combine(Logs,args[2]+".log");
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
         if(NeedsAdmin(args[1]) && !Admin) return 66;
+        if(NativeDesktopWorkflow.Handles(args[1])){using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;return NativeDesktopWorker.Run(args[1],args[3],port,args[5]=="1",options,writer.WriteLine);}}
         if(args[1].StartsWith("ws-",StringComparison.Ordinal)&&(args[1]!="ws-start-info"||options==null||!Convert.ToBoolean(options["allowCloseRunningApp"]))){
             try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;Action<string> emit=value=>writer.WriteLine(value);var settings=WebSocketSettings.FromOptions(options??NormalizeOptions(null),port);Dictionary<string,object> report;
                 switch(args[1]){case "ws-start-info":var installed=WebSocketApp.Discover();writer.WriteLine("@@WS_APP@@"+Json.Serialize(new {installLocation=installed.InstallLocation,version=installed.Version,launchAlias=installed.LaunchAlias}));return 0;case "ws-model-check":report=WebSocketStartup.ModelCheck(settings,Value(options,"modelCliPath",""));emit(Value(report,"modelState",""));break;case "ws-check":report=WebSocketStartup.Check(settings,emit);break;case "ws-start-prepare":report=WebSocketStartup.Prepare(settings,Value(options,"desktopInstallLocation",""),emit);break;case "ws-start-verify":report=WebSocketStartup.Verify();emit(Value(report,"summary",""));break;default:WebSocketStartup.Rollback(emit);report=new Dictionary<string,object>{{"state","restored"},{"summary","WebSocket 启动准备已撤销"}};break;}

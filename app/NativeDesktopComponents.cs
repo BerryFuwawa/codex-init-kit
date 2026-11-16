@@ -1,0 +1,120 @@
+using File=CodexKit.Native.NativeFile;
+using Directory=CodexKit.Native.NativeDirectory;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Collections;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
+using System.Security.Principal;
+using Microsoft.Win32.SafeHandles;
+using CodexKit.Native;
+
+namespace CodexKit {
+internal static class NativePackageHealth {
+    internal static void Verify(OfficialDesktop app){try{var managerType=Type.GetType("Windows.Management.Deployment.PackageManager, Windows.Management.Deployment, ContentType=WindowsRuntime",true);var manager=Activator.CreateInstance(managerType);var package=managerType.GetMethod("FindPackageForUser",new[]{typeof(string),typeof(string)}).Invoke(manager,new object[]{WindowsIdentity.GetCurrent().User.Value,app.FullName});if(package==null)throw new IOException("当前用户的官方桌面包已不可用。");if(Convert.ToString(package.GetType().GetProperty("SignatureKind").GetValue(package,null))!="Store")throw new IOException("桌面应用不是支持的 Microsoft Store 官方渠道，未切换安装通道。");var status=package.GetType().GetProperty("Status").GetValue(package,null);if(!(bool)status.GetType().GetMethod("VerifyIsOK").Invoke(status,null))throw new IOException("桌面包正在更新、等待修复或尚不可用，依赖修复已暂停。");}catch(System.Reflection.TargetInvocationException ex){throw new IOException("无法确认桌面包已完成更新："+ex.GetBaseException().Message,ex);} }
+}
+internal static class NativeOfficialSignature {
+    [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct TrustFile {public uint Size;[MarshalAs(UnmanagedType.LPWStr)]public string Path;public IntPtr Handle,Subject;}
+    [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct TrustData {public uint Size;public IntPtr Policy,Sip;public uint UI,Revocation,Choice;public IntPtr File;public uint Action;public IntPtr State;public IntPtr Url;public uint Flags,Context;}
+    [DllImport("wintrust.dll",ExactSpelling=true)]static extern int WinVerifyTrust(IntPtr window,[In]ref Guid action,ref TrustData data);
+    [StructLayout(LayoutKind.Sequential)]struct ProviderSigner {public uint Size,TimeLow,TimeHigh,Count;public IntPtr Chain;}
+    [StructLayout(LayoutKind.Sequential)]struct ProviderCertificate {public uint Size;public IntPtr Certificate;}
+    [DllImport("wintrust.dll",ExactSpelling=true)]static extern IntPtr WTHelperProvDataFromStateData(IntPtr state);
+    [DllImport("wintrust.dll",ExactSpelling=true)]static extern IntPtr WTHelperGetProvSignerFromChain(IntPtr provider,uint index,[MarshalAs(UnmanagedType.Bool)]bool counter,uint counterIndex);
+    internal static void Verify(string path){
+        var file=new TrustFile{Size=(uint)Marshal.SizeOf(typeof(TrustFile)),Path=NativePath.Io(path)};var pointer=Marshal.AllocHGlobal(Marshal.SizeOf(file));Marshal.StructureToPtr(file,pointer,false);var action=new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");var data=new TrustData{Size=(uint)Marshal.SizeOf(typeof(TrustData)),UI=2,Revocation=0,Choice=1,File=pointer,Flags=0x1000,Action=1};
+        try{int result=WinVerifyTrust(new IntPtr(-1),ref action,ref data);if(result!=0)throw new InvalidDataException("官方组件签名检查失败（0x"+unchecked((uint)result).ToString("X8")+"）："+path);var provider=WTHelperProvDataFromStateData(data.State);if(provider==IntPtr.Zero)throw new InvalidDataException("无法读取已验证的组件证书链。");var signerPointer=WTHelperGetProvSignerFromChain(provider,0,false,0);if(signerPointer==IntPtr.Zero)throw new InvalidDataException("无法读取已验证的组件签名者。");var signer=(ProviderSigner)Marshal.PtrToStructure(signerPointer,typeof(ProviderSigner));if(signer.Count==0||signer.Chain==IntPtr.Zero)throw new InvalidDataException("组件签名证书链为空。");var certificate=(ProviderCertificate)Marshal.PtrToStructure(signer.Chain,typeof(ProviderCertificate));using(var cert=new X509Certificate2(certificate.Certificate))if(!Regex.IsMatch(cert.Subject,@"\bOpenAI\b"))throw new InvalidDataException("组件签名发布者不是 OpenAI："+path);}finally{data.Action=2;WinVerifyTrust(new IntPtr(-1),ref action,ref data);Marshal.DestroyStructure(pointer,typeof(TrustFile));Marshal.FreeHGlobal(pointer);}
+    }
+}
+internal static class NativeJunction {
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern SafeFileHandle CreateFile(string name,uint access,uint share,IntPtr security,uint disposition,uint flags,IntPtr template);
+    [DllImport("kernel32.dll",SetLastError=true)]static extern bool DeviceIoControl(SafeFileHandle file,uint code,byte[] input,int length,IntPtr output,int outLength,out int bytes,IntPtr overlapped);
+    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern uint GetFinalPathNameByHandle(SafeFileHandle file,StringBuilder path,uint size,uint flags);
+    internal static string Resolve(string path){using(var handle=CreateFile(NativePath.Io(path),0,7,IntPtr.Zero,3,0x02000000,IntPtr.Zero)){if(handle.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());var b=new StringBuilder(32768);uint size=GetFinalPathNameByHandle(handle,b,(uint)b.Capacity,0);if(size==0||size>=b.Capacity)throw new Win32Exception(Marshal.GetLastWin32Error());var s=b.ToString();return s.StartsWith(@"\\?\UNC\")?@"\\"+s.Substring(8):s.StartsWith(@"\\?\")?s.Substring(4):s;}}
+    internal static void Create(string link,string target){
+        target=Path.GetFullPath(target).TrimEnd('\\');var substitute=Encoding.Unicode.GetBytes(@"\??\"+target);var display=Encoding.Unicode.GetBytes(target);var data=new byte[16+substitute.Length+2+display.Length+2];Action<int,ushort> word=(offset,value)=>Buffer.BlockCopy(BitConverter.GetBytes(value),0,data,offset,2);Buffer.BlockCopy(BitConverter.GetBytes(0xA0000003u),0,data,0,4);word(4,(ushort)(data.Length-8));word(8,0);word(10,(ushort)substitute.Length);word(12,(ushort)(substitute.Length+2));word(14,(ushort)display.Length);Buffer.BlockCopy(substitute,0,data,16,substitute.Length);Buffer.BlockCopy(display,0,data,18+substitute.Length,display.Length);Directory.CreateDirectory(link);
+        try{using(var handle=CreateFile(NativePath.Io(link),0x40000000,0,IntPtr.Zero,3,0x02200000,IntPtr.Zero)){if(handle.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());int bytes;if(!DeviceIoControl(handle,0x900A4,data,data.Length,IntPtr.Zero,0,out bytes,IntPtr.Zero))throw new Win32Exception(Marshal.GetLastWin32Error());}}catch{Directory.Delete(link,false);throw;}
+    }
+}
+internal sealed class NativeDesktopComponents:IDesktopInitializationSteps {
+    readonly NativePaths paths;readonly NativeServices services;readonly Dictionary<string,object> settings;readonly int port;readonly Action<string> log;
+    internal Action<string> Signature=NativeOfficialSignature.Verify;
+    internal Action<OfficialDesktop> Health=NativePackageHealth.Verify;
+    Dictionary<string,object> priorMode=new Dictionary<string,object>();
+    public void CaptureSelection(){priorMode.Clear();var state=State();foreach(var key in new[]{"ActiveMode","ActiveCliPath","LastModeReason"})if(state.ContainsKey(key))priorMode[key]=state[key];}
+    public void RestoreSelection(){if(!File.Exists(StateFile))return;var state=State();foreach(var key in new[]{"ActiveMode","ActiveCliPath","LastModeReason"}){if(priorMode.ContainsKey(key))state[key]=priorMode[key];else state.Remove(key);}NativeData.Write(StateFile,NativeData.Json.Serialize(state));}
+    bool safe=true;public bool DesktopSafe{get{if(!safe)return false;try{Health(services.Desktop.Discover());return true;}catch(Exception ex){safe=false;log("桌面组件状态未就绪："+ex.Message);return false;}}}
+    internal string Standalone{get{return Path.Combine(paths.Home,"packages","standalone");}}
+    internal string Current{get{return Path.Combine(Standalone,"current");}}
+    internal string GuardRoot{get{return Path.Combine(paths.Documents,"Codex启动保护管理器");}}
+    internal string StateFile{get{return Path.Combine(GuardRoot,"State","guard-state.json");}}
+    internal NativeDesktopComponents(NativePaths p,NativeServices s,Dictionary<string,object> options,int proxyPort,Action<string> emit){paths=p;services=s;settings=options;port=proxyPort;log=emit;}
+    string Persisted(string name){var user=services.Registry.Get(name);return user.Exists&&!String.IsNullOrWhiteSpace(Convert.ToString(user.Value))?Convert.ToString(user.Value):Convert.ToString(services.Registry.GetMachine(name).Value);}
+    public string DetectCli(){if(!String.IsNullOrWhiteSpace(Persisted("CODEX_CODE_MODE_HOST_PATH")))return "unknown";var cli=Persisted("CODEX_CLI_PATH");if(String.IsNullOrWhiteSpace(cli))return "desktop-native";if(!File.Exists(cli))return "unknown";var app=services.Desktop.Discover();if(NativeData.Inside(cli,app.Install))return "desktop-native";var relative=Path.GetFullPath(cli).Substring(Math.Min(Path.GetFullPath(cli).Length,Path.GetFullPath(Standalone).TrimEnd('\\').Length+1));return NativeData.Inside(cli,Standalone)&&Regex.IsMatch(relative,@"^(?:current|releases\\[^\\]+)\\bin\\codex\.exe$",RegexOptions.IgnoreCase)?"official-standalone":"unknown";}
+    void Stopped(){if(services.Processes.List(paths,services.Desktop.Discover()).Count>0)throw new InvalidOperationException("应用仍在运行或已重新启动，请保存工作并退出后重试。");}
+    internal string NativeCli(OfficialDesktop app){Health(app);var root=Path.Combine(app.Install,"app","resources");foreach(var name in new[]{"codex.exe","codex-code-mode-host.exe","codex-command-runner.exe","codex-windows-sandbox-setup.exe"}){var path=Path.Combine(root,name);if(!File.Exists(path))throw new FileNotFoundException("桌面原生 CLI 组件缺失。",path);Signature(path);}return Path.Combine(root,"codex.exe");}
+    NativeCommandResult Command(string file,string[] args,int timeout){var result=services.Commands.Run(file,args,null,timeout);if(!String.IsNullOrWhiteSpace(result.Output))log(result.Output.Trim());if(!String.IsNullOrWhiteSpace(result.Error))log(result.Error.Trim());return result;}
+    public void DesktopUpdate(){
+        Stopped();var before=services.Desktop.Discover();var winget=FindExecutable("winget.exe");
+        try{
+            NativeCli(before);if(winget==null)throw new FileNotFoundException("找不到 winget，请在微软商店或 Codex 内手动更新。");var result=Command(winget,new[]{"upgrade","--id","9PLM9XGG6VKS","--exact","--source","msstore","--silent","--accept-source-agreements","--accept-package-agreements","--disable-interactivity"},1200000);uint code=unchecked((uint)result.ExitCode);
+            if(result.TimedOut||code==3010||code==1641||code==0x8a150109){safe=false;throw new IOException(result.TimedOut?"桌面更新超时，商店可能仍在处理，请稍后重新检查。":"桌面更新等待重启或尚未完成，依赖修复已暂停。");}
+            var after=services.Desktop.Discover();var cli=NativeCli(after);
+            if(result.ExitCode!=0&&code!=0x8a15002b)throw new IOException(code==0x80072efd?"无法连接微软商店更新服务（0x80072EFD / -2147012867）。":"桌面版更新失败，退出码："+result.ExitCode+"（0x"+code.ToString("X8")+"）。");
+            if(code==0&&new Version(after.Version)<=new Version(before.Version)){safe=false;throw new IOException("商店命令已结束，但尚未确认安装版本变更，请重新检查。");}
+            try{var probe=Command(cli,new[]{"--version"},30000);if(probe.TimedOut||probe.ExitCode!=0||!Regex.IsMatch(probe.Output??"",@"codex.*\d+\.\d+"))throw new IOException("内置 CLI 版本运行验证未通过。");}catch(Win32Exception ex){if(ex.NativeErrorCode!=5)throw;log("内置 CLI 版本运行验证受权限限制（Windows 错误码 5：访问被拒绝）。官方组件签名检查通过，保留更新结果并继续；版本运行验证未完成。");}
+            log(code==0x8a15002b?"当前软件源没有更新，桌面版保持现有版本："+after.Version:"桌面版已更新："+before.Version+" → "+after.Version);
+        }catch(Exception){try{NativeCli(services.Desktop.Discover());}catch{safe=false;}log("提示：自动更新可能因网络或商店服务暂时不可用而失败，这种情况无需担心；你可以自行在微软商店或 Codex 内手动更新。本次自动更新未完成，请同时留意组件检查和重启提示。");throw;}
+    }
+    internal string FindExecutable(string name){foreach(var dir in (paths.SearchPath??"").Split(';')){if(String.IsNullOrWhiteSpace(dir))continue;var candidate=Path.Combine(dir.Trim('"'),name);if(File.Exists(candidate))return candidate;}var system=Path.Combine(Environment.SystemDirectory,name);return File.Exists(system)?system:null;}
+    internal string Package(string root){
+        foreach(var relative in new[]{"codex-package.json","codex-path/rg.exe"})if(!File.Exists(Path.Combine(root,relative.Replace('/',Path.DirectorySeparatorChar))))throw new FileNotFoundException("官方独立 CLI 组件缺失。",relative);
+        var manifest=NativeData.Json.Deserialize<Dictionary<string,object>>(NativeData.Read(Path.Combine(root,"codex-package.json")));if(manifest==null)throw new InvalidDataException("独立 CLI 清单无法读取。");
+        var executables=new List<string>{"bin/codex.exe","bin/codex-code-mode-host.exe","codex-resources/codex-command-runner.exe","codex-resources/codex-windows-sandbox-setup.exe"};if(Regex.IsMatch(NativeData.Read(Path.Combine(root,"codex-package.json")),"\"execServer\"\\s*:"))executables.Add("bin/codex-exec-server.exe");foreach(var relative in executables){var file=Path.Combine(root,relative.Replace('/',Path.DirectorySeparatorChar));if(!File.Exists(file))throw new FileNotFoundException("独立 CLI 组件缺失。",file);Signature(file);}
+        var result=Command(Path.Combine(root,"bin","codex.exe"),new[]{"--version"},30000);var match=Regex.Match(result.Output??"",@"codex(?:-cli)?\s+(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?)");if(result.TimedOut||result.ExitCode!=0||!match.Success)throw new IOException("官方独立 CLI 版本运行验证未通过。");return match.Groups[1].Value;
+    }
+    public void OfficialCli(bool onlyIfMissing){
+        Directory.CreateDirectory(Standalone);NativeData.NoLinks(Standalone);using(var installLock=new FileStream(NativePath.Io(Path.Combine(Standalone,"install.lock")),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None))OfficialCliLocked(onlyIfMissing);
+    }
+    void OfficialCliLocked(bool onlyIfMissing){
+        Stopped();if(onlyIfMissing)try{Package(Current);return;}catch(Exception ex){log("现有独立组件需要准备："+ex.Message);}
+        string metadata;bool firstParty=true;try{metadata=services.Downloads.Text("https://releases.openai.com/codex/channels/latest",ValidRelease);}catch(Exception ex){log("OpenAI 官方下载源暂不可用，尝试官方 GitHub 发布："+ex.Message);firstParty=false;metadata=services.Downloads.Text("https://api.github.com/repos/openai/codex/releases/latest",ValidRelease);}
+        var release=NativeData.Json.Deserialize<Dictionary<string,object>>(metadata);string version=Core.Value(release,"tag_name","").Replace("rust-v","");var assets=((IEnumerable)release["assets"]).Cast<Dictionary<string,object>>().ToArray();const string asset="codex-package-x86_64-pc-windows-msvc.tar.gz";var selected=assets.SingleOrDefault(x=>Core.Value(x,"name","")==asset);if(selected==null)throw new InvalidDataException("官方发布未提供支持的 Windows x64 完整包；未安装其他渠道。");string digest=Core.Value(selected,"digest","");if(!Regex.IsMatch(digest,@"^sha256:[a-fA-F0-9]{64}$"))throw new InvalidDataException("官方发布缺少软件包 SHA-256，已停止下载。");digest=digest.Substring(7).ToLowerInvariant();string github="https://github.com/openai/codex/releases/download/rust-v"+version+"/"+asset;string url=firstParty?"https://releases.openai.com/codex/releases/"+version+"/"+asset:github;
+        Directory.CreateDirectory(Standalone);NativeData.NoLinks(Standalone);var releases=Path.Combine(Standalone,"releases");Directory.CreateDirectory(releases);var staging=Path.Combine(releases,".staging-"+Guid.NewGuid().ToString("N"));var archive=Path.Combine(Standalone,".download-"+Guid.NewGuid().ToString("N")+".tar.gz");var target=Path.Combine(releases,version+"-x86_64-pc-windows-msvc-"+Guid.NewGuid().ToString("N").Substring(0,8));string previous=null;
+        try{
+            Action<string> validate=p=>{if(NativeCua.Hash(p)!=digest)throw new InvalidDataException("官方独立 CLI 软件包 SHA-256 不符。");};try{services.Downloads.File(url,archive,validate);}catch{if(!firstParty)throw;services.Downloads.File(github,archive,validate);}
+            var tar=FindExecutable("tar.exe");if(tar==null)throw new FileNotFoundException("找不到 Windows tar.exe，未解压或切换组件。");var listing=services.Commands.Run(tar,new[]{"-tzf",archive},null,60000);if(listing.TimedOut||listing.ExitCode!=0)throw new IOException("官方软件包目录无法读取。");ValidateArchive(listing.Output);
+            Directory.CreateDirectory(staging);var extract=Command(tar,new[]{"-xzf",archive,"-C",staging},300000);if(extract.TimedOut||extract.ExitCode!=0)throw new IOException("官方独立 CLI 解压未完成。");NativeTree.Read(staging);if(Package(staging)!=version)throw new InvalidDataException("下载版本与实际 CLI 版本不一致。");Stopped();Directory.Move(staging,target);
+            if(Directory.Exists(Current)){if((File.GetAttributes(Current)&FileAttributes.ReparsePoint)!=0&&!NativeData.Inside(NativeJunction.Resolve(Current),releases))throw new IOException("当前独立 CLI 链接指向外部目录，未覆盖。");previous=Path.Combine(Standalone,".current-backup-"+Guid.NewGuid().ToString("N"));Directory.Move(Current,previous);}
+            try{NativeJunction.Create(Current,target);if(Package(Current)!=version)throw new IOException("切换后的独立 CLI 版本不一致。");}catch{if(Directory.Exists(Current))Directory.Delete(Current,false);if(previous!=null)Directory.Move(previous,Current);throw;}
+            if(previous!=null)log("旧独立 CLI 入口已保留："+previous);log("官方独立 CLI 已准备："+version+"。未安装登录任务或改变 CLI 选择。");
+        }finally{if(File.Exists(archive))File.Delete(archive);if(Directory.Exists(staging)&&NativeData.Inside(staging,releases))Directory.Delete(staging,true);}
+    }
+    static bool ValidRelease(string text){try{var d=NativeData.Json.Deserialize<Dictionary<string,object>>(text);return Regex.IsMatch(Core.Value(d,"tag_name",""),@"^rust-v\d+\.\d+\.\d+(?:-alpha(?:\.\d+){0,2}|-beta(?:\.\d+)?)?$")&&d.ContainsKey("assets")&&d["assets"] is IEnumerable;}catch{return false;}}
+    internal static void ValidateArchive(string listing){foreach(var entry in (listing??"").Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries)){var name=entry.Replace('\\','/');if(name.StartsWith("/")||name.Contains(":")||name.Split('/').Any(x=>x==".."))throw new InvalidDataException("软件包包含不支持的路径，未解压。");}}
+    internal bool ProtectionInstalled{get{try{return File.Exists(StateFile)&&Convert.ToBoolean(State().ContainsKey("Installed")?State()["Installed"]:false);}catch{return false;}}}
+    Dictionary<string,object> State(){return File.Exists(StateFile)?NativeData.Json.Deserialize<Dictionary<string,object>>(NativeData.Read(StateFile)):new Dictionary<string,object>();}
+    internal void ModeState(string mode,string cli){if(!File.Exists(StateFile))return;var state=State();state["ActiveMode"]=mode;state["ActiveCliPath"]=cli;state["LastModeReason"]="原生初始化已核验所选 CLI";NativeData.Write(StateFile,NativeData.Json.Serialize(state));}
+    public void SelectCli(string mode){Stopped();if(mode=="desktop-native"){NativeCli(services.Desktop.Discover());services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=false});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("DesktopNativeProtected",null);}else{Package(Current);services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=true,Kind="String",Value=Path.Combine(Current,"bin","codex.exe")});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("OfficialCurrent",Path.Combine(Current,"bin","codex.exe"));}}
+    internal void CachedCli(string root){if(!NativeData.Inside(root,Path.Combine(Standalone,"releases")))throw new IOException("回滚版本不在官方独立 CLI 缓存中。");Stopped();Package(root);var before=services.Registry.Get("CODEX_CLI_PATH");var host=services.Registry.Get("CODEX_CODE_MODE_HOST_PATH");CaptureSelection();try{var cli=Path.Combine(root,"bin","codex.exe");services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=true,Kind="String",Value=cli});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("Rollback",cli);VerifyCli("official-standalone");log("已切换并核验官方独立 CLI 回滚版本："+root);}catch{services.Registry.Set("CODEX_CLI_PATH",before);services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",host);RestoreSelection();throw;}}
+    public void VerifyCli(string mode){if(DetectCli()!=mode)throw new IOException("实际 CLI 模式与本次选择不符，请检查用户或机器级路径覆盖。");}
+    public void Protection(){
+        Stopped();OfficialCli(true);var state=State();if(!state.ContainsKey("OriginalCliPath"))state["OriginalCliPath"]=services.Registry.Get("CODEX_CLI_PATH").Value;
+        Directory.CreateDirectory(GuardRoot);NativeData.NoLinks(GuardRoot);var installed=Path.Combine(GuardRoot,"CodexInitKit.Guard.exe");var stage=installed+".stage-"+Guid.NewGuid().ToString("N");var backup=installed+".previous";
+        if(!String.Equals(Path.GetFullPath(paths.Self),Path.GetFullPath(installed),StringComparison.OrdinalIgnoreCase)){try{File.Copy(paths.Self,stage,false);if(File.Exists(installed))File.Replace(stage,installed,backup);else File.Move(stage,installed);}finally{if(File.Exists(stage))File.Delete(stage);}}
+        var taskFile=Path.Combine(GuardRoot,"native-task.xml");NativeData.Write(taskFile,TaskXml(installed,WindowsIdentity.GetCurrent().User.Value));
+        var schtasks=Path.Combine(Environment.SystemDirectory,"schtasks.exe");var registration=Command(schtasks,new[]{"/Create","/TN","CodexGuardAuto","/XML",taskFile,"/F"},30000);if(registration.TimedOut||registration.ExitCode!=0)throw new IOException("登录自动维护任务注册未完成，尚未报告安装成功。");
+        var query=Command(schtasks,new[]{"/Query","/TN","CodexGuardAuto","/XML"},30000);if(query.TimedOut||query.ExitCode!=0||!query.Output.Contains(System.Security.SecurityElement.Escape(installed))||!query.Output.Contains("--native-guard"))throw new IOException("登录自动维护任务核验未通过。");
+        state["Installed"]=true;state["NativeGuard"]=true;state["InstalledAt"]=DateTime.Now.ToString("s");state["OfficialVersion"]=Package(Current);state["LastUpdateResult"]="原生启动保护安装完成";NativeData.Write(StateFile,NativeData.Json.Serialize(state));log("启动保护已安装：登录时仅运行内置原生维护，不调用 PowerShell，不强制关闭应用。");
+    }
+    internal static string TaskXml(string executable,string sid){return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>"+sid+"</UserId></LogonTrigger></Triggers><Principals><Principal id=\"Author\"><UserId>"+sid+"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><Hidden>true</Hidden><ExecutionTimeLimit>PT5M</ExecutionTimeLimit></Settings><Actions Context=\"Author\"><Exec><Command>"+System.Security.SecurityElement.Escape(executable)+"</Command><Arguments>--native-guard</Arguments></Exec></Actions></Task>";}
+    internal void AutoMaintain(){var app=services.Desktop.Discover();if(services.Processes.List(paths,app).Count>0){log("应用正在运行，登录维护已跳过。不会中断任务。");return;}if(!File.Exists(StateFile)||!Convert.ToBoolean(State().ContainsKey("NativeGuard")?State()["NativeGuard"]:false))return;try{NativeCli(app);log("桌面原生组件完整，保留当前用户选择。");}catch{Package(Current);if(DetectCli()=="desktop-native")SelectCli("official-standalone");}}
+    public void Browser(){new NativeDesktopBrowser(paths,services,port,Core.Value(settings,"proxyHost",Core.DefaultProxyHost),log).Repair();}
+    public void WebSocket(){var report=WebSocketStartup.Prepare(WebSocketSettings.FromOptions(settings,port),services.Desktop.Discover().Install,log);log("@@WS_RESULT@@"+Core.Json.Serialize(report));}
+}
+}

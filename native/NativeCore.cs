@@ -42,6 +42,7 @@ public sealed class NativePaths {
 }
 public sealed class NativeOptions {
     public bool Confirm,AllowClose,Folder=true,Subagents=true,Cua=true,Proxy=true;
+    public bool DesktopProfile,AntiOverDefense=true,WorkJournal=true,CommandLineFirst=true,Memories=true;
     public string ProxyHost="127.0.0.1",ParentModel="gpt-6.1-sol",ChildModel="gpt-6.1-sol",ParentEffort="high",ChildEffort="high";
     public int ProxyPort=10808;
     public string[] ApprovedProcesses;

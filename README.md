@@ -158,13 +158,13 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 在仓库根目录执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\Build-Desktop.ps1
+python .\tools\Build-Desktop.py
 ```
 
-输出为 `build\desktop\CodexInitKit.exe`。命令行验收、组件源码和构建说明见 [桌面版使用手册](docs/Desktop.md#构建与验证边界)与[脚本说明](docs/Scripts.md)。
+输出为 `build\desktop-native\CodexInitKit.exe`，运行只需该 EXE 和系统自带的 .NET Framework 4.8，不需要 Python 或旁置脚本。命令行验收、组件源码和构建说明见 [桌面版使用手册](docs/Desktop.md#构建与验证边界)与[脚本说明](docs/Scripts.md)。
 
 Codex Init Kit 是社区维护的独立工具，并非 OpenAI 官方产品。
 
 ## 本地原生初始化迁移
 
-独立初始化已提供 C# 原生 CLI 本地构建，包含备份回滚、RTK、CUA、进程确认和专用更新组件。此构建尚未发布，不改变当前公开版本。[功能、命令与验证边界](docs/NativeInitializer.md) · [逐项验收标准](native/验收计划.md)
+本地迁移版保留雾夜蓝图形界面，初始化按钮已接入 C# 原生后台。仅分发一个 `CodexInitKit.exe`，无需额外 CLI、DLL 或脚本文件。配置、中文规则、RTK、CUA、CLI 选择、浏览器与 WebSocket 准备沿用原有选项和进度页。此构建尚未发布，不改变当前公开版本。[单文件桌面版与验证范围](docs/NativeDesktop.md) · [独立 CLI](docs/NativeInitializer.md) · [逐项验收标准](native/验收计划.md)
