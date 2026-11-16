@@ -427,7 +427,7 @@ public partial class MainWindow : Window {
         settings.Children.Add(proxyEnabled);settings.Children.Add(ProxyPortRow());settings.Children.Add(proxyPortNotice);
         settings.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",12,MutedBrush));
         settings.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));settings.Children.Add(proxyHost);
-        Row(settings,Button("修复并启动 Codex",async()=>await Run("browser-start-prepare","修复并启动 Codex",true),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",()=>{Clipboard.SetText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。");banner.Text="已复制 · 重启 Codex 后在新对话中运行测试";},false));
+        Row(settings,Button("修复并启动 Codex",async()=>await Run("browser-start-prepare","修复并启动 Codex",true),true),Button("检查连接",async()=>await Run("browser-check","检查浏览器连接",false),false),Button("修复连接",async()=>await Run("browser-repair","修复浏览器连接",true),false),Button("恢复原始文件",async()=>await Run("browser-rollback","恢复浏览器入口",true),false),Button("复制连接测试指令",async()=>await CopyText("请使用浏览器控制工具，新建独立测试标签页访问 https://example.com，读取页面标题和 DOM；成功后关闭本次新建的测试标签。保留我的其他 Chrome 标签页。请分别报告连接、页面读取和关闭结果，不要仅用 HTTP 状态判断连接成功。","已复制 · 重启 Codex 后在新对话中运行测试"),false));
         Row(settings,Button("仅保存代理配置",async()=>await Run("proxy","更新代理",true),false),Link("微软商店 ↗",()=>Open("ms-windows-store://pdp/?ProductId=9PLM9XGG6VKS")));
         settings.Children.Add(T("通过此按钮启动时会先检查并按需修复；原来的 Codex 图标不会经过此检查。",12,MutedBrush));
         settings.Children.Add(T("修复前请保存工作并退出 Codex。保留 Chrome 和用户标签页，修复后重启 Codex 验证。",12,Accent));
@@ -469,7 +469,11 @@ public partial class MainWindow : Window {
         githubLogView.Text=githubLogText;networkCard.Children.Add(githubLogView);
         Card("更新如何进行","每次启动自动检查 GitHub 新版，右下角显示检查状态，发现更新时显示更新入口。点击后下载并校验，退出后替换同目录、同文件名的 EXE 并重启；更新成功后自动删除旧版本。\n检查失败不影响本地功能。网络请求遵循初始化页面中的代理开关和端口。");
     }
-    void LogsPage() { subtitle.Text="默认跟随底部最新日志；上翻暂停，回到底部恢复。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,LatestLogButton(),Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",()=>Clipboard.SetText(LogToCopy()),false)); }
+    bool copyingClipboard;
+    internal Action<string> ClipboardWriter=text=>Clipboard.SetDataObject(new DataObject(DataFormats.UnicodeText,text),true);
+    internal Func<int,Task> ClipboardDelay=Task.Delay;
+    async Task CopyText(string text,string success="已复制"){if(copyingClipboard){banner.Text="正在复制，请稍候…";return;}copyingClipboard=true;try{var result=await ClipboardCopy.Copy(text,ClipboardWriter,ClipboardDelay);banner.Text=result.Success?success:result.Message;}finally{copyingClipboard=false;}}
+    void LogsPage() { subtitle.Text="默认跟随底部最新日志；上翻暂停，回到底部恢复。"; var p=Card(operationTitle.Length>0?operationTitle:"执行日志","中文和原始日志保存在当前用户 LocalAppData\\CodexInitKit\\Desktop\\Logs。"); p.Children.Add(log); Row(p,LatestLogButton(),Button(showRawLog?"查看中文日志":"查看原始日志",()=>{showRawLog=!showRawLog;UpdateLogView();Navigate("日志");},false),Button("打开日志目录",()=>Open(Core.Logs),false),Button("复制日志",async()=>await CopyText(LogToCopy(),"已复制当前显示的日志"),false)); }
     Button LatestLogButton(){return Button("回到最新日志",()=>{var expander=log.Parent as Expander;if(expander!=null)expander.IsExpanded=true;logViewport.Latest();},false);}
     string LogToCopy(){return log.Text.Length>0?log.Text:"尚无日志";}
     void UpdateLogView(){logViewport.SetText(showRawLog?rawLogText:chineseLogText);}

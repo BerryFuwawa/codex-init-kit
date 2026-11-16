@@ -11,16 +11,18 @@ public sealed class WindowsRegistryStore:INativeRegistry {
     public void Set(string name,RegistryValueState value){if(!new[]{"Path","CODEX_CLI_PATH","CODEX_CODE_MODE_HOST_PATH"}.Contains(name))throw new ArgumentException("该操作不管理此环境变量。");using(var key=Registry.CurrentUser.CreateSubKey("Environment")){if(!value.Exists)key.DeleteValue(name,false);else{var kind=(RegistryValueKind)Enum.Parse(typeof(RegistryValueKind),value.Kind);object data=value.Value;if(kind==RegistryValueKind.String||kind==RegistryValueKind.ExpandString)data=Convert.ToString(data);key.SetValue(name,data,kind);}}Environment.SetEnvironmentVariable(name,value.Exists?Convert.ToString(value.Value):null,EnvironmentVariableTarget.Process);IntPtr broadcast;SendMessageTimeout(new IntPtr(0xffff),0x001a,IntPtr.Zero,"Environment",2,1000,out broadcast);}
 }
 public sealed class NativeCommandRunner:INativeCommands {
+    [DllImport("kernel32.dll")]static extern uint GetOEMCP();
+    public static string DecodeOutput(byte[] bytes,int fallbackCodePage=0){if(bytes.Length>=2&&bytes[0]==255&&bytes[1]==254)return Encoding.Unicode.GetString(bytes,2,bytes.Length-2);if(bytes.Length>=2&&bytes[0]==254&&bytes[1]==255)return Encoding.BigEndianUnicode.GetString(bytes,2,bytes.Length-2);int offset=bytes.Length>=3&&bytes[0]==239&&bytes[1]==187&&bytes[2]==191?3:0;try{return new UTF8Encoding(false,true).GetString(bytes,offset,bytes.Length-offset);}catch(DecoderFallbackException){return Encoding.GetEncoding(fallbackCodePage==0?(int)GetOEMCP():fallbackCodePage).GetString(bytes);}}
     public NativeCommandResult Run(string file,string[] args,Dictionary<string,string> environment,int timeoutMs){
         var info=new ProcessStartInfo(NativePath.Display(Path.GetFullPath(file)),String.Join(" ",args.Select(NativeData.Quoted))){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
         if(environment!=null)foreach(var item in environment)info.EnvironmentVariables[item.Key]=item.Value;
         using(var process=new Process{StartInfo=info})using(var job=new NativeChildJob()){
             if(!process.Start())throw new IOException("无法启动组件："+file);
             try{job.Assign(process);}catch{if(!process.HasExited)process.Kill();throw;}
-            process.StandardInput.Close();var output=process.StandardOutput.ReadToEndAsync();var error=process.StandardError.ReadToEndAsync();bool exited=process.WaitForExit(timeoutMs);
+            process.StandardInput.Close();using(var outputBytes=new MemoryStream())using(var errorBytes=new MemoryStream()){var output=process.StandardOutput.BaseStream.CopyToAsync(outputBytes);var error=process.StandardError.BaseStream.CopyToAsync(errorBytes);bool exited=process.WaitForExit(timeoutMs);
             if(!exited){job.Terminate();process.WaitForExit(5000);}
             if(!output.Wait(5000)||!error.Wait(5000))throw new IOException("组件输出未关闭，请检查本次进程日志。");
-            return new NativeCommandResult{ExitCode=exited?process.ExitCode:-1,TimedOut=!exited,Output=output.Result,Error=error.Result};
+            return new NativeCommandResult{ExitCode=exited?process.ExitCode:-1,TimedOut=!exited,Output=DecodeOutput(outputBytes.ToArray()),Error=DecodeOutput(errorBytes.ToArray())};}
         }
     }
 }

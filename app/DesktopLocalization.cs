@@ -239,7 +239,7 @@ public static class DesktopLocalization {
     static readonly Regex PathPattern=new Regex(@"(?<![A-Za-z0-9])(?:[A-Za-z]:\\|\\\\)[^\r\n;，。\""']+",RegexOptions.CultureInvariant);
     static readonly Regex CodePattern=new Regex(@"(?i)\b(?:0x[0-9a-f]{4,8}|E(?:PERM|ACCES|CONNREFUSED|CONNRESET|TIMEDOUT)|HRESULT\s*[:=]?\s*-?\d+|(?:exit code|退出码)\s*[:=]?\s*-?\d+)\b",RegexOptions.CultureInvariant);
     static readonly Regex WebStatus=new Regex(@"(?i)(?:\bHTTP\s*|\()(\d{3})(?:\)|\b)",RegexOptions.CultureInvariant);
-    static readonly string[] Technical={"Microsoft Store","Codex Doctor","Codex CLI","OpenAI Codex","Node.js","HTTP Proxy","SHA-256","SHA256","PowerShell","Windows","GitHub","OpenAI","Codex","Node","CUA","CLI","HTTP","HTTPS","JSON","GBK","UTF-8","ASAR","XCOPY","EXE","URL","IP","IPv4","IPv6","WebSocket","VPN","DNS","MCP","CDN","GB","MB","KB","winget",".env","parentModel","childModel","parentEffort","childEffort","proxyHost","projectPath","folderManagement","antiOverDefense","subagents","cuaRepair","browserRepair","officialCliUpdate","desktopUpdate","minimal","medium","xhigh","ultra","none","low","high","max"};
+    static readonly string[] Technical={"RTK","WMI","CODEX_HOME","Microsoft Store","Codex Doctor","Codex CLI","OpenAI Codex","Node.js","HTTP Proxy","SHA-256","SHA256","PowerShell","Windows","GitHub","OpenAI","Codex","Node","CUA","CLI","HTTP","HTTPS","JSON","GBK","UTF-8","ASAR","XCOPY","EXE","URL","IP","IPv4","IPv6","WebSocket","VPN","DNS","MCP","CDN","GB","MB","KB","winget",".env","parentModel","childModel","parentEffort","childEffort","proxyHost","projectPath","folderManagement","antiOverDefense","subagents","cuaRepair","browserRepair","officialCliUpdate","desktopUpdate","minimal","medium","xhigh","ultra","none","low","high","max"};
     static string ReplaceInsensitive(string input,string from,string to) {
         var at=input.IndexOf(from,StringComparison.OrdinalIgnoreCase);if(at<0)return input;
         var result=new StringBuilder();int start=0;
@@ -273,9 +273,11 @@ public static class DesktopLocalization {
         if(Regex.IsMatch(original,@"^\s*RESULT\s*=\s*FAIL\s*$"))return "结果：失败";
         if(Regex.IsMatch(text,@"^\s*(?:#< CLIXML|<Objs\b|CategoryInfo\s*:|FullyQualifiedErrorId\s*:|At .+ line:|at\s+\S+\(|\+\s|~{3,})",RegexOptions.IgnoreCase))return "异常详细输出已保留，请查看原始日志。";
         if(text.Trim()=="Notes")return "检查提示";if(text.Trim()=="Environment")return "运行环境";
+        var exceptionNames=new Dictionary<string,string>{{"InvalidDataException","数据检查失败"},{"IOException","文件读写失败"},{"InvalidOperationException","操作条件不满足"},{"TimeoutException","操作超时"},{"UnauthorizedAccessException","访问被拒绝"},{"Win32Exception","Windows 操作失败"},{"ManagementException","系统进程查询失败"},{"ArgumentException","参数无效"},{"FileNotFoundException","所需文件不存在"},{"DirectoryNotFoundException","所需目录不存在"}};
         var preserved=new List<string>();
         text=PathPattern.Replace(text,m=>{var marker="〔保留"+preserved.Count+"〕";preserved.Add(m.Value);return marker;});
         text=Regex.Replace(text,@"(?i)\b(?:https?|ms-windows-store)://\S+",m=>{var marker="〔保留"+preserved.Count+"〕";preserved.Add(m.Value);return marker;});
+        text=Regex.Replace(text,@"\b(?:System\.[A-Za-z.]+)?(InvalidDataException|IOException|InvalidOperationException|TimeoutException|UnauthorizedAccessException|Win32Exception|ManagementException|ArgumentException|FileNotFoundException|DirectoryNotFoundException)\b",m=>exceptionNames[m.Groups[1].Value]);
         text=Regex.Replace(text,@"(?i)\[BROWSER INCOMPLETE\]","【浏览器未完成】");
         text=Regex.Replace(text,@"(?i)\[INCOMPLETE\]","【未完成】");
         text=Regex.Replace(text,@"(?i)\[FAIL\]","【失败】");
@@ -300,7 +302,7 @@ public static class DesktopLocalization {
         text=Regex.Replace(text,@"(?i)(\d+) active files [·.] ([0-9.]+ [A-Z]+) on disk","$1 个活动文件，占用磁盘 $2");
         text=Regex.Replace(text,@"(?i)(\d+) issues - rollout files are missing from the state DB; duplicate thread inventory entries found","$1 项问题：状态数据库缺少会话记录，且会话清单存在重复项");
         text=Regex.Replace(text,@"(?i)(\d+) ok\s*\|\s*(\d+) idle\s*\|\s*(\d+) notes\s*\|\s*(\d+) warn\s*\|\s*(\d+) fail(?: failed)?","$1 项正常 | $2 项空闲 | $3 项提示 | $4 项警告 | $5 项失败");
-        text=Regex.Replace(text,@"(?i)(^|\s)(rollouts|updates|threads|reachability|websocket|mcp)\s+",m=>m.Groups[1].Value+new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"rollouts","会话记录："},{"updates","更新检查："},{"threads","会话清单："},{"reachability","网络可达性："},{"websocket","WebSocket："},{"mcp","MCP："}}[m.Groups[2].Value]);
+        text=Regex.Replace(text,@"(?i)(^|\s)(rollouts|updates|threads|reachability|websocket|mcp)\s+(?=[A-Za-z])",m=>m.Groups[1].Value+new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase){{"rollouts","会话记录："},{"updates","更新检查："},{"threads","会话清单："},{"reachability","网络可达性："},{"websocket","WebSocket："},{"mcp","MCP："}}[m.Groups[2].Value]);
         text=Regex.Replace(text,@"(?i)\bmodel\s+([A-Za-z0-9._/:-]+)\s+(?:is\s+)?(?:not available|not found|not supported|access denied)","模型 $1 当前不可用，请核对模型 ID 和账号权限");
         var check=MaskTechnical(text);
         check=Regex.Replace(check,@"(?i)\bGPT\s*\d+(?:\.\d+)?\s*(?:SOL|TERRA|LUNA|ASTRA)?\s*(?:HIGH|MAX)?\b","");
@@ -318,6 +320,7 @@ public static class DesktopLocalization {
     }
     public static string ExceptionText(Exception ex) {
         if(ex==null)return "操作未完成，原因尚未识别；请查看原始日志。";
+        var external=ex as System.Runtime.InteropServices.ExternalException;if(external!=null&&unchecked((uint)external.ErrorCode)==0x800401D0)return "剪贴板暂时被其他程序占用，请稍后再次点击复制。";
         if(ex is UnauthorizedAccessException)return "无权访问文件或目录，请检查权限。"+Details(ex.Message);
         if(ex is PathTooLongException)return "文件路径过长，请缩短路径后重试。"+Details(ex.Message);
         var missing=ex as FileNotFoundException;if(missing!=null)return "找不到所需文件。"+(String.IsNullOrEmpty(missing.FileName)?Details(ex.Message):" 路径："+missing.FileName);
