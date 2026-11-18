@@ -191,7 +191,7 @@ public static class InitializationFlowTests {
             var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
             foreach(var title in new[]{"工作与规则","记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
             var choices=Descendants<CheckBox>(features).ToArray();
-            Assert(choices.Length==12&&choices.Distinct().Count()==12&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.Length==11&&choices.Distinct().Count()==11&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
             var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
             Assert(journal.IsChecked==false&&(bool)((Dictionary<string,object>)Call(window,"Options"))["memories"],"Grouping or navigation reset feature choices");
             foreach(var width in new[]{1000.0,1120.0}){window.Width=width;window.UpdateLayout();Assert(choices.All(c=>c.ActualWidth>0&&c.ActualHeight>0),"Grouped feature control was hidden at supported window width");}

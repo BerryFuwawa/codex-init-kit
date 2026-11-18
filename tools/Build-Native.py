@@ -17,6 +17,7 @@ for resource in sorted((root/'native/Data').iterdir()):
 for resource_name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]:
     params.append('/resource:'+str(root/'app'/resource_name)+',Native.Desktop.'+resource_name)
 if args.tests:
+    params.append(str(root/'tests/ProcessTermination.Tests.cs'))
     for resource in sorted((root/'tests/Data').glob('Cua*.js')):
         params.append('/resource:'+str(resource)+',NativeTest.'+resource.name)
 params.extend(str(path) for path in sorted((root/'native').glob('*.cs')))
@@ -48,7 +49,7 @@ if args.tests and result.returncode==0:
             sys.stdout.buffer.write(built.stdout+built.stderr)
             raise SystemExit(built.returncode)
 if args.tests and result.returncode==0:
-    fixture_source=(root/'tests/NativeUpdate.Fixture.cs').read_text(encoding='utf-8').replace('2.3.1.2','2.3.0.0')
+    fixture_source=(root/'tests/NativeUpdate.Fixture.cs').read_text(encoding='utf-8').replace('99.0.0.0','2.3.0.0')
     old_source=out/'old-update-fixture.cs'
     old_source.write_text(fixture_source,encoding='utf-8')
     old_build=subprocess.run(['rtk','proxy',str(framework/'csc.exe'),'/nologo','/target:exe','/utf8output','/out:'+str(out/'old-cli-fixture.exe'),str(old_source)],cwd=root,capture_output=True,timeout=30)

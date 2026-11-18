@@ -16,12 +16,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-    public const string Version = "2.3.2";
+public const string Version = "2.3.3";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","browser-rollback","browser-start-prepare","browser-start-verify","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","ws-start-info","ws-model-check","ws-check","ws-start-prepare","ws-start-verify","ws-rollback"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -45,7 +45,7 @@ public static class Core {
             Directory.CreateDirectory(directory,acl);
         } else Directory.CreateDirectory(directory);
         var assembly=Assembly.GetExecutingAssembly();
-        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","InitConfigAdapter.Tests.ps1","Backend220.ps1","Backend220.Tests.ps1","BrowserStartup.ps1","BrowserStartup.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","RtkRules.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
+        foreach(var name in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1","Backend.Tests.ps1","ConfigCompatibility.cs","InitializationPreflight.ps1","InitializationPreflight.Tests.ps1","InitConfigAdapter.Tests.ps1","Backend220.ps1","Backend220.Tests.ps1","DesktopCoreRecovery.ps1","DesktopCoreRecovery.Tests.ps1","RuntimeDiscovery.Tests.ps1","AntiOverDefense.md","RtkRules.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt","WorkJournal.md","CommandLineFirst.md","GitHubTransport.cs","GitHubDownload.ps1","DesktopUpdate225.Tests.ps1"}) {
             using(var stream=assembly.GetManifestResourceStream("Payload."+name)) {
                 if(stream==null) throw new InvalidOperationException("缺少内置资源："+name);
                 using(var file=new FileStream(Path.Combine(directory,name), FileMode.CreateNew,FileAccess.Write,FileShare.Read)) stream.CopyTo(file);
@@ -53,19 +53,11 @@ public static class Core {
         }
         return directory;
     }
-    public static bool NeedsAdmin(string operation) { return !NativeDesktopWorkflow.Handles(operation) && !operation.StartsWith("ws-",StringComparison.Ordinal) && operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-start-verify" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
-
-    public static string BrowserLaunchUri(Dictionary<string,object> prepared,Dictionary<string,object> current) {
-        const string family="OpenAI.Codex_2p2nqsd0c76g0";
-        var package=Value(prepared,"packageFullName","");var app=Value(prepared,"appId","");
-        if(Value(prepared,"packageFamilyName","")!=family || !Regex.IsMatch(package,@"^OpenAI\.Codex_[A-Za-z0-9._-]+_2p2nqsd0c76g0\z") || !Regex.IsMatch(app,@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z"))throw new InvalidDataException("官方桌面应用身份无效，启动已停止。");
-        foreach(var key in new[]{"packageFullName","packageFamilyName","appId"})if(!String.Equals(Value(prepared,key,""),Value(current,key,""),StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("桌面应用已更新，请重新执行浏览器修复后启动。");
-        return @"shell:AppsFolder\"+family+"!"+app;
-    }
+    public static bool NeedsAdmin(string operation) { return !NativeDesktopWorkflow.Handles(operation) && operation!="model-network-check" && operation!="initialize-preflight" && operation!="desktop-core-check" && operation!="desktop-core-repair" && operation!="browser-check" && operation!="status" && operation!="cua-check" && operation!="doctor" && operation!="config-check" && operation!="config-cleanup" && operation!="rollback-delete-all"; }
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"websocketRepair",true},{"wsProxyHost",""},{"wsProxyPort",""},{"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
@@ -120,7 +112,7 @@ public static class Core {
         }
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
-        foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate","websocketRepair"})normalized[key]=ReadOptionBoolean(source,key,true);
+        foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
         var cliMode=ReadOptionString(source,"cliMode","auto");
         if(cliMode!="auto"&&cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
         normalized["cliMode"]=cliMode;
@@ -129,7 +121,7 @@ public static class Core {
         normalized["parentEffort"]=ReadOptionString(source,"parentEffort",DefaultParentEffort);
         normalized["childEffort"]=ReadOptionString(source,"childEffort",DefaultChildEffort);
         normalized["proxyHost"]=ReadProxyHost(source);
-        foreach(var key in new[]{"wsProxyHost","wsProxyPort","desktopInstallLocation","modelCliPath"}){object value;if(source.TryGetValue(key,out value)){if(value!=null&&!(value is string))throw new ArgumentException(key+" 必须为文本。");normalized[key]=(value as string??"").Trim();}}
+        foreach(var key in new[]{"desktopInstallLocation","modelCliPath"}){object value;if(source.TryGetValue(key,out value)){if(value!=null&&!(value is string))throw new ArgumentException(key+" 必须为文本。");normalized[key]=(value as string??"").Trim();}}
         object projectPath;
         if(source.TryGetValue("projectPath",out projectPath)) {
             if(projectPath!=null && !(projectPath is string))throw new ArgumentException("项目路径必须为文本。");
@@ -165,11 +157,9 @@ public static class Core {
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
         if(WorkerNeedsAdmin(args[1],args[5]=="1",options) && !Admin) return 66;
         if(NativeDesktopWorkflow.Handles(args[1])){using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;return NativeDesktopWorker.Run(args[1],args[3],port,args[5]=="1",options,writer.WriteLine);}}
-        if(args[1].StartsWith("ws-",StringComparison.Ordinal)&&(args[1]!="ws-start-info"||options==null||!Convert.ToBoolean(options["allowCloseRunningApp"]))){
-            try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;Action<string> emit=value=>writer.WriteLine(value);var settings=WebSocketSettings.FromOptions(options??NormalizeOptions(null),port);Dictionary<string,object> report;
-                switch(args[1]){case "ws-start-info":var installed=WebSocketApp.Discover();writer.WriteLine("@@WS_APP@@"+Json.Serialize(new {installLocation=installed.InstallLocation,version=installed.Version,launchAlias=installed.LaunchAlias}));return 0;case "ws-model-check":report=WebSocketStartup.ModelCheck(settings,Value(options,"modelCliPath",""));emit(Value(report,"modelState",""));break;case "ws-check":report=WebSocketStartup.Check(settings,emit);break;case "ws-start-prepare":report=WebSocketStartup.Prepare(settings,Value(options,"desktopInstallLocation",""),emit);break;case "ws-start-verify":report=WebSocketStartup.Verify();emit(Value(report,"summary",""));break;default:WebSocketStartup.Rollback(emit);report=new Dictionary<string,object>{{"state","restored"},{"summary","WebSocket 启动准备已撤销"}};break;}
-                writer.WriteLine("@@WS_RESULT@@"+Json.Serialize(report));return report.ContainsKey("passed")&&!(bool)report["passed"]?1:0;}}
-            catch(Exception ex){File.AppendAllText(log,"WebSocket 线路操作未完成："+ex.Message+Environment.NewLine,new UTF8Encoding(false));return 1;}
+        if(args[1]=="model-network-check"){
+            try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;var report=NetworkDiagnostics.ModelCheck(Value(options,"modelCliPath",""),writer.WriteLine);writer.WriteLine("@@NETWORK_RESULT@@"+Json.Serialize(report));return (bool)report["passed"]?0:1;}}
+            catch(Exception ex){var report=NetworkDiagnostics.FailedReport(ex);File.AppendAllText(log,Value(report,"summary","")+Environment.NewLine+"@@NETWORK_RESULT@@"+Json.Serialize(report)+Environment.NewLine,new UTF8Encoding(false));return 1;}
         }
         var job=NeedsAdmin(args[1])?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"CodexInitKit-privileged-"+Guid.NewGuid().ToString("N")):Path.Combine(Root,"Jobs",args[2]);
         try {

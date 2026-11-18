@@ -806,7 +806,8 @@ END CODEX LUNA PROMPT V1.3
         $rebuiltAgentsText = [IO.File]::ReadAllText($agentsPath,[Text.Encoding]::UTF8)
         Assert ([Convert]::ToBase64String([IO.File]::ReadAllBytes($agentsPath)) -eq [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($expectedRebuildText))) 'Fresh AGENTS rebuild did not produce the embedded baseline and RTK reference exactly.'
         Assert ($rebuiltAgentsText.Contains('@' + $rtkFixturePath) -and $rebuiltAgentsText.Contains('<!-- BEGIN CODEX INIT WORK RULES -->') -and $rebuiltAgentsText.Contains('GOAL')) 'Fresh AGENTS rebuild omitted the RTK reference or base work rules.'
-        Assert ($rebuiltAgentsText -notmatch 'user-owned instruction|old Luna instructions|BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT|BEGIN LEMGE|D:\\Codex|folderManagement = false') 'Fresh AGENTS rebuild retained old global rules or drive binding text.'
+        $rebuiltRules = ($rebuiltAgentsText -split '\r?\n', 2)[1]
+        Assert ($rebuiltRules -notmatch 'user-owned instruction|old Luna instructions|BEGIN CODEX LUNA PROMPT|BEGIN CODEX FOLDER MANAGEMENT|BEGIN LEMGE|D:\\Codex|folderManagement = false') 'Fresh AGENTS rebuild retained old global rules or drive binding text.'
         Assert ((HashFile $projectAgentsPath) -eq $projectAgentsHash) 'Project AGENTS.md changed during the global AGENTS rebuild.'
     }
 

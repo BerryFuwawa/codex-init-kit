@@ -36,9 +36,6 @@ $script:DefaultOptions = [ordered]@{
     customGithubMirror = ''
     subagents = $false
     cuaRepair = $true
-    websocketRepair = $true
-    wsProxyHost = ''
-    wsProxyPort = ''
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
@@ -135,8 +132,7 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','websocketRepair','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
-    foreach($key in @('wsProxyHost','wsProxyPort')){$value=& $get $key;if($null -ne $value -and $value -isnot [string]){throw ($key+' 必须为文本。')};$normalized[$key]=if($null -eq $value){''}else{$value.Trim()}}
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $approvedProcesses=& $get 'closeApprovedProcesses'
     if($null -ne $approvedProcesses){
@@ -1425,9 +1421,8 @@ function Invoke-BackendMain {
     $proxySnapshot = $null
     try {
         $input=Resolve-BackendInput -RequestedOperation $RequestedOperation -RequestedPayloadRoot $RequestedPayloadRoot -RequestedDrive $RequestedDrive -RequestedProxyPort $RequestedProxyPort -RequestedInstallProtection:$RequestedInstallProtection.IsPresent -RequestedJobFile $RequestedJobFile -RequestedOptionsBase64 $RequestedOptionsBase64
-        if ($input.Operation -notin @('status','ws-start-info','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
+        if ($input.Operation -notin @('doctor','status','initialize-preflight','config-check','config-cleanup','rollback-delete-all')) { $proxySnapshot = Set-TransientProxyEnvironment $input.ProxyPort $input.Options.proxyHost }
         switch($input.Operation){
-            'ws-start-info' { if($input.Options.allowCloseRunningApp){Stop-InitializationApps $input.PayloadRoot $true ([string]$input.Options.closeApprovedProcesses)};$package=Get-OfficialDesktopPackage;Assert-DesktopReady $package;Write-BackendLine ('@@WS_APP@@'+(@{installLocation=$package.InstallLocation;version=[string]$package.Version}|ConvertTo-Json -Compress));return 0 }
             'status' { Write-BackendStatus (Get-ReadOnlyStatus $input.PayloadRoot); return 0 }
             'initialize-preflight' { Write-BackendLine ('@@INIT_PREFLIGHT@@'+((Get-InitializationPreflight $input.PayloadRoot)|ConvertTo-Json -Compress -Depth 8)); return 0 }
             'config-check' { return (Invoke-ConfigCompatibility -ProjectPath $input.Options.projectPath) }
@@ -1435,11 +1430,6 @@ function Invoke-BackendMain {
             'initialize' { return (Invoke-Initialize220 $input) }
             'desktop-update' { [void](Invoke-DesktopUpdate $input.PayloadRoot); return 0 }
             'official-cli-update' { return (Invoke-OfficialCliUpdate $input.PayloadRoot) }
-            'browser-check' { return (Invoke-BrowserOperation 'check' $input.PayloadRoot $input.ProxyPort $input.Options) }
-            'browser-repair' { return (Invoke-BrowserOperation 'repair' $input.PayloadRoot $input.ProxyPort $input.Options) }
-            'browser-rollback' { return (Invoke-BrowserOperation 'rollback' $input.PayloadRoot $input.ProxyPort $input.Options) }
-            'browser-start-prepare' { return (Invoke-BrowserStartWorker $input.PayloadRoot $input.ProxyPort $input.Options) }
-            'browser-start-verify' { return (Invoke-BrowserStartWorker $input.PayloadRoot 0 $input.Options -VerifyOnly) }
             'desktop-core-check' { return (Invoke-DesktopCoreOperation 'check' $input.PayloadRoot) }
             'desktop-core-repair' { return (Invoke-DesktopCoreOperation 'repair' $input.PayloadRoot) }
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }

@@ -8,16 +8,16 @@ public partial class MainWindow {
     LogViewport githubViewport;
     void UpdateBusyControls(){
         bool locked=busy&&activeOperation=="initialize";
-        foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,wsProxyHost,wsProxyPort,githubMirrors})control.IsEnabled=!locked;
+        foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,githubMirrors})control.IsEnabled=!locked;
         proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=!locked&&proxyEnabled.IsChecked==true;
         childModel.IsEnabled=childEffort.IsEnabled=!locked&&subagents.IsChecked==true;
-        githubCustomMirror.IsEnabled=!locked&&githubMirrors.IsChecked==true;UpdateWebSocketControls();if(locked)websocketEnabled.IsEnabled=websocketRepair.IsEnabled=false;
-        foreach(var b in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)){var label=Convert.ToString(b.Content);bool operation=new[]{"确认并开始","检查更新","下载并更新","更新官方","更新桌面","仅保存","保存 WS","保存下载","修复并启动","修复连接","检查连接","检查 WebSocket","验证重启","检查 CUA","检查并修复","开始诊断","安装 /","卸载启动","恢复原始","撤销 WebSocket","清理已","仅重试","切换官方","切换桌面","启动 Codex"}.Any(x=>label.StartsWith(x,StringComparison.Ordinal));if(operation){b.IsEnabled=!busy;b.ToolTip=busy?"当前操作正在执行，请等待结果后再操作。":null;}}
+        githubCustomMirror.IsEnabled=!locked&&githubMirrors.IsChecked==true;
+        foreach(var b in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)){var label=Convert.ToString(b.Content);bool operation=new[]{"确认并开始","保存代理","检查已保存","检查组件","修复组件","检查更新","下载并更新","更新官方","更新桌面","仅保存","保存 WS","保存下载","修复并启动","修复连接","检查连接","检查 WebSocket","验证重启","检查 CUA","检查并修复","开始诊断","安装 /","卸载启动","恢复原始","撤销 WebSocket","清理已","仅重试","切换官方","切换桌面","启动 Codex"}.Any(x=>label.StartsWith(x,StringComparison.Ordinal));if(operation){b.IsEnabled=!busy;b.ToolTip=busy?"当前操作正在执行，请等待结果后再操作。":null;}}
         UpdateRollbackActions();
     }
     void ApplyCompactLayout(){var root=Content as FrameworkElement;bool compact=root!=null&&root.ActualHeight>0&&root.ActualHeight<500;subtitle.Visibility=compact?Visibility.Collapsed:Visibility.Visible;heading.FontSize=compact?20:24;if(page=="初始化"&&wizard==0&&pageNavigation.Children.Count>0)pageNavigation.Children[0].Visibility=compact?Visibility.Collapsed:Visibility.Visible;}
     void WizardActions(params UIElement[] controls){Row(wizardActions,controls);wizardActions.Visibility=Visibility.Visible;}
-    static bool LocalOperation(string op){return new[]{"status","rollback-selected","rollback-delete-all","init-rollback","config-check","config-cleanup","cua-check","cua-repair","desktop-core-check","desktop-core-repair","guard-uninstall"}.Contains(op);}
+    static bool LocalOperation(string op){return new[]{"doctor","model-network-check","browser-check","browser-repair","status","rollback-selected","rollback-delete-all","init-rollback","config-check","config-cleanup","cua-check","cua-repair","desktop-core-check","desktop-core-repair","guard-uninstall"}.Contains(op);}
     void RememberReading(){if(viewedLogRecord!=null){viewedLogRecord.Reading=logViewport.Capture();viewedLogRecord.ShowRaw=showRawLog;}}
     OperationRecord VisibleRecord(){return page=="初始化"&&wizard==2?initializationRecord:page=="日志"?(selectedLogRecord??activeRecord):activeRecord;}
     void BeginRecord(string id,string title,string path,bool initialization){RememberReading();activeRecord=OperationRecord.Create(id,title,path);operationRecords[path]=activeRecord;selectedLogRecord=null;if(initialization)initializationRecord=activeRecord;viewedLogRecord=null;showRawLog=false;PersistRecord(activeRecord);}

@@ -13,101 +13,6 @@ foreach($name in @('Get-BrowserStateRoot','Get-BrowserContext','Test-BrowserProx
     if(Test-Path ('Function:'+ $name)){$functions[$name]=(Get-Item ('Function:'+$name)).ScriptBlock}
 }
 try {
-    $source=Join-Path $scratch 'official';$target=Join-Path $scratch 'runtimes\0123456789abcdef';$stateRoot=Join-Path $scratch 'state'
-    [void][IO.Directory]::CreateDirectory($source);[void][IO.Directory]::CreateDirectory($target)
-    $original=@'
-#!/usr/bin/env node
-import * as cua_repl from "@oai/cua-repl";
-
-try {
-  await cua_repl.launch();
-} catch (error) {
-  const error_message = error instanceof Error ? error.message : String(error);
-  console.error(`cua_repl could not start: ${error_message}`);
-  process.exitCode = 1;
-}
-'@
-    $original+="`n"
-    $launcher=Join-Path $target 'cua-repl.mjs';$sourceLauncher=Join-Path $source 'cua-repl.mjs'
-    [IO.File]::WriteAllText($sourceLauncher,$original,[Text.UTF8Encoding]::new($false))
-    [IO.File]::WriteAllText($launcher,$original,[Text.UTF8Encoding]::new($false))
-    foreach($folder in @($source,$target)){[IO.File]::WriteAllText((Join-Path $folder 'component.txt'),'official')}
-    function Get-BrowserStateRoot {return $stateRoot}
-    $context=[pscustomobject]@{Package=[pscustomobject]@{Version='26.1.0.0';PackageFullName='fixture26';InstallLocation=$source};Source=$source;Target=$target;Root=(Split-Path $target);Id='0123456789abcdef';SourceLauncher=$sourceLauncher;Launcher=$launcher}
-    function Get-BrowserContext {return $context}
-    function Confirm-CodexStopped {}
-    function Test-BrowserProxy {return 'fixture TCP reachable'}
-    function Test-BrowserEnvironment {return 'fixture env passed'}
-    $opts=Convert-BackendOptions @{proxyHost='192.168.50.4'}
-    foreach($key in @('browserRepair','officialCliUpdate','desktopUpdate','websocketRepair')){Assert220 $opts[$key] ('New option default: '+$key)}
-    $originalHash=(Get-FileDigest $launcher).Hash
-    $rc=Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts
-    Assert220 ($rc -eq 0) 'First browser patch failed.'
-    $patchedHash=(Get-FileDigest $launcher).Hash
-    Assert220 ($patchedHash -ne $originalHash) 'Browser launcher unchanged.'
-    $text=[IO.File]::ReadAllText($launcher)
-    Assert220 ($text.Contains('http://192.168.50.4:10808') -and $text.Contains('NODE_USE_ENV_PROXY') -and $text.Contains('NODE_REPL_UNTRUSTED_ENV_ALLOWLIST')) 'Proxy settings missing.'
-    Assert220 ((Compare-TreeInventory (Get-TreeInventory $source) $target).Passed) 'CUA rejected a validated managed patch.'
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 0 -and (Get-FileDigest $launcher).Hash -eq $patchedHash) 'Repeated browser patch was not idempotent.'
-    # Execute the generated ES module using a local fixture launch implementation.
-    $node=(Get-Command node.exe -ErrorAction SilentlyContinue)
-    if(-not $node){throw 'Node is required for the environment regression fixture.'}
-    $module=Join-Path $target 'node_modules\@oai\cua-repl'
-    [void][IO.Directory]::CreateDirectory($module)
-    [IO.File]::WriteAllText((Join-Path $module 'package.json'),'{"type":"module","exports":"./index.mjs"}')
-    [IO.File]::WriteAllText((Join-Path $module 'index.mjs'),'export async function launch(){ console.log(JSON.stringify({http:process.env.HTTP_PROXY,https:process.env.HTTPS_PROXY,no:process.env.NO_PROXY,flag:process.env.NODE_USE_ENV_PROXY,list:process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST})); }')
-    $run=Invoke-BoundedProcess $node.Source @($launcher) 15 @{NODE_REPL_UNTRUSTED_ENV_ALLOWLIST='EXISTING,EXISTING'}
-    $envReport=$run.Output.Trim()|ConvertFrom-Json
-    Assert220 ($run.ExitCode -eq 0 -and $envReport.http -eq 'http://192.168.50.4:10808' -and $envReport.https -eq $envReport.http -and $envReport.flag -eq '1' -and $envReport.no -eq 'localhost,127.0.0.1,::1') 'Injected variables did not reach launch.'
-    $allowed=@($envReport.list.Split(','))
-    Assert220 ($allowed.Count -eq 5 -and $allowed[0] -eq 'EXISTING') 'Allowlist was lost or duplicated.'
-    Remove-Item -LiteralPath (Join-Path $target 'node_modules') -Recurse -Force
-    # Actual subprocess inheritance probe through Node, without executing the live Codex runtime.
-    $bounded=$functions['Invoke-BoundedProcess'];$nodeExe=$node.Source
-    # Use the available Node fixture for both deadline and emitted-output checks.
-    $timeoutScript=Join-Path $scratch 'bounded-timeout.cjs'
-    [IO.File]::WriteAllText($timeoutScript,'if(process.argv[2] === "emit") console.log("fixture-before-timeout"); setTimeout(() => {}, 30000);',[Text.UTF8Encoding]::new($false))
-    $watch=[Diagnostics.Stopwatch]::StartNew()
-    $timed=& $bounded $nodeExe @($timeoutScript) 1
-    Assert220 ($timed.TimedOut -and $watch.Elapsed.TotalSeconds -lt 15) 'Bounded process did not enforce its deadline.'
-    $timedWithOutput=& $bounded $nodeExe @($timeoutScript,'emit') 8
-    Assert220 ($timedWithOutput.TimedOut -and $timedWithOutput.Output -match 'fixture-before-timeout') 'Output already emitted before timeout was not retained.'
-    function Invoke-BoundedProcess {param($FilePath,$Arguments,$TimeoutSeconds,$Environment=@{}) & $bounded $nodeExe $Arguments $TimeoutSeconds $Environment}
-    $envProbe=& $functions['Test-BrowserEnvironment'] $context 'http://127.0.0.1:10808'
-    Assert220 ($envProbe -match '继承通过') 'Node inheritance probe failed.'
-    Set-Item Function:Invoke-BoundedProcess $bounded
-    # CUA canonical repair must reapply only an already validated patch.
-    [IO.File]::WriteAllText((Join-Path $target 'component.txt'),'broken')
-    $repair=Invoke-RuntimeRepair -SourceInventory (Get-TreeInventory $source) -Target $target -RuntimeRoot (Split-Path $target) -RunDirectory $scratch -CopyAction {
-        param($from,$to,$copyLog)
-        [void][IO.Directory]::CreateDirectory($to)
-        Get-ChildItem -LiteralPath $from | Copy-Item -Destination $to -Recurse
-    }
-    Assert220 ($repair.Changed -and (Get-FileDigest $launcher).Hash -eq $patchedHash -and (Compare-TreeInventory (Get-TreeInventory $source) $target).Passed) 'CUA repair failed to retain the managed patch.'
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 0 $opts) -eq 0 -and (Get-FileDigest $launcher).Hash -eq $originalHash) 'Proxy off did not restore direct mode.'
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 0) 'Reapplying after direct mode failed.'
-    Assert220 ((Invoke-BrowserOperation 'rollback' $PayloadRoot 10808 $opts) -eq 0 -and (Get-FileDigest $launcher).Hash -eq $originalHash) 'Exact byte rollback failed.'
-    # Rollback must not depend on a working proxy or a successful Node probe.
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 0) 'Patch preparation before rollback test failed.'
-    function Test-BrowserEnvironment {throw 'fixture Node unavailable'}
-    Assert220 ((Invoke-BrowserOperation 'rollback' $PayloadRoot 10808 $opts) -eq 0 -and (Get-FileDigest $launcher).Hash -eq $originalHash) 'Rollback incorrectly depended on a Node probe.'
-    function Test-BrowserEnvironment {return 'fixture env passed'}
-    $backupFile=Get-ChildItem -LiteralPath $stateRoot -Filter '*.bin' | Select-Object -First 1
-    $backupBytes=[IO.File]::ReadAllBytes($backupFile.FullName)
-    [IO.File]::WriteAllText($backupFile.FullName,'bad backup')
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 2 -and (Get-FileDigest $launcher).Hash -eq $originalHash) 'Corrupt backup was accepted.'
-    [IO.File]::WriteAllBytes($backupFile.FullName,$backupBytes)
-    [IO.File]::AppendAllText($launcher,'// third party')
-    $thirdHash=(Get-FileDigest $launcher).Hash
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 2 -and (Get-FileDigest $launcher).Hash -eq $thirdHash) 'Third-party edit was overwritten.'
-    [IO.File]::WriteAllText($launcher,$original,[Text.UTF8Encoding]::new($false))
-    $recordPath=Join-Path $stateRoot '0123456789abcdef.json'
-    $record=[IO.File]::ReadAllText($recordPath)|ConvertFrom-Json;$record.patchedHash='bad';[IO.File]::WriteAllText($recordPath,($record|ConvertTo-Json))
-    Assert220 ((Invoke-BrowserOperation 'rollback' $PayloadRoot 10808 $opts) -eq 2 -and (Get-FileDigest $launcher).Hash -eq $originalHash) 'Metadata hash mismatch was accepted.'
-    $record.patchedHash=$patchedHash;$record.source='another-version';[IO.File]::WriteAllText($recordPath,($record|ConvertTo-Json))
-    Assert220 ((Invoke-BrowserOperation 'repair' $PayloadRoot 10808 $opts) -eq 2) 'Different app version was accepted.'
-    $rejected=$false;try{New-BrowserLauncherBytes ([Text.Encoding]::UTF8.GetBytes($original+'// new structure')) 'http://127.0.0.1:10808'}catch{$rejected=$true}
-    Assert220 $rejected 'Unknown launcher structure was accepted.'
     $before=[pscustomobject]@{Version='1.0.0.0';InstallLocation='fixture';Status='Ok'}
     $after=[pscustomobject]@{Version='2.0.0.0';InstallLocation='fixture';Status='Ok'}
     function Assert-DesktopStopped {return $before}
@@ -216,16 +121,16 @@ try {
     function Restore-InitializationCliSnapshot {$calls.Add('restore')}
     function Set-InitializationCliMode {param($Mode,$PayloadRoot) $calls.Add('cli:'+ $Mode);if($switchFails){throw 'fixture CLI unavailable'};return $Mode}
     function Assert-InitializationCliMode {param($Mode) $calls.Add('verify:'+ $Mode);if($finalFails){throw 'fixture mode changed'};return $Mode}
-    $inputData=[pscustomobject]@{PayloadRoot=$PayloadRoot;Drive='D';ProxyPort=10808;Options=(Convert-BackendOptions @{websocketRepair=$false});InstallProtection=$true}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Detected native CLI was not applied and verified after guard.'
+    $inputData=[pscustomobject]@{PayloadRoot=$PayloadRoot;Drive='D';ProxyPort=10808;Options=(Convert-BackendOptions @{});InstallProtection=$true}
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,verify:desktop-native') 'Detected native CLI was not applied and verified after guard.'
     $calls.Clear();$script:fixtureMode='OfficialStandalone'
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:official-standalone,browser,verify:official-standalone') 'Detected standalone CLI was not retained after guard.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:official-standalone,verify:official-standalone') 'Detected standalone CLI was not retained after guard.'
     $calls.Clear();$script:fixtureMode='Unknown';$rejected=$false
     try{[void](Invoke-Initialize220 $inputData)}catch{$rejected=$_.Exception.Message.Contains('无法识别初始化前的 CLI 模式')}
     Assert220 ($rejected -and ($calls -join ',') -eq 'preflight,detect') 'Unknown CLI mode did not stop before initialization changes.'
     $script:fixtureMode='DesktopNative'
     $calls.Clear();$desktopFails=$true;$after.Status='Ok'
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,browser,verify:desktop-native') 'Failed optional update did not continue as partial.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,guard,cli:desktop-native,verify:desktop-native') 'Failed optional update did not continue as partial.'
     $calls.Clear();function Invoke-DesktopUpdate {$calls.Add('desktop');throw (New-DesktopUnsafeError 'restart pending')}
     Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,detect,snapshot,desktop,base,official,restore') 'Pending desktop did not pause dependent repairs and restore CLI.'
     $calls.Clear();$inputData.Options.desktopUpdate=$false;$inputData.Options.officialCliUpdate=$false;$inputData.Options.browserRepair=$false;$inputData.Options.cliMode='desktop-native';$inputData.InstallProtection=$false
@@ -233,25 +138,12 @@ try {
     $calls.Clear();$inputData.Options.cliMode='official-standalone'
     Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,verify:official-standalone') 'Standalone selection required an optional update or guard.'
     $calls.Clear();$switchFails=$true;$inputData.Options.browserRepair=$true
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,restore,browser') 'Failed CLI selection did not restore the snapshot or continue independent work.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,restore') 'Failed CLI selection did not restore the snapshot or continue independent work.'
     $calls.Clear();$switchFails=$false;$finalFails=$true
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,browser,verify:official-standalone,restore') 'Changed final CLI mode was not reported and restored.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,verify:official-standalone,restore') 'Changed final CLI mode was not reported and restored.'
     $calls.Clear();$finalFails=$false;$baseFails=$true
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 1 -and ($calls -join ',') -eq 'preflight,snapshot,base,restore,browser') 'Failed base initialization did not restore CLI or report failure.'
-    $calls.Clear();$baseFails=$false;$finalFails=$false;$switchFails=$false;$inputData.Options.browserRepair=$false;$inputData.Options.websocketRepair=$true
-    function Initialize-WebSocketRoute {$calls.Add('websocket')}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,websocket,verify:official-standalone') 'WS preparation was not ordered after CLI selection.'
-    $calls.Clear();function Initialize-WebSocketRoute {$calls.Add('websocket');throw 'fixture WS unavailable'}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 2 -and ($calls -join ',') -eq 'preflight,snapshot,base,cli:official-standalone,websocket,verify:official-standalone') 'WS failure did not produce a partial result.'
-    $calls.Clear();$inputData.ProxyPort=0;$inputData.Options.wsProxyHost='';$inputData.Options.wsProxyPort=''
-    $directLines=[Collections.Generic.List[string]]::new()
-    function Write-BackendLine {param([string]$Text) $directLines.Add($Text)}
-    Assert220 ((Invoke-Initialize220 $inputData) -eq 0 -and -not $calls.Contains('websocket')) 'Direct mode should skip proxy repair without failing initialization.'
-    $summaryLine=$directLines|Where-Object {$_ -like '@@INIT_RESULT@@*'}|Select-Object -Last 1
-    $directSummary=$summaryLine.Substring('@@INIT_RESULT@@'.Length)|ConvertFrom-Json
-    $wsSteps=@($directSummary.steps|Where-Object {$_.stageId -eq 'websocket'})
-    Assert220 ($wsSteps.Count -eq 1 -and $wsSteps[0].state -eq 'skipped') 'Direct WS stage was duplicated or reported complete.'
-    Write-Output 'PASS: browser variables, allowlist, inheritance, idempotency, proxy off, exact rollback, unknown structure, hashes, app identity, CUA compatibility, winget results, initialization order and partial continuation. No live updates performed.'
+    Assert220 ((Invoke-Initialize220 $inputData) -eq 1 -and ($calls -join ',') -eq 'preflight,snapshot,base,restore') 'Failed base initialization did not restore CLI or report failure.'
+
 } finally {
     foreach($name in $functions.Keys){Set-Item ('Function:'+$name) $functions[$name]}
     if(Test-Path -LiteralPath $scratch){Remove-Item -LiteralPath $scratch -Recurse -Force}

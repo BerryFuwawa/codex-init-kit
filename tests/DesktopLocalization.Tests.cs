@@ -51,7 +51,7 @@ public static class DesktopLocalizationTests {
     }
     static void AuditOwnedErrors(string root) {
         var sources=new List<string>();
-        foreach(var name in new[]{"Backend.ps1","Backend220.ps1","DesktopCoreRecovery.ps1","BrowserStartup.ps1","cua.cmd"})sources.Add(File.ReadAllText(Path.Combine(root,name),Encoding.UTF8));
+        foreach(var name in new[]{"Backend.ps1","Backend220.ps1","DesktopCoreRecovery.ps1","cua.cmd"})sources.Add(File.ReadAllText(Path.Combine(root,name),Encoding.UTF8));
         var init=File.ReadAllText(Path.Combine(root,"init.cmd"),Encoding.GetEncoding(936));
         foreach(var prefix in new[]{"PMB64","KITB64"}){
             var b64=string.Join("",Regex.Matches(init,"(?m)^::"+prefix+":([A-Za-z0-9+/=]+)\\r?$").Cast<Match>().Select(m=>m.Groups[1].Value));

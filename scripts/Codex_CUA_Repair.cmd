@@ -147,7 +147,7 @@ function Get-BrowserLauncher {
     Assert-NoReparsePoint $Root -Tree
     return (Assert-ContainedPath $matches[0].FullName $Root)
 }
-function New-BrowserLauncherBytes {
+function Get-LegacyBrowserLauncherBytes {
     param([byte[]]$Original,[string]$Proxy)
     $text = [Text.UTF8Encoding]::new($false,$true).GetString($Original)
     $known = @'
@@ -184,16 +184,6 @@ function Get-BrowserBytesHash {
     $hash=[Security.Cryptography.SHA256]::Create()
     try { return [BitConverter]::ToString($hash.ComputeHash($Bytes)).Replace('-','').ToLowerInvariant() } finally { $hash.Dispose() }
 }
-function Write-BrowserAtomic {
-    param([string]$Path,[byte[]]$Bytes)
-    Assert-NoReparsePoint (Split-Path -Parent $Path)
-    if(Test-Path -LiteralPath $Path){Assert-NoReparsePoint $Path}
-    $temporary=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
-    try {
-        [IO.File]::WriteAllBytes($temporary,$Bytes)
-        if(Test-Path -LiteralPath $Path){[IO.File]::Replace($temporary,$Path,[NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
-    } finally { if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force} }
-}
 function Get-BrowserManagedPatch {
     param([string]$Source,[string]$Target,[switch]$AllowOriginal)
     $id=Split-Path -Leaf $Target
@@ -212,7 +202,7 @@ function Get-BrowserManagedPatch {
     $originalHash=Get-BrowserBytesHash $original
     $backup=Join-Path $stateRoot ($id+'-'+$originalHash+'.bin')
     if($record.originalHash -ne $originalHash -or -not(Test-Path -LiteralPath $backup) -or (Get-FileDigest $backup).Hash -ne $originalHash){throw 'Original bytes or backup hash changed; refusing overwrite.'}
-    $patched=New-BrowserLauncherBytes $original $record.proxy
+    $patched=Get-LegacyBrowserLauncherBytes $original $record.proxy
     $patchedHash=Get-BrowserBytesHash $patched
     if($record.patchedHash -ne $patchedHash){throw 'Managed patch metadata hash mismatch.'}
     $current=(Get-FileDigest $launcher).Hash
@@ -241,7 +231,6 @@ function Compare-TreeInventory {
         }
         $a = $actual.Files[$relative]
         $e = $Expected.Files[$relative]
-        if ($managed -and $relative -eq $managed.Relative -and $a.Hash -eq $managed.PatchedHash -and $e.Hash -eq $managed.OriginalHash) { continue }
         if ($a.Length -ne $e.Length -or $a.Hash -ne $e.Hash) {
             return [pscustomobject]@{ Passed = $false; Reason = ('File content differs: ' + $relative) }
         }
@@ -291,7 +280,12 @@ function Invoke-RuntimeRepair {
     if ($targetPath.Equals($SourceInventory.Root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Source and target must differ.' }
     if ($targetPath.StartsWith($SourceInventory.Root + '\', [StringComparison]::OrdinalIgnoreCase) -or $SourceInventory.Root.StartsWith($targetPath + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Source and target must not contain each other.' }
     $managed = Get-BrowserManagedPatch $SourceInventory.Root $targetPath -AllowOriginal
-    $reapply = $managed -and $managed.CurrentHash -eq $managed.PatchedHash
+    if(-not $managed -and (Test-Path -LiteralPath $targetPath)){
+        foreach($sourceLauncher in @(Get-ChildItem -LiteralPath $SourceInventory.Root -Filter 'cua-repl.mjs' -File -Recurse)){
+            $targetLauncher=Join-Path $targetPath $sourceLauncher.FullName.Substring($SourceInventory.Root.TrimEnd('\').Length+1)
+            if((Test-Path -LiteralPath $targetLauncher) -and (Get-BrowserBytesHash ([IO.File]::ReadAllBytes($targetLauncher))) -ne (Get-BrowserBytesHash ([IO.File]::ReadAllBytes($sourceLauncher.FullName)))){throw 'Browser launcher contains unrecognized changes; file preserved.'}
+        }
+    }
     $initial = Compare-TreeInventory $SourceInventory $targetPath
     if ($initial.Passed) { return [pscustomobject]@{ Changed = $false; Backup = $null; Quarantine = $null } }
     if ($InstallLocation) { Confirm-CodexStopped $InstallLocation $RuntimeRoot }
@@ -310,7 +304,6 @@ function Invoke-RuntimeRepair {
         if ($InstallLocation) { Confirm-CodexStopped $InstallLocation $RuntimeRoot }
         $copyLog = Join-Path $RunDirectory 'XCOPY.log'
         if ($CopyAction) { & $CopyAction $SourceInventory.Root $targetPath $copyLog } else { Copy-RuntimeTree $SourceInventory.Root $targetPath $copyLog }
-        if ($reapply) { Write-BrowserAtomic $managed.Launcher $managed.Patched }
         $verified = Compare-TreeInventory $SourceInventory $targetPath
         if (-not $verified.Passed) { throw ('Verification failed: ' + $verified.Reason) }
         $sourceNow = Compare-TreeInventory $SourceInventory $SourceInventory.Root

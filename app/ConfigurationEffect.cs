@@ -9,10 +9,8 @@ internal sealed class ConfigurationEffect {
         switch(id){
         case "config":e.name="Codex 配置（config.toml）";e.activation="新会话创建时重新读取会话默认值；已有会话和各功能开关是否热加载待验证。项目配置、配置档及会话参数可覆盖全局默认值。";e.impact="不关闭现有对话；只改文件不能改变当前回合已选的模型、权限或运行参数。";break;
         case "agents":e.name="全局规则（AGENTS.md）";e.activation="新会话／新运行重新装载规则；已有会话是否重读待验证。AGENTS.override.md、项目规则及指令优先级仍适用。";e.impact="不要求关闭桌面；已有对话保留原上下文，不能宣称已采用新规则。";break;
-        case "env":e.name="HTTP 代理（.env）";e.activation="由读取 .env 的新 CLI／组件进程采用；现有进程环境不会随文件自动改变。桌面主进程的 WebSocket 环境需单独准备与验证。";e.impact="不改变现有连接；新对话若复用旧组件，仍可能沿用旧环境。既有进程环境与启动方式的优先关系需核对。";break;
+        case "env":e.name="持久代理（.env 与当前用户）";e.activation="官方原生 CLI 启动时读取 .env；桌面 Node 连接在下次普通图标启动时继承当前用户代理及 NODE_USE_ENV_PROXY。现有进程环境不会随保存自动更新，需要重新打开后采用。";e.impact="当前 Windows 用户下其他遵循 HTTP_PROXY、HTTPS_PROXY 的程序也会读取这些设置。原有直连排除项保留；实际 HTTP、Work 与桌面 WebSocket 分别验收。";e.evidence="文件与持久用户设置检查；未验证当前运行实例采用此变更。";break;
         case "cli":e.name="CLI 路径选择";e.activation="下一次桌面启动并创建 CLI 时核对进程实际路径；保存的用户路径还可能受机器级或启动环境覆盖。";e.impact="现有 CLI 进程不会换成另一个程序。需要重新打开桌面时先保存全部对话，并另行确认。";break;
-        case "browser":e.name="浏览器入口";e.activation="新浏览器组件进程启动时读取入口。可先建立新连接；桌面是否复用旧组件待验证，需要退出时另行确认。";e.impact="已加载入口的组件不热替换；不关闭 Chrome 标签页。真实浏览器操作仍需单独验收。";break;
-        case "websocket":e.name="WebSocket 启动设置";e.activation="在方便退出时，通过本工具的“修复并启动 Codex”创建带代理环境的新桌面进程，再验收 Dot 连接。";e.impact="只保存本工具设置，不向正在运行的桌面注入环境。重新打开桌面会影响全部对话，必须另行确认。";break;
         case "guard":e.name="启动保护";e.activation="登录任务在下次符合条件的用户登录时执行；仅保存程序不代表任务注册成功，具体看阶段结果。";e.impact="不立即启动维护或关闭当前对话；不会令正在运行的 CLI 自动切换。";break;
         case "desktop":e.name="桌面应用组件";e.activation="下一次打开桌面后使用新组件；是否等待系统重启，以商店和组件检查结果为准。";e.impact="更新替换前需确认退出桌面，会中断所有正在进行的对话。";break;
         case "official":e.name="官方独立 CLI 组件";e.activation="下一次以该入口创建 CLI 进程时采用；单独更新组件不改变所选 CLI 模式。";e.impact="已有进程不热替换；已保留旧入口，当前实例版本未验证。";break;

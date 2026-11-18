@@ -150,137 +150,6 @@ function Invoke-OfficialCliUpdate {
         }}
     }
 }
-function Get-BrowserContext {
-    param([string]$PayloadRoot)
-    Import-CuaLibrary $PayloadRoot
-    $package=Get-OfficialDesktopPackage
-    Assert-DesktopReady $package
-    $source=Get-FullDirectoryPath (Join-Path $package.InstallLocation 'app\resources\cua_node')
-    Assert-NoReparsePoint $source -Tree
-    $id=Get-RequiredRuntimeId $source $package.InstallLocation
-    $root=Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\runtimes\cua_node'
-    $target=Assert-ContainedPath (Join-Path $root $id) $root
-    Assert-NoReparsePoint $target -Tree
-    $launcher=Get-BrowserLauncher $source
-    $relative=$launcher.Substring($source.Length+1)
-    return [pscustomobject]@{Package=$package;Source=$source;Target=$target;Root=$root;Id=$id;SourceLauncher=$launcher;Launcher=(Join-Path $target $relative)}
-}
-function Test-BrowserProxy {
-    param([string]$Proxy)
-    if(-not $Proxy){return '直连（代理关闭）'}
-    $uri=[uri]$Proxy;$client=[Net.Sockets.TcpClient]::new()
-    try {
-        $task=$client.ConnectAsync($uri.DnsSafeHost.Trim('[',']'),$uri.Port)
-        if(-not $task.Wait(3000)) {return '代理不可达（连接超时）'}
-        [void]$task.GetAwaiter().GetResult()
-        return '代理端口可达（TCP）；尚未验证 Chrome 或代理认证'
-    } catch {return ('代理不可达：'+$_.Exception.Message)} finally {$client.Dispose()}
-}
-function Test-BrowserEnvironment {
-    param($Context,[string]$Proxy)
-    # Execute the verified cache copy: WindowsApps may prohibit launching
-    # bundled executables directly outside the packaged application.
-    $node=Join-Path $Context.Target 'bin\node.exe'
-    $capability=Invoke-BoundedProcess $node @('-p',"JSON.stringify({proxy:process.allowedNodeEnvironmentFlags.has('--use-env-proxy')})") 15
-    if($capability.ExitCode -ne 0 -or $capability.Output -notmatch '"proxy":true'){throw 'Bundled Node does not advertise environment proxy support.'}
-    $values=@{HTTP_PROXY=$Proxy;HTTPS_PROXY=$Proxy;NO_PROXY='localhost,127.0.0.1,::1';NODE_USE_ENV_PROXY='1';NODE_REPL_UNTRUSTED_ENV_ALLOWLIST='HTTP_PROXY,HTTPS_PROXY,NO_PROXY,NODE_USE_ENV_PROXY'}
-    $script='const {spawnSync}=require("node:child_process");const keys=process.env.NODE_REPL_UNTRUSTED_ENV_ALLOWLIST.split(",");const env=Object.fromEntries(keys.map(k=>[k,process.env[k]]));const r=spawnSync(process.execPath,["-p","JSON.stringify(process.env)"],{env,encoding:"utf8"});if(r.status!==0)process.exit(1);const e=JSON.parse(r.stdout);for(const k of keys)if(e[k]!==process.env[k])process.exit(2);console.log("ENV_INHERITANCE_PASS");'
-    $probeRoot=Join-Path ([IO.Path]::GetTempPath()) ('CodexKit-browser-probe-'+[guid]::NewGuid().ToString('N'))
-    [void][IO.Directory]::CreateDirectory($probeRoot)
-    $probeFile=Join-Path $probeRoot 'probe.cjs'
-    try {
-        [IO.File]::WriteAllText($probeFile,$script,[Text.UTF8Encoding]::new($false))
-        $probe=Invoke-BoundedProcess $node @($probeFile) 15 $values
-        if($probe.ExitCode -ne 0 -or $probe.Output -notmatch 'ENV_INHERITANCE_PASS'){throw 'Environment inheritance probe failed.'}
-        return 'Node 代理能力及隔离子进程变量继承通过；CUA 沙箱真实连接待重启验证'
-    } finally {Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue;[IO.Directory]::Delete($probeRoot)}
-}
-function Invoke-BrowserOperation {
-    param([ValidateSet('check','repair','rollback')][string]$Mode,[string]$PayloadRoot,[int]$Port,[object]$Options)
-    $report=[ordered]@{desktopVersion='未检测';runtime='未检测';proxy=(Get-ProxyUrl $Port $Options.proxyHost);patch='未检查';integrity='未检查';reachability='未检查';environment='未检查';connection='重启后真实浏览器连接：待验证';checkedAt=(Get-Date -Format 'yyyy-MM-dd HH:mm:ss');error=''}
-    $mutex=$null;$acquired=$false
-    try {
-        $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-        $mutex=[Threading.Mutex]::new($false,('Local\CodexCUARepair-'+$sid))
-        try{$acquired=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$acquired=$true}
-        if(-not $acquired){throw 'Another CUA or browser check/repair is running. Wait for it to finish.'}
-        $context=Get-BrowserContext $PayloadRoot
-        $report.desktopVersion=[string]$context.Package.Version;$report.runtime=$context.Target
-        if($Mode -ne 'check'){Confirm-CodexStopped $context.Package.InstallLocation $context.Root}
-        $patch=Get-BrowserManagedPatch $context.Source $context.Target -AllowOriginal
-        if($patch -and $patch.Record.packageFullName -ne $context.Package.PackageFullName){throw 'Managed patch app version differs; rollback refused.'}
-        $original=[IO.File]::ReadAllBytes($context.SourceLauncher)
-        $originalHash=Get-BrowserBytesHash $original
-        $currentHash=(Get-FileDigest $context.Launcher).Hash
-        if(-not $patch -and $currentHash -ne $originalHash){throw 'Launcher has unrecognized changes; no overwrite attempted. Inspect CUA components first.'}
-        $inventory=Get-TreeInventory $context.Source
-        $check=Compare-TreeInventory $inventory $context.Target
-        $report.integrity=$check.Reason
-        if(-not $check.Passed){throw ('Component integrity check failed: '+$check.Reason)}
-        $report.patch=if($patch -and $currentHash -eq $patch.PatchedHash){'受管理补丁已准备；真实连接待重启验证'}else{'原始直连入口'}
-        if($Mode -ne 'rollback' -and -not($Mode -eq 'repair' -and -not $report.proxy)){
-            $report.reachability=Test-BrowserProxy $report.proxy
-            $report.environment=Test-BrowserEnvironment $context $report.proxy
-        }
-        if($Mode -eq 'rollback' -or ($Mode -eq 'repair' -and -not $report.proxy)){
-            if($patch -and $currentHash -eq $patch.PatchedHash){
-                $latest=Get-BrowserContext $PayloadRoot
-                if($latest.Package.PackageFullName -ne $context.Package.PackageFullName){throw 'App version changed before rollback.'}
-                $patch=Get-BrowserManagedPatch $context.Source $context.Target
-                Confirm-CodexStopped $context.Package.InstallLocation $context.Root
-                Write-BrowserAtomic $context.Launcher $patch.Original
-            }
-            $report.patch='已恢复原始直连入口（或原本未修改）'
-        } elseif($Mode -eq 'repair') {
-            $bytes=New-BrowserLauncherBytes $original $report.proxy
-            $stateRoot=Get-BrowserStateRoot
-            [void][IO.Directory]::CreateDirectory($stateRoot)
-            Assert-NoReparsePoint $stateRoot -Tree
-            $backup=Join-Path $stateRoot ($context.Id+'-'+$originalHash+'.bin')
-            if(Test-Path -LiteralPath $backup){if((Get-FileDigest $backup).Hash -ne $originalHash){throw 'Existing original backup failed hash verification.'}}
-            else {Write-BrowserAtomic $backup $original}
-            $record=[ordered]@{schema=1;runtimeId=$context.Id;appVersion=[string]$context.Package.Version;packageFullName=$context.Package.PackageFullName;source=$context.Source;target=$context.Target;proxy=$report.proxy;originalHash=$originalHash;patchedHash=(Get-BrowserBytesHash $bytes);preparedAt=[DateTime]::UtcNow.ToString('o')}
-            $latest=Get-BrowserContext $PayloadRoot
-            if($latest.Package.PackageFullName -ne $context.Package.PackageFullName -or (Get-FileDigest $context.SourceLauncher).Hash -ne $originalHash){throw 'Official app changed before patch; stopped.'}
-            if((Get-FileDigest $context.Launcher).Hash -ne $currentHash){throw 'Launcher changed before patch; stopped.'}
-            Confirm-CodexStopped $context.Package.InstallLocation $context.Root
-            # Commit journal first: AllowOriginal permits a safe retry after interruption.
-            Write-BrowserAtomic (Join-Path $stateRoot ($context.Id+'.json')) ([Text.Encoding]::UTF8.GetBytes(($record|ConvertTo-Json -Depth 5)))
-            Write-BrowserAtomic $context.Launcher $bytes
-            [void](Get-BrowserManagedPatch $context.Source $context.Target)
-            $report.patch='修复已准备；请重新启动 Codex 并运行连接测试'
-        }
-        return 0
-    } catch {$report.error=$_.Exception.Message;$report.patch='未完成：'+$report.error;Write-BackendLine ('[BROWSER INCOMPLETE] '+$report.error);return 2}
-    finally {
-        if($acquired -and $mutex){$mutex.ReleaseMutex()};if($mutex){$mutex.Dispose()}
-        Write-BackendLine ('@@BROWSER@@'+($report|ConvertTo-Json -Compress -Depth 5))
-        $root=Get-BrowserStateRoot
-        [void][IO.Directory]::CreateDirectory($root)
-        Write-BrowserAtomic (Join-Path $root 'last-check.json') ([Text.Encoding]::UTF8.GetBytes(($report|ConvertTo-Json -Depth 5)))
-    }
-}
-function Invoke-BrowserStartWorker {
-    param([string]$PayloadRoot,[int]$Port,[object]$Options,[switch]$VerifyOnly)
-    . (Assert-PayloadFile $PayloadRoot 'BrowserStartup.ps1')
-    if($VerifyOnly){
-        $package=Get-OfficialDesktopPackage
-        Assert-DesktopReady $package
-        $target=Get-BrowserLaunchTarget $package
-        Write-BackendLine ('@@BROWSER_START@@'+($target|ConvertTo-Json -Compress))
-        return 0
-    }
-    $mutex=$null;$acquired=$false
-    try {
-        $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-        $mutex=[Threading.Mutex]::new($false,('Local\CodexCUARepair-'+$sid))
-        try{$acquired=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$acquired=$true}
-        if(-not $acquired){throw 'Another CUA or browser operation is running.'}
-        return (Invoke-BrowserStartup -PayloadRoot $PayloadRoot -Port $Port -ProxyHost $Options.proxyHost -AllowDirect -PrepareOnly -EmitLaunchInfo)
-    } finally {
-        if($acquired -and $mutex){$mutex.ReleaseMutex()};if($mutex){$mutex.Dispose()}
-    }
-}
 function Get-InitializationCliSnapshot {
     param([string]$EnvironmentKey='Environment',[string]$StatePath)
     $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($EnvironmentKey,$false)
@@ -341,16 +210,6 @@ function Set-InitializationCliMode {
     }
     return (Assert-InitializationCliMode $Mode)
 }
-function Initialize-WebSocketRoute {
-    param($InputData)
-    if(-not $ToolkitExe -or -not [IO.File]::Exists($ToolkitExe)){throw '原生 WebSocket 组件未提供；可在连接检查页单独准备。'}
-    $package=Get-OfficialDesktopPackage;Assert-DesktopReady $package
-    $json=$InputData.Options|ConvertTo-Json -Compress -Depth 8;$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
-    $result=Invoke-BoundedProcess -FilePath $ToolkitExe -Arguments @('--ws-prepare',$encoded,[string]$InputData.ProxyPort,[string]$package.InstallLocation) -TimeoutSeconds 30
-    foreach($text in @($result.Output,$result.Error)){if($text){Write-BackendLine $text}}
-    if($result.TimedOut){throw 'WebSocket 启动准备超时，已停止该步骤。'}
-    if($result.ExitCode -ne 0){throw 'WebSocket 线路修复准备未完成，请查看日志。'}
-}
 function Invoke-Initialize220 {
     param($InputData)
     $opts=$InputData.Options
@@ -360,8 +219,6 @@ function Invoke-Initialize220 {
     if($opts.officialCliUpdate){$steps.Add(@{Name='更新官方独立 CLI';Kind='official'})}
     if($InputData.InstallProtection){$steps.Add(@{Name='安装启动保护';Kind='guard'})}
     $steps.Add(@{Name='应用所选 CLI';Kind='cli'})
-    if($opts.browserRepair){$steps.Add(@{Name='浏览器连接修复';Kind='browser'})}
-    if($opts.websocketRepair){$steps.Add(@{Name='WebSocket 线路修复';Kind='websocket'})}
     Write-BackendLine ('@@PROGRESS@@'+(@{step=1;total=$steps.Count+1;stageId='preflight';state='running';title='前置检查';detail='正在核对应用状态与所选 CLI'}|ConvertTo-Json -Compress))
     Stop-InitializationApps $InputData.PayloadRoot ([bool]$InputData.Options.allowCloseRunningApp) ([string]$InputData.Options.closeApprovedProcesses)
     $cliMode=$opts.cliMode
@@ -407,14 +264,8 @@ function Invoke-Initialize220 {
                         $selected=Set-InitializationCliMode $cliMode $InputData.PayloadRoot
                         $cliApplied=$true
                     }
-                    'websocket' {
-                        if(-not $desktopSafe){throw '桌面更新尚未完成，WebSocket 线路修复准备已暂停。'}
-                        if($InputData.ProxyPort -eq 0 -and -not $opts.wsProxyHost -and -not $opts.wsProxyPort){$entry=@{stageId='websocket';name=$step.Name;state='skipped';message='未配置代理，保持直连；仍可检查 WebSocket 线路'};$results.Add($entry);Write-BackendLine ('@@PROGRESS@@'+(@{step=$index+1;total=$steps.Count+1;stageId='websocket';state='skipped';title=$step.Name;detail=$entry.message}|ConvertTo-Json -Compress));continue InitializationStages}
-                        Initialize-WebSocketRoute $InputData
-                    }
-                    'browser' {if(-not $desktopSafe){throw 'Desktop update pending; browser repair paused.'};if((Invoke-BrowserOperation 'repair' $InputData.PayloadRoot $InputData.ProxyPort $opts) -ne 0){throw '浏览器修复未完成，可在浏览器连接页单独重试。'}}
                 }
-                $entry=@{stageId=$step.Kind;name=$step.Name;state='complete';message=if($step.Kind -eq 'cli'){'已选择并核验：'+$selected}elseif($step.Kind -eq 'websocket'){'启动准备已保存；通过本工具启动后验证真实连接'}else{'完成'}}
+                $entry=@{stageId=$step.Kind;name=$step.Name;state='complete';message=if($step.Kind -eq 'cli'){'已选择并核验：'+$selected}else{'完成'}}
                 $results.Add($entry);if($step.Kind -eq 'cli'){$cliResult=$entry;Write-BackendLine ('当前 CLI 模式：'+$selected)}
             } catch {
                 $message=$_.Exception.Message

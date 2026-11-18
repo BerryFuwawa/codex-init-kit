@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
-  "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.2",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.2/CodexInitKit.exe",
-  "sha256": "4d1c1f5af0a67f81f93806d4d1c2edfd9b79dbf5ff1ce808efe614ab0323f732",
-  "notes": "初始化回归简单：保留登录和用户资料，电脑名称与允许控制手动设置。保留按需配置、失败重试、代理、CLI 和连接修复。"
+    "schema_version":  1,
+    "repository":  "BerryFuwawa/codex-init-kit",
+    "version":  "2.3.3",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.3/CodexInitKit.exe",
+    "sha256":  "e3d86c53fe12a0e6c4b19bead38cd097425d82ea82a449eaa21af1f0080e98e3",
+    "notes":  "保存代理后照常打开 Codex。模型设置加入 GPT-6.2 Sol 和 Astra。"
 }

@@ -23,8 +23,7 @@ internal sealed class InitializationProgress {
         if(Convert.ToBoolean(options["officialCliUpdate"]))Stages.Add(new InitializationStage("official","更新官方独立 CLI"));
         if(protection)Stages.Add(new InitializationStage("guard","安装启动保护"));
         Stages.Add(new InitializationStage("cli","应用所选 CLI"));
-        if(Convert.ToBoolean(options["browserRepair"]))Stages.Add(new InitializationStage("browser","浏览器连接修复"));
-        if(options.ContainsKey("websocketRepair")&&Convert.ToBoolean(options["websocketRepair"]))Stages.Add(new InitializationStage("websocket","WebSocket 线路修复"));
+        if(Convert.ToBoolean(options["browserRepair"]))Stages.Add(new InitializationStage("browser","浏览器组件检查"));
         var retry=Core.Value(options,"retryStages","");if(retry.Length>0)foreach(var stage in Stages.Where(x=>x.Id!="preflight"&&!retry.Split(',').Contains(x.Id))){InitializationStage old;if(previous.TryGetValue(stage.Id,out old)){stage.State=old.State;stage.Detail=old.Detail;}else{stage.State="skipped";stage.Detail="本次仅重试所选项目，此项未执行。";}}
     }
     internal void Apply(Dictionary<string,object> record){

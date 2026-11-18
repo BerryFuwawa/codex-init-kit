@@ -63,6 +63,7 @@ public static class DesktopLocalization {
         {"Another desktop startup check or repair is running.","另一个桌面启动检查或修复正在运行，请等待结束。"},
         {"Managed patch app version differs; rollback refused.","补丁对应的桌面版版本不一致，已停止回滚。"},
         {"Launcher has unrecognized changes; no overwrite attempted. Inspect CUA components first.","浏览器入口存在无法识别的修改，未覆盖文件；请先检查 CUA 组件。"},
+        {"Browser launcher contains unrecognized changes; file preserved.","浏览器入口存在无法识别的修改，已保留原文件。"},
         {"Component integrity check failed:","组件完整性检查失败："},
         {"App version changed before rollback.","回滚前桌面版版本已变化，操作已停止。"},
         {"Existing original backup failed hash verification.","已有原始备份未通过哈希校验，操作已停止。"},

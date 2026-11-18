@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.2";
+    public const string Version="2.3.3";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -64,6 +64,6 @@ public interface INativeDownloads {string Text(string url,Func<string,bool> vali
 public sealed class OfficialDesktop {public string FullName,Version,Install,Source,StartupCode;}
 public interface INativeDesktop {OfficialDesktop Discover();}
 public sealed class ProcessIdentity {public int Id,ParentId,SessionId;public long Started;public string Name,Path,Owner;internal string CommandLine;public string Key{get{return Id+":"+Started;}}}
-public interface INativeProcesses {List<ProcessIdentity> List(NativePaths paths,OfficialDesktop desktop);void RequestExit(ProcessIdentity process,bool force);List<ProcessIdentity> Wait(NativePaths paths,OfficialDesktop desktop,int timeoutMs);}
+public interface INativeProcesses {List<ProcessIdentity> List(NativePaths paths,OfficialDesktop desktop);List<ProcessIdentity> RuntimeUsers(NativePaths paths,OfficialDesktop desktop);void Terminate(ProcessIdentity process);List<ProcessIdentity> Wait(NativePaths paths,OfficialDesktop desktop,IEnumerable<ProcessIdentity> tracked,int timeoutMs);}
 public sealed class NativeServices {public INativeRegistry Registry;public INativeCommands Commands;public INativeDownloads Downloads;public INativeDesktop Desktop;public INativeProcesses Processes;public Action<string> Log=delegate{};}
 }

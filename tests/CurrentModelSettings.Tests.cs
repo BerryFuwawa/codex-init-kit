@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Windows.Controls;
@@ -42,6 +44,25 @@ public static class CurrentModelSettingsTests {
                 Func<string,ComboBox> combo=name=>(ComboBox)type.GetField(name,flags).GetValue(window);
                 Assert(Convert.ToString(combo("parentModel").SelectedItem)=="gpt-6-astra"&&Convert.ToString(combo("parentEffort").SelectedItem)=="max"&&Convert.ToString(combo("childModel").SelectedItem)=="gpt-6-luna"&&Convert.ToString(combo("childEffort").SelectedItem)=="high","Window did not load current settings at startup");
                 Assert(!combo("childModel").IsEnabled&&File.ReadAllText(config)==before&&!File.Exists(agents),"Opening the window modified configuration or enabled subagents");
+
+                var expectedEfforts=new[]{"low","medium","high","xhigh","max","ultra"};
+                var parentEffort=combo("parentEffort");
+                combo("parentModel").SelectedItem="gpt-6.2-sol";
+                Assert(parentEffort.Items.Cast<string>().SequenceEqual(expectedEfforts),"GPT-6.2 Sol did not expose its six reasoning efforts");
+                parentEffort.SelectedItem="ultra";
+
+                var subagents=(CheckBox)type.GetField("subagents",flags).GetValue(window);
+                subagents.IsChecked=true;
+                var childEffort=combo("childEffort");
+                combo("childModel").SelectedItem="gpt-6.2-astra";
+                Assert(childEffort.IsEnabled&&childEffort.Items.Cast<string>().SequenceEqual(expectedEfforts),"GPT-6.2 Astra did not expose its six reasoning efforts");
+                childEffort.SelectedItem="xhigh";
+
+                var selected=(Dictionary<string,object>)type.GetMethod("Options",flags).Invoke(window,null);
+                var generated=Native.NativeInitializer.Config(new Native.NativePaths{Workspace=root},NativeDesktopWorkflow.Options(selected,0));
+                Assert(ManagedToml.SavedValue(generated,"model")=="gpt-6.2-sol"&&ManagedToml.SavedValue(generated,"model_reasoning_effort")=="ultra","Parent selection did not reach the generated configuration");
+                Assert(ManagedToml.SavedValue(generated,"agents","default_subagent_model")=="gpt-6.2-astra"&&ManagedToml.SavedValue(generated,"agents","default_subagent_reasoning_effort")=="xhigh","Child selection did not reach the generated configuration");
+                Assert(File.ReadAllText(config)==before,"Changing the model controls saved settings before confirmation");
             } finally {window.Close();}
         } finally {Environment.SetEnvironmentVariable("CODEX_HOME",previous,EnvironmentVariableTarget.Process);}
     }
