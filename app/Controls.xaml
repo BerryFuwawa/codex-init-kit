@@ -92,8 +92,16 @@
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ProgressBar"><Grid ClipToBounds="True">
       <Border x:Name="PART_Track" Background="#2B3A4C" CornerRadius="4"/>
       <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="4" HorizontalAlignment="Left"/>
-      <Border x:Name="Activity" Width="70" Background="{TemplateBinding Foreground}" CornerRadius="4" HorizontalAlignment="Left" Visibility="Collapsed"><Border.RenderTransform><TranslateTransform x:Name="ActivityOffset" X="-70"/></Border.RenderTransform></Border>
-    </Grid><ControlTemplate.Triggers><Trigger Property="IsIndeterminate" Value="True"><Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/><Setter TargetName="Activity" Property="Visibility" Value="Visible"/><Trigger.EnterActions><BeginStoryboard x:Name="ActivityMotion"><Storyboard><DoubleAnimation Storyboard.TargetName="ActivityOffset" Storyboard.TargetProperty="X" From="-70" To="650" Duration="0:0:1.6" RepeatBehavior="Forever"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.EnterActions><Trigger.ExitActions><StopStoryboard BeginStoryboardName="ActivityMotion"/></Trigger.ExitActions></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+      <Border x:Name="Activity" CornerRadius="4" Visibility="Collapsed">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+            <LinearGradientBrush.RelativeTransform><TranslateTransform x:Name="ActivityOffset"/></LinearGradientBrush.RelativeTransform>
+            <GradientStop Offset="0" Color="#009DAFC4"/><GradientStop Offset="0.003" Color="#9DAFC4"/>
+            <GradientStop Offset="0.097" Color="#AFBED0"/><GradientStop Offset="0.1" Color="#00AFBED0"/>
+          </LinearGradientBrush>
+        </Border.Background>
+      </Border>
+    </Grid><ControlTemplate.Triggers><Trigger Property="IsIndeterminate" Value="True"><Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/><Setter TargetName="Activity" Property="Visibility" Value="Visible"/><Trigger.EnterActions><BeginStoryboard x:Name="ActivityMotion"><Storyboard><DoubleAnimation Storyboard.TargetName="ActivityOffset" Storyboard.TargetProperty="X" From="0" To="0.9" Duration="0:0:1.6" RepeatBehavior="Forever"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.EnterActions><Trigger.ExitActions><StopStoryboard BeginStoryboardName="ActivityMotion"/></Trigger.ExitActions></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style TargetType="Expander"><Setter Property="Foreground" Value="#AEB8C4"/><Setter Property="Padding" Value="4"/></Style>
   <Style x:Key="KitRollbackItem" TargetType="ListBoxItem"><Setter Property="Margin" Value="0,2"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SelectionSurface" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8"><ContentPresenter HorizontalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="SelectionSurface" Property="Background" Value="#3B5066"/><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SelectionSurface" Property="BorderBrush" Value="#AFBED0"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>

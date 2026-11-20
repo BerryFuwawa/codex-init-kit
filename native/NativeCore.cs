@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.3";
+    public const string Version="2.3.4";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -37,7 +37,12 @@ public sealed class NativePaths {
     public string LegacyCli{get{return Path.Combine(LocalData,"OpenAI","Codex","cli");}}
     public string RuntimeRoot{get{return Path.Combine(LocalData,"OpenAI","Codex","runtimes","cua_node");}}
     public string BackupRoot{get{return Path.Combine(Documents,"Codex初始化备份");}}
-    public static NativePaths Current(){var profile=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);return new NativePaths{Home=Environment.GetEnvironmentVariable("CODEX_HOME")??Path.Combine(profile,".codex"),LocalData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),RoamingData=Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),Documents=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),UserTools=Path.Combine(profile,".local","bin"),Workspace=null,Self=Assembly.GetEntryAssembly().Location,SearchPath=Environment.GetEnvironmentVariable("PATH")};}
+    public static string CodexHome() {
+        var home=Environment.GetEnvironmentVariable("CODEX_HOME",EnvironmentVariableTarget.Process);
+        if(String.IsNullOrWhiteSpace(home))home=Environment.GetEnvironmentVariable("CODEX_HOME",EnvironmentVariableTarget.User);
+        return Path.GetFullPath(String.IsNullOrWhiteSpace(home)?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),".codex"):home);
+    }
+    public static NativePaths Current(){var profile=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);return new NativePaths{Home=CodexHome(),LocalData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),RoamingData=Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),Documents=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),UserTools=Path.Combine(profile,".local","bin"),Workspace=null,Self=Assembly.GetEntryAssembly().Location,SearchPath=Environment.GetEnvironmentVariable("PATH")};}
     public void Validate(){foreach(var p in new[]{Home,LocalData,RoamingData,Documents,UserTools})if(String.IsNullOrWhiteSpace(p)||!Path.IsPathRooted(p))throw new ArgumentException("初始化目录必须为明确的绝对路径。");if(!Directory.Exists(Documents))throw new DirectoryNotFoundException("Documents 目录不可用："+Documents);}
 }
 public sealed class NativeOptions {

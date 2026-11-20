@@ -16,12 +16,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-public const string Version = "2.3.3";
+public const string Version = "2.3.4";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check","relay-enable","relay-disable","relay-sync"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
@@ -156,7 +156,25 @@ public const string Version = "2.3.3";
         var log=Path.Combine(Logs,args[2]+".log");
         if(Sid!=args[6]) { File.WriteAllText(log,"管理员账户与原账户不同。操作已停止，请使用同一账户授权。\r\n",Encoding.UTF8); return 65; }
         if(WorkerNeedsAdmin(args[1],args[5]=="1",options) && !Admin) return 66;
-        if(NativeDesktopWorkflow.Handles(args[1])){using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;return NativeDesktopWorker.Run(args[1],args[3],port,args[5]=="1",options,writer.WriteLine);}}
+        if(NativeDesktopWorkflow.Handles(args[1])){
+            using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){
+                writer.AutoFlush=true;
+                return NativeDesktopWorker.Run(args[1],args[3],port,args[5]=="1",options,writer.WriteLine);
+            }
+        }
+        if(args[1]=="relay-enable" || args[1]=="relay-disable" || args[1]=="relay-sync"){
+            using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){
+                try {
+                    bool sync=args[1]=="relay-sync";
+                    bool enable=args[1]=="relay-enable" || (sync && port>0);
+                    if(enable && port==0)throw new ArgumentException("请先选择有效的代理端口。");
+                    var target=enable?new IPEndPoint(IPAddress.Parse(Value(options,"proxyHost",DefaultProxyHost)),port):null;
+                    if(!RemoteRelayService.Configure(target,sync)){writer.WriteLine("转发已关闭。");return 0;}
+                    writer.WriteLine(enable?"远控转发已开启。请在 Codex 的「控制其他设备」中刷新。":"远控转发已关闭，服务和专用 hosts 映射已移除。");
+                    return 0;
+                } catch(Exception ex){writer.WriteLine("远控转发设置未完成："+ex.Message);return 1;}
+            }
+        }
         if(args[1]=="model-network-check"){
             try{using(var writer=new StreamWriter(log,false,new UTF8Encoding(false))){writer.AutoFlush=true;var report=NetworkDiagnostics.ModelCheck(Value(options,"modelCliPath",""),writer.WriteLine);writer.WriteLine("@@NETWORK_RESULT@@"+Json.Serialize(report));return (bool)report["passed"]?0:1;}}
             catch(Exception ex){var report=NetworkDiagnostics.FailedReport(ex);File.AppendAllText(log,Value(report,"summary","")+Environment.NewLine+"@@NETWORK_RESULT@@"+Json.Serialize(report)+Environment.NewLine,new UTF8Encoding(false));return 1;}

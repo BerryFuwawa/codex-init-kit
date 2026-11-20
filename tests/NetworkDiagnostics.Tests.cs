@@ -12,6 +12,7 @@ namespace CodexKit {
 internal static class NetworkDiagnosticsTests {
     static void Require(bool passed,string message){if(!passed)throw new InvalidDataException(message);}
     internal static void Run(string directory){
+        RemoteControlRelayTests.Run(directory);
         var home=Path.Combine(directory,"saved-network");Directory.CreateDirectory(home);var path=Path.Combine(home,".env");File.WriteAllText(path,"CUSTOM=preserve\nHTTPS_PROXY=http://127.0.0.1:6112\nNO_PROXY=localhost,127.0.0.1\n");var before=File.ReadAllBytes(path);
         var saved=SavedNetworkConfiguration.Read(home,key=>key=="HTTPS_PROXY"?"http://127.0.0.1:6113":null);Require(saved.Summary.Contains(":6112")&&!saved.Summary.Contains(":6113")&&saved.Summary.Contains(".env 已保存")&&File.ReadAllBytes(path).SequenceEqual(before),"Saved A was replaced by draft or inherited B");
         var probe=NetworkDiagnostics.ProbeStartInfo("fixture.exe");foreach(var key in new[]{"HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","NODE_USE_ENV_PROXY","NO_PROXY","CODEX_CLI_PATH"})Require(probe.EnvironmentVariables[key]==Environment.GetEnvironmentVariable(key),"Probe injected or cleared "+key);Require(probe.WorkingDirectory==Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Probe inherited repository config scope");
@@ -26,13 +27,65 @@ internal static class NetworkDiagnosticsTests {
         var checks=new Dictionary<string,object>();checks["network.provider_reachability"]=new{status=http};checks["network.websocket_reachability"]=new{status="ok",details=new Dictionary<string,object>{{"handshake result",handshake},{"supports websockets",skipped?"false":"true"}}};checks["network.env"]=new{details=new Dictionary<string,object>{{"respect system proxy",system},{"managed proxy","not configured"}}};return Core.ReadJson(Core.Json.Serialize(new{checks=checks}));
     }
     static object Field(object target,string name){return target.GetType().GetField(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(target);}
-    internal static void VerifyWindow(){
+    internal static void VerifyWindow(string directory){
         var window=new MainWindow(true);var path=Path.Combine(Path.GetTempPath(),"CodexKit-network-ui-"+Guid.NewGuid().ToString("N")+".log");var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
         try{
             File.WriteAllText(path,"@@NETWORK_RESULT@@"+Core.Json.Serialize(new{kind="model",passed=false,modelState="隔离探针未通过",configurationPath="fixture/.env",savedConfiguration="HTTPS_PROXY：.env 已保存 · http://127.0.0.1:6112",proxyPolicy="官方 CLI 策略"})+"\n");
             window.GetType().GetField("lastLog",flags).SetValue(window,path);window.GetType().GetField("logInputComplete",flags).SetValue(window,true);window.GetType().GetMethod("ReadLog",flags).Invoke(window,null);window.GetType().GetMethod("Navigate",flags).Invoke(window,new object[]{"连接与修复"});
-            var labels=InitializationFlowTests.Descendants<Button>(window.Content as DependencyObject).Select(x=>Convert.ToString(x.Content)).ToArray();Require(labels.Contains("检查已保存的模型线路")&&!labels.Any(x=>x.Contains("启动 Codex")||x.Contains("保存 WS")),"Custom launch remains in connection page");var body=String.Join("\n",InitializationFlowTests.Descendants<TextBlock>(window.Content as DependencyObject).Select(x=>x.Text));Require(body.Contains(":6112")&&body.Contains("官方 CLI 策略")&&body.Contains("隔离探针未通过"),"Probe result or saved source lost in log UI");Require(window.GetType().GetField("wsProxyHost",flags)==null,"Independent WS override remains");
+            var labels=InitializationFlowTests.Descendants<Button>(window.Content as DependencyObject).Select(x=>Convert.ToString(x.Content)).ToArray();Require(labels.Contains("开启远控转发"),"Remote relay switch missing");Require(labels.Contains("检查已保存的模型线路")&&!labels.Any(x=>x.Contains("启动 Codex")||x.Contains("保存 WS")),"Custom launch remains in connection page");var body=String.Join("\n",InitializationFlowTests.Descendants<TextBlock>(window.Content as DependencyObject).Select(x=>x.Text));Require(body.Contains(":6112")&&body.Contains("官方 CLI 策略")&&body.Contains("隔离探针未通过"),"Probe result or saved source lost in log UI");Require(window.GetType().GetField("wsProxyHost",flags)==null,"Independent WS override remains");
+            VerifyProgressTravel(window,directory);
         }finally{window.Close();File.Delete(path);}
+    }
+    static int[] ProgressPixels(ProgressBar bar) {
+        int width=(int)Math.Ceiling(bar.ActualWidth), height=(int)Math.Ceiling(bar.ActualHeight);
+        var image=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);
+        var drawing=new DrawingVisual();
+        using(var dc=drawing.RenderOpen())
+            dc.DrawRectangle(new VisualBrush(bar),null,new Rect(0,0,width,height));
+        image.Render(drawing);
+        var row=new byte[width*4];
+        image.CopyPixels(new Int32Rect(0,height/2,width,1),row,width*4,0);
+        int first=-1,last=-1;
+        for(int x=0;x<width;x++)if(row[x*4+2]>105){if(first<0)first=x;last=x;}
+        Require(first>=0 && last-first>=width*.08 && last-first<=width*.12,
+            "Bright segment missing or clipped: "+first+".."+last+" of "+width);
+        return new[]{first,last,width};
+    }
+    static void VerifyProgressTravel(MainWindow window,string directory){
+        var bar=(ProgressBar)Field(window,"progress");
+        window.Left=-20000;window.Top=-20000;window.ShowInTaskbar=false;window.Show();
+        var frames=new List<string>{"run,window,track,first,last"};
+        foreach(string run in new[]{"narrow","wide","resize"}){
+            bar.IsIndeterminate=false;
+            window.Width=run=="wide"?1480:1000;
+            window.UpdateLayout();Pump(35);
+            bar.IsIndeterminate=true;
+            bool left=false,right=false,dragging=false;
+            double previous=0;int initialWidth=0;
+            var timer=System.Diagnostics.Stopwatch.StartNew();
+            while(timer.ElapsedMilliseconds<2500 && !right){
+                Pump(20);
+                var p=ProgressPixels(bar);
+                double start=(double)p[0]/p[2];
+                frames.Add(String.Join(",",run,window.Width,p[2],p[0],p[1]));
+                if(initialWidth==0)initialWidth=p[2];
+                if(!left){left=start<.025; if(!left)continue;}
+                Require(start+.025>=previous,"Animation restarted before reaching the current right edge");
+                previous=start;
+                if(run=="resize"){
+                    if(!dragging && start>.18 && start<.65)dragging=true;
+                    if(dragging && window.Width<1479){
+                        window.Width=Math.Min(1480,window.Width+120);window.UpdateLayout();continue;
+                    }
+                }
+                right=p[1]>=p[2]-4;
+                if(right && run=="resize")Require(dragging && p[2]>=initialWidth+450,
+                    "Window did not widen during this sweep");
+            }
+            Require(left && right,"Progress did not traverse the track: "+run);
+        }
+        bar.IsIndeterminate=false;
+        File.WriteAllLines(Path.Combine(directory,"progress-travel.csv"),frames);
     }
     internal static void Visual(string directory){
         var indicator=new ActivityIndicator{State="running",Width=36,Height=36};var panel=new StackPanel{Background=MorandiTheme.Canvas,Margin=new Thickness(0),Width=390,Height=210};panel.Children.Add(new Image{Source=Brand.VectorLogo,Width=40,Height=40,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,12)});panel.Children.Add(indicator);panel.Children.Add(new TextBlock{Text="模型线路检查 · 正在处理",TextWrapping=TextWrapping.Wrap,Foreground=MorandiTheme.Text,FontSize=16,Margin=new Thickness(0,12,0,0)});var window=new Window{Content=panel,Width=390,Height=210,Left=-20000,Top=-20000,ShowInTaskbar=false,UseLayoutRounding=true};

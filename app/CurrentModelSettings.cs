@@ -9,9 +9,7 @@ public sealed class CurrentModelSettings {
     public string ParentModel="gpt-6.1-sol", ParentEffort="medium", ChildModel="gpt-6.1-sol", ChildEffort="medium";
 
     public static string CodexHome() {
-        var home=Environment.GetEnvironmentVariable("CODEX_HOME",EnvironmentVariableTarget.Process);
-        if(String.IsNullOrWhiteSpace(home))home=Environment.GetEnvironmentVariable("CODEX_HOME",EnvironmentVariableTarget.User);
-        return Path.GetFullPath(String.IsNullOrWhiteSpace(home)?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),".codex"):home);
+        return Native.NativePaths.CodexHome();
     }
     static string ReadOptional(string path) {
         try{return File.ReadAllText(path,Encoding.UTF8);}

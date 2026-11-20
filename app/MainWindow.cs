@@ -481,7 +481,7 @@ public partial class MainWindow : Window {
     string Impact(string op) {
         switch(op) {
             case "cua-repair":return "检查并修复官方桌面应用的 CUA 组件，修复前单独备份。";
-            case "proxy":return "更新当前用户 Codex 的代理配置："+ProxySummary()+"。";
+            case "proxy":return "更新当前用户 Codex 的代理配置："+ProxySummary()+"。已开启的远控转发将同步新上游；取消勾选代理并保存会同时关闭转发。";
             case "config-cleanup":return "先备份用户配置、profile 及所选项目配置，再仅移除 features.code_mode_tool_description_first 和 features.guardianv2.thread_context 的可靠布尔赋值。复杂写法保留并提示。不会重置配置或关闭 Codex；session-flags 警告需单独处理。";
             case "init-rollback":return "恢复最新初始化备份，可能停止 Codex 进程。CUA 和已创建的工作目录不在此回滚范围内。";
             case "guard-uninstall":return "移除保护器管理的登录任务、启动入口与配置。";
@@ -506,9 +506,11 @@ public partial class MainWindow : Window {
             var localOperation=LocalOperation(op);
             var request=initialize?(initializationRequest??new InitializationRequest(Drive(),Port(),guard.IsChecked==true,extraOptions??Options())):null;
             int proxy=initialize?request.Port:localOperation?0:Port();string disk=initialize?request.Drive:Environment.SystemDirectory.Substring(0,1);
-            var options=initialize?request.Options():configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:localOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:ProxyOptions();
+            var options=initialize?request.Options():configOperation?new Dictionary<string,object>{{"projectPath",compatibilityProjectPath},{"proxyHost",Core.DefaultProxyHost}}:localOperation?new Dictionary<string,object>{{"proxyHost",Core.DefaultProxyHost}}:op=="relay-enable"?new Dictionary<string,object>{{"proxyHost",ProxyHost()}}:ProxyOptions();
             if(extraOptions!=null)foreach(var pair in extraOptions)options[pair.Key]=pair.Value;
             bool initGuard=initialize?request.Guard:false;if(initialize){lastInitializationPort=proxy;lastInitializationDrive=disk;lastInitializationGuard=initGuard;}
+            if(op=="relay-enable" && proxy==0)throw new InvalidOperationException("请先勾选上方的代理配置并选择端口。");
+            if(op=="relay-enable")confirmationText="使用当前代理 "+new System.Net.IPEndPoint(System.Net.IPAddress.Parse(Core.Value(options,"proxyHost",Core.DefaultProxyHost)),proxy)+" 添加 chatgpt.com 的系统 hosts 映射，并安装随 Windows 启动的 CodexInitKitRelay 服务。关闭工具后继续转发，可在此关闭并移除。";
             if(confirm && !Confirm(title,confirmationText??Impact(op)))return;
             if(configOperation)compatibilityAdvice="";
             if(coreOperation)desktopCoreAdvice="";
@@ -525,6 +527,19 @@ public partial class MainWindow : Window {
                 if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=chineseLogText;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;repairTab=4;Navigate("连接与修复");}
                 else if(coreOperation){if(desktopCoreAdvice.Length==0)desktopCoreAdvice=chineseLogText;banner.Text=process.ExitCode==0?"桌面启动组件检查完成 · 请查看结果":"桌面启动检查或修复未完成 · 请查看原因";progress.Value=100;repairTab=3;Navigate("连接与修复");if(process.ExitCode!=0&&!preview)MessageBox.Show(this,desktopCoreAdvice,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
                 else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,rawDiagnosticText);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(rawDiagnosticText);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;repairTab=0;Navigate("连接与修复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
+                else if(op=="relay-enable"||op=="relay-disable"){
+                    banner.Text=process.ExitCode==0?title+"完成":title+"未完成 · 查看日志";
+                    repairTab=0;Navigate("连接与修复");
+                    if(process.ExitCode!=0&&!preview)MessageBox.Show(this,chineseLogText,title,MessageBoxButton.OK,MessageBoxImage.Warning);
+                }
+                else if(op=="proxy"){
+                    if(page=="连接与修复")Navigate(page);
+                    if(process.ExitCode==0){progress.Value=100;banner.Text="代理配置已保存";}
+                    else {
+                        banner.Text=process.ExitCode==2?"代理已保存，远控转发同步未完成":"代理配置未完成";
+                        if(!preview)MessageBox.Show(this,chineseLogText,title,MessageBoxButton.OK,MessageBoxImage.Warning);
+                    }
+                }
                 else if(op=="model-network-check"){banner.Text=process.ExitCode==0?"已保存配置的模型线路检查完成":"已保存配置的模型线路检查未通过；请查看日志";progress.Value=100;repairTab=0;Navigate("连接与修复");}
                 else if(op.StartsWith("browser-")){banner.Text=process.ExitCode==0?"浏览器组件已检查 · 真实连接待验收":"浏览器操作未完成 · 可查看原因后单独重试";progress.Value=100;Navigate("连接与修复");}
                 else if(initialize){initExitCode=process.ExitCode;showInitializationResult=true;banner.Text=initExitCode==0?"初始化完成 · 日志已保存":initExitCode==2?"初始化部分完成 · 请重试未完成项目":"初始化未完成 · 请查看日志";if(initExitCode==0||initExitCode==2)progress.Value=100;refreshStatus=true;}

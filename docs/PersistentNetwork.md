@@ -19,7 +19,8 @@
 | --- | --- | --- |
 | 原生 CLI HTTP 与模型 WebSocket | CLI 启动读取 .env，覆盖同名继承变量 | 官方 CLI 模型线路检查 |
 | Work 本机 exec-server WSS／Noise | 同一原生 CLI 的网络工厂与代理配置 | Work 在线、连接日志及真实使用 |
-| 桌面 Node WebSocket，包括 durable | 普通图标启动继承用户代理，官方连接器按 Node 代理开关使用代理 Agent | 当前桌面握手日志与 Karing 源端口 |
+| 桌面远控（控制其他设备） | 可在连接状态页启用本机转发，使用已保存的 HTTP／混合代理 | 远端设备显示已连接，且实际只读操作成功 |
+| 桌面 durable WebSocket | 普通图标启动继承用户代理，官方连接器按 Node 代理开关使用代理 Agent | 当前桌面握手日志与 Karing 源端口 |
 | 桌面 HTTP | Electron 系统网络栈 | 桌面实际请求 |
 | 浏览器、插件与其他工具 | 各自网络实现 | 分别测试实际连接 |
 

@@ -15,7 +15,7 @@ framework = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework64/v4.0.30319"
 build = (repo / "tools/Build-Desktop.ps1").read_text(encoding="utf-8-sig")
 output.mkdir(parents=True, exist_ok=True)
 exe = output / "CodexInitKit.exe"
-references = ["System.Management.dll", "System.IO.Compression.dll", "System.IO.Compression.FileSystem.dll", "System.dll", "System.Core.dll", "System.Web.Extensions.dll", "WPF/WindowsBase.dll",
+references = ["System.ServiceProcess.dll", "System.Management.dll", "System.IO.Compression.dll", "System.IO.Compression.FileSystem.dll", "System.dll", "System.Core.dll", "System.Web.Extensions.dll", "WPF/WindowsBase.dll",
               "WPF/PresentationCore.dll", "WPF/PresentationFramework.dll", "System.Xaml.dll"]
 resources = {
     "Brand.logo.png": repo / "assets/logo.png",

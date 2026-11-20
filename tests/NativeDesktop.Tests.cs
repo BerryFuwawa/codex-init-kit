@@ -9,6 +9,27 @@ internal static partial class NativeDesktopTests {
     internal static int Run(string outputRoot){root=Path.GetFullPath(outputRoot);Directory.CreateDirectory(root);checks.Clear();failures.Clear();
         Check("代理排除项与注释保留",()=>{var o=new NativeOptions{Proxy=true,ProxyPort=3067};var original="NO_PROXY=localhost,internal.example,10.0.0.0/8\nPRIVATE_KEY=fixture\n";var result=NativeDesktopReconcile.EnvironmentText(original,o);Assert(result.Contains("internal.example")&&result.Contains("10.0.0.0/8")&&result.Contains("PRIVATE_KEY=fixture")&&NativeDesktopReconcile.EnvironmentText(result,o)==result,"proxy exclusions lost");});
         Check("单文件版本元数据与核心一致",()=>{var info=System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location);Assert(info.FileVersion==Core.Version&&NativeData.Version==Core.Version,"file and core versions diverged");});
+        Check("保存新代理后新连接切换且已建立连接继续传输",()=>{
+            var f=new Fixture();
+            string command=null;
+            Action<System.Net.IPEndPoint> save=target=>{
+                var o=NativeDesktopWorkflow.Options(Settings(),target.Port);
+                o.ProxyHost=target.Address.ToString();
+                var saved=new NativeDesktopReconcile(f.P,f.Services,o).Run(true);
+                Assert(saved.state=="complete" && Convert.ToString(f.Registry.Get("HTTPS_PROXY").Value)==o.ProxyUrl,"proxy save");
+                if(command==null){
+                    RemoteRelayService.SyncSavedProxy(f.P.Home,null,ep=>{throw new Exception("Saving enabled a disabled relay");});
+                    command=RemoteRelayService.CommandFor(target);
+                }else{
+                    bool applied=false;
+                    RemoteRelayService.SyncSavedProxy(f.P.Home,command,ep=>{command=RemoteRelayService.CommandFor(ep);applied=true;});
+                    Assert(applied,"Saved proxy was not applied to the active relay");
+                }
+            };
+            var roundTrip=RemoteControlRelayTests.RoundTrip(save,()=>RemoteRelayService.ReadTarget(command));
+            if(!roundTrip.Wait(TimeSpan.FromSeconds(15)))throw new TimeoutException("Timed out after saving the new upstream");
+            roundTrip.GetAwaiter().GetResult();
+        });
 Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();var o=NativeDesktopWorkflow.Options(Settings(),3067);NativeData.Write(f.P.Env,NativeInitializer.ProxyText(o));f.AddDesktop(71,500);var r=new NativeDesktopReconcile(f.P,f.Services,o);var result=r.Run(true);Assert(result.state=="complete"&&result.session!=null,"missing user-only backup");Assert(Convert.ToString(f.Registry.Get("HTTPS_PROXY").Value)=="http://127.0.0.1:3067"&&Convert.ToString(f.Registry.Get("NODE_USE_ENV_PROXY").Value)=="1","desktop proxy not persisted");Assert(f.Process.Requested==0&&r.Changes.Count==1&&r.Changes[0].id=="env","live app touched or effect missing");Assert(new NativeDesktopReconcile(f.P,f.Services,o).Run(true).session==null,"unchanged proxy backed up again");NativeSession.Load(result.session,f.P).Restore(f.Registry);Assert(!f.Registry.Get("HTTPS_PROXY").Exists&&!f.Registry.Get("NODE_USE_ENV_PROXY").Exists,"original absence not restored");});
         Check("用户代理类型与排除项可精确回滚",()=>{var f=new Fixture();f.Registry.V["HTTP_PROXY"]=new RegistryValueState{Exists=true,Kind="ExpandString",Value="http://%PROXY_HOST%:81"};f.Registry.V["NO_PROXY"]=new RegistryValueState{Exists=true,Kind="String",Value="internal.example,10.0.0.0/8"};var o=NativeDesktopWorkflow.Options(Settings(),3067);var result=new NativeDesktopReconcile(f.P,f.Services,o).Run(true);var exclusions=Convert.ToString(f.Registry.Get("NO_PROXY").Value);Assert(exclusions.Contains("internal.example")&&exclusions.Contains("10.0.0.0/8")&&exclusions.Contains("::1"),"user exclusions lost");File.Delete(Path.Combine(result.session,"session.json"));NativeSession.Load(result.session,f.P).Restore(f.Registry);Assert(f.Registry.Get("HTTP_PROXY").Kind=="ExpandString"&&Convert.ToString(f.Registry.Get("HTTP_PROXY").Value)=="http://%PROXY_HOST%:81"&&Convert.ToString(f.Registry.Get("NO_PROXY").Value)=="internal.example,10.0.0.0/8","legacy rollback lost proxy values or types");});
         Check("关闭用户代理移除Node开关并保留排除项",()=>{var f=new Fixture();var o=NativeDesktopWorkflow.Options(Settings(),3067);new NativeDesktopReconcile(f.P,f.Services,o).Run(true);var exclusions=Convert.ToString(f.Registry.Get("NO_PROXY").Value);o.Proxy=false;var result=new NativeDesktopReconcile(f.P,f.Services,o).Run(true);Assert(result.state=="complete"&&!f.Registry.Get("HTTP_PROXY").Exists&&!f.Registry.Get("HTTPS_PROXY").Exists&&!f.Registry.Get("NODE_USE_ENV_PROXY").Exists,"user proxy still enabled");Assert(Convert.ToString(f.Registry.Get("NO_PROXY").Value)==exclusions,"exclusions removed");});
