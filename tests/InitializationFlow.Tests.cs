@@ -76,16 +76,19 @@ public static class InitializationFlowTests {
             try{
                 dialog.UpdateLayout();var panel=(Grid)((Border)dialog.Content).Child;
                 var title=panel.Children.OfType<TextBlock>().First();var body=(TextBlock)panel.Children.OfType<ScrollViewer>().Single().Content;
-                var button=Descendants<Button>(panel).Single();
+                var buttons=Descendants<Button>(panel).ToArray();
+                bool success=expectedTitle=="已完成初始化";
+                var button=success?buttons.Single(b=>Equals(b.Content,"关闭")):buttons.Single();
+                Assert(success?buttons.Length==2&&buttons.Any(b=>Equals(b.Content,"启动Codex")):Equals(button.Content,"确认"),"Unexpected result actions");
                 Assert(title.Text==expectedTitle&&dialog.Title==expectedTitle&&title.IsVisible&&title.ActualHeight>0,"Result dialog title was not visible");
                 var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:MorandiTheme.Dark) as SolidColorBrush;
                 Assert(body.Text.Contains(expectedBody)&&body.IsVisible&&body.ActualHeight>0&&body.ActualWidth>0&&ink!=null&&ink.Color.A>0&&background!=null&&ink.Color!=background.Color,"Result details for "+expectedTitle+" were empty or hidden: expected="+expectedBody+", text="+body.Text+", visible="+body.IsVisible+", height="+body.ActualHeight);
-                Assert(button.IsVisible&&button.IsDefault&&Convert.ToString(button.Content)=="确认","Result confirmation button was unavailable");
+                Assert(button.IsVisible&&(success?button.IsCancel:button.IsDefault),"Result dismiss button was unavailable");
                 loaded=true;Click(button);
             }catch(Exception ex){error=ex;dialog.Close();}
         }));
         var accepted=dialog.ShowDialog();if(error!=null)throw error;
-        Assert(loaded&&accepted==true,"Result dialog did not accept confirmation");
+        Assert(loaded&&accepted==(expectedTitle!="已完成初始化")&&window.IsVisible,"Closing the result dialog did not keep the results window open");
     }
     static void Sidebar(MainWindow window,string page){
         var buttons=(List<Button>)Field(window,"navigation");Click(buttons.Single(b=>Convert.ToString(b.Content)==page));
@@ -205,7 +208,7 @@ public static class InitializationFlowTests {
             Assert(Convert.ToString(Call(window,"InitSummary")).Contains("原有权限、自定义配置、登录和用户资料保留"),"Confirmation did not explain preserved settings");
             var response=new TaskCompletionSource<Dictionary<string,object>>();int checks=0,dialogs=0,workers=0;
             window.InitializationPreflight=()=>{checks++;return response.Task;};
-            window.PresentAppCloseDialog=dialog=>{dialogs++;return AppCloseDialog(dialog,accept);};
+            window.PresentAppCloseDialog=dialog=>{Assert(window.IsEnabled&&!window.OwnedWindows.Cast<Window>().Any(w=>w.IsVisible&&w.Title=="正在准备初始化"),"Wait dialog obscured the close confirmation");dialogs++;return AppCloseDialog(dialog,accept);};
             window.OperationLogPath=id=>Path.Combine(root,"init.log");
             window.StartOperation=(op,id,drive,port,guard,options)=>{
                 Assert(op=="initialize"&&(bool)options["allowCloseRunningApp"]==(running&&accept),"One-time close authorization was missing or persisted incorrectly");workers++;
@@ -214,19 +217,48 @@ public static class InitializationFlowTests {
             };
             Set(window,"wizard",1);Navigate(window,"初始化");
             var task=(Task)Call(window,"BeginInitialization");Pump((Task)Call(window,"BeginInitialization"));
-            Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");Navigate(window,"概览");
+            Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");
+            var wait=window.OwnedWindows.Cast<Window>().Single(w=>w.Title=="正在准备初始化");
+            wait.UpdateLayout();
+            Assert(wait.IsVisible&&wait.IsEnabled&&!window.IsEnabled&&!Descendants<Button>(wait).Any(),"Pending preflight was dismissible or did not block the owner");
+            Assert(Descendants<ActivityIndicator>(wait).Single().State=="running"&&Descendants<TextBlock>(wait).Any(x=>x.Text.Contains("检查完成后会自动继续")),"Wait note or indicator missing");
+            wait.Close();Assert(wait.IsVisible,"User closed a pending preflight");Navigate(window,"概览");
             if(fail)response.SetException(new InvalidDataException("fixture permission read failure"));
             else response.SetResult(new Dictionary<string,object>{{"processes",running?new object[]{new Dictionary<string,object>{{"Id",123},{"Started","639298120645079230"}}}:new object[0]}});
             Pump(task);
+            Assert(!wait.IsVisible&&window.IsEnabled,"Preflight left its owner blocked");
             bool started=!fail&&(!running||accept);
             Assert(workers==(started?1:0)&&dialogs==(!fail&&running?1:0),"Preflight cancellation or failure started initialization");
             Assert(!(bool)Field(window,"busy")&&Convert.ToString(Field(window,"page"))=="初始化"&&(int)Field(window,"wizard")== (started?2:1),"Preflight did not restore the correct initialization page");
             Assert(!((Dictionary<string,object>)Call(window,"Options")).ContainsKey("allowCloseRunningApp"),"Preflight kept closure consent");
         }finally{Set(window,"busy",false);window.Close();Directory.Delete(root,true);SynchronizationContext.SetSynchronizationContext(previous);}
     }
+    static void VerifyLaunchRetry(){
+        using(var scenario=new Scenario(0)){
+            int attempts=0,foregroundRequests=0;
+            scenario.Window.BringInitializationWindowForward=()=>foregroundRequests++;
+            scenario.Window.LaunchCodexDesktop=()=>{if(++attempts==1)throw new InvalidOperationException("启动测试");};
+            scenario.Window.PresentInitializationDialog=dialog=>{
+                Exception failure=null;
+                dialog.Loaded+=(s,e)=>dialog.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,new Action(()=>{
+                    try{
+                        var launch=Descendants<Button>(dialog).Single(b=>Equals(b.Content,"启动Codex"));
+                        Click(launch);
+                        Assert(dialog.IsVisible&&launch.IsEnabled&&Descendants<TextBlock>(dialog).Any(t=>t.Text.Contains("可以重试")),"Launch failure did not permit retry");
+                        Click(launch);
+                    }catch(Exception ex){failure=ex;dialog.Close();}
+                }));
+                var result=dialog.ShowDialog();if(failure!=null)throw failure;
+                Assert(result==true,"Successful launch did not dismiss the dialog");
+            };
+            scenario.Complete(Fixture("complete","初始化完成"));
+            Assert(attempts==2&&foregroundRequests==1,"Successful launch brought Init Kit back to the foreground");
+        }
+    }
     public static void Run(){
         OverviewDuringInitialization();ReturnAfterInitialization();
-        VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","所选配置已检查或保存");
+        VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","现在可以打开 Codex");
+        VerifyLaunchRetry();
         VerifyOutcome(2,"连接与修复",Fixture("partial","更新桌面版：未完成"),"初始化部分完成","更新桌面版：未完成");
         VerifyOutcome(2,"更新与下载","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
         VerifyOutcome(1,"CLI 管理",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");

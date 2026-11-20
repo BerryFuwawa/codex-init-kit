@@ -68,6 +68,7 @@ public partial class MainWindow : Window {
     internal Func<string,string,string,int,bool,Dictionary<string,object>,Process> StartOperation=Core.StartWorker;
     internal Func<string,string> OperationLogPath=id=>Path.Combine(Core.Logs,id+".log");
     internal Action<Window> PresentInitializationDialog;
+    internal Action LaunchCodexDesktop=Native.WindowsNativeDesktop.Activate;
     internal Action BringInitializationWindowForward;
     internal Func<Task<Dictionary<string,object>>> InitializationPreflight;
     internal Func<Window,bool?> PresentAppCloseDialog;
@@ -88,7 +89,7 @@ public partial class MainWindow : Window {
         folderManagement.IsChecked=false;subagents.IsChecked=false;cuaRepair.IsChecked=false;guard.IsChecked=false;settings=Options();if((bool)settings["folderManagement"]||(bool)settings["subagents"]||(bool)settings["cuaRepair"]||childModel.IsEnabled||childEffort.IsEnabled||!parentModel.IsEnabled||!parentEffort.IsEnabled||Convert.ToString(settings["childEffort"])!="high")throw new InvalidOperationException("Optional setup switches failed");
         subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled||Convert.ToString(childModel.SelectedItem)!="gpt-5.5")throw new InvalidOperationException("Re-enabling subagents lost custom selection");
         parentModel.SelectedItem="gpt-6.1-sol";childModel.SelectedItem="gpt-6.1-sol";parentEffort.SelectedItem="medium";childEffort.SelectedItem="medium";folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
-        var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as Grid;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||InitializationFlowTests.Descendants<Button>(completionPanel).Count()!=1||!InitializationFlowTests.Descendants<TextBlock>(completionPanel).Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion dialog is not themed or single-action");
+        var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as Grid;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||!InitializationFlowTests.Descendants<Button>(completionPanel).Select(b=>Convert.ToString(b.Content)).SequenceEqual(new[]{"启动Codex","关闭"})||!InitializationFlowTests.Descendants<TextBlock>(completionPanel).Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion actions are missing");
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"runtimeModeDetail","桌面应用自带 CLI"},{"currentCliPath",""},{"protectionInstalled",false}};Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("DesktopNative","由桌面应用自动选择");status["runtimeMode"]="OfficialStandalone";status["runtimeModeDetail"]="官方独立 CLI";status["currentCliPath"]="C:\\Users\\Test\\.codex\\bin\\codex.exe";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("OfficialStandalone","C:\\Users\\Test\\.codex\\bin\\codex.exe");status["runtimeMode"]="Unknown";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("Unknown","C:\\Users\\Test\\.codex\\bin\\codex.exe");status=null;
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="CLI 管理"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
@@ -323,6 +324,7 @@ public partial class MainWindow : Window {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
     async Task<Dictionary<string,object>> ReadInitializationPreflight(Dictionary<string,object> options) {
+        await Dispatcher.Yield(DispatcherPriority.Background);
         var id=Guid.NewGuid().ToString("N");var path=OperationLogPath(id);
         using(var process=StartOperation("initialize-preflight",id,initializationRequest.Drive,initializationRequest.Port,false,options)){
             while(!process.HasExited)await Task.Delay(100);
@@ -331,6 +333,22 @@ public partial class MainWindow : Window {
             var line=lines.LastOrDefault(x=>x.StartsWith("@@INIT_PREFLIGHT@@"));
             if(line==null)throw new InvalidDataException("未收到初始化前检查结果，请重试。");
             return Core.ReadJson(line.Substring("@@INIT_PREFLIGHT@@".Length));
+        }
+    }
+    async Task<Dictionary<string,object>> CheckInitializationWithWait(Dictionary<string,object> options){
+        var dialog=IsVisible?CreatePreflightDialog():null;
+        bool finished=false;
+        try{
+            if(dialog!=null){
+                dialog.Closing+=(s,e)=>{e.Cancel=!finished;};
+                dialog.Show();
+                IsEnabled=false;
+            }
+            return InitializationPreflight==null?await ReadInitializationPreflight(options):await InitializationPreflight();
+        }finally{
+            if(dialog!=null){
+                finished=true;IsEnabled=true;dialog.Close();
+            }
         }
     }
     bool allowInitializationCloseDeferral;
@@ -346,7 +364,7 @@ public partial class MainWindow : Window {
         Dictionary<string,object> options=null;
         try {
             options=pendingInitializationRetry??Options();pendingInitializationRetry=null;initializationRequest=new InitializationRequest(options.ContainsKey("retryContext")?lastInitializationDrive:Drive(),options.ContainsKey("retryContext")?lastInitializationPort:Port(),options.ContainsKey("retryContext")?lastInitializationGuard:guard.IsChecked==true,options);UpdateBusyControls();allowInitializationCloseDeferral=Core.Value(options,"retryStages","").Length>0;options.Remove("allowCloseRunningApp");options.Remove("closeApprovedProcesses");initializationSummary="";initializationState="";initializationProgress.Reset(options,initializationRequest.Guard);initializationProgress.Apply(new Dictionary<string,object>{{"stageId","preflight"},{"state","running"},{"detail","正在检查应用状态"}});
-            var report=InitializationPreflight==null?await ReadInitializationPreflight(options):await InitializationPreflight();
+            var report=await CheckInitializationWithWait(options);
             object value;if(!report.TryGetValue("processes",out value)||!(value is System.Collections.IList))throw new InvalidDataException("初始化进程检查结果无效，请重试。");
             initializationCloseImpact="";object reasonValues;if(report.TryGetValue("reasons",out reasonValues)&&reasonValues is System.Collections.IEnumerable)initializationCloseImpact=String.Join("\n",((System.Collections.IEnumerable)reasonValues).Cast<object>().Select(Convert.ToString));
             int count=((System.Collections.IList)value).Count;
@@ -566,7 +584,7 @@ public partial class MainWindow : Window {
             else {FinishRecord("failed",DesktopLocalization.ExceptionText(ex));Error(ex);}
         }
         finally {busy=false;activeOperation="";operationActivity.State="pending";operationActivity.Visibility=Visibility.Collapsed;progress.IsIndeterminate=false;if(op=="status"&&status==null){cliDetectionComplete=true;UpdateCliDetectionHint();}if(initialize)initializationRequest=null;UpdateBusyControls();}
-        if(showInitializationResult){if(!initCancelled&&initExitCode==0&&initializationProgress.Outcome.Length==0){initExitCode=2;initError="未收到完整的执行摘要，未确认的步骤需检查后重试。";}RecoverInitializationResult(initExitCode,initError,initCancelled);initializationState=initCancelled?"cancelled":initExitCode==0?"complete":initExitCode==2?"partial":"failed";FinishRecord(initializationState,String.IsNullOrWhiteSpace(initError)?initializationSummary:initError);wizard=2;Navigate("初始化");RestoreInitializationWindow();ShowInitializationResult(initExitCode,initError,initCancelled,initBrowserRepair);RestoreInitializationWindow();}
+        if(showInitializationResult){if(!initCancelled&&initExitCode==0&&initializationProgress.Outcome.Length==0){initExitCode=2;initError="未收到完整的执行摘要，未确认的步骤需检查后重试。";}RecoverInitializationResult(initExitCode,initError,initCancelled);initializationState=initCancelled?"cancelled":initExitCode==0?"complete":initExitCode==2?"partial":"failed";FinishRecord(initializationState,String.IsNullOrWhiteSpace(initError)?initializationSummary:initError);wizard=2;Navigate("初始化");RestoreInitializationWindow();if(!ShowInitializationResult(initExitCode,initError,initCancelled,initBrowserRepair))RestoreInitializationWindow();}
         if(refreshStatus && !preview) await RefreshStatusQuietly();
         if((op=="rollback-selected"||op=="rollback-delete-all")&&!preview){await RefreshStatusQuietly();if(page=="备份与回滚")Navigate(page);}
     }
@@ -694,10 +712,26 @@ public partial class MainWindow : Window {
     Window CreateInitializationCompletedDialog(){return CreateInitializationResultDialog(0,"",false,browserRepair.IsChecked==true);}
     Window CreateInitializationResultDialog(int exitCode,string error,bool cancelled,bool browserSelected) {
         var title=cancelled?"已取消初始化":exitCode==0?"已完成初始化":exitCode==2?"初始化部分完成":"初始化未完成";
-        var detail=cancelled?"已取消管理员授权，未开始执行初始化。":exitCode==0?"所选配置已检查或保存，组件检查已结束。具体生效方式见结果页；保存成功不代表当前运行实例已采用。":(exitCode==2?"部分项目未完成，请查看下方日志并重试。":"初始化未完成，请查看下方日志了解原因。");
+        var detail=cancelled?"已取消管理员授权，未开始执行初始化。":exitCode==0?"现在可以打开 Codex，也可以关闭提示，查看本次初始化结果。":(exitCode==2?"部分项目未完成，请查看下方日志并重试。":"初始化未完成，请查看下方日志了解原因。");
         var summary=String.IsNullOrWhiteSpace(error)?initializationSummary:error;
         if(!cancelled&&exitCode!=0&&!String.IsNullOrWhiteSpace(summary))detail+="\n\n"+summary;
-        var dialog=CreateActionDialog(title,detail,false);var confirm=InitializationFlowTests.Descendants<Button>((DependencyObject)dialog.Content).Single(b=>Convert.ToString(b.Content)=="知道了");confirm.Content="确认";return dialog;
+        TextBlock message;WrapPanel actions;
+        var dialog=CreateMessageDialog(title,detail,out message,out actions);
+        if(!cancelled&&exitCode==0){
+            var launch=Button("启动Codex",()=>{
+                try{LaunchCodexDesktop();}
+                catch(Exception ex){
+                    message.Text="未能启动 Codex。可以重试，或关闭提示后从开始菜单打开。\n"+DesktopLocalization.ExceptionText(ex);
+                    message.Foreground=MorandiTheme.Warning;return;
+                }
+                dialog.DialogResult=true;
+            },true);
+            actions.Children.Add(launch);
+            var close=Button("关闭",()=>dialog.DialogResult=false,false);close.IsCancel=true;actions.Children.Add(close);
+        }else{
+            var confirm=Button("确认",()=>Motion.Close(dialog,true,preview),true);confirm.IsDefault=true;actions.Children.Add(confirm);
+        }
+        return dialog;
     }
     Window CreateDiagnosticDialog(){var dialog=CreateActionDialog("诊断建议",diagnosticAdvice,false);var accept=InitializationFlowTests.Descendants<Button>((DependencyObject)dialog.Content).Single(b=>Convert.ToString(b.Content)=="知道了");((Panel)accept.Parent).Children.Insert(0,Button("查看详细日志",()=>{dialog.Close();Navigate("日志");},false));return dialog;}
     void RestoreInitializationWindow(){
@@ -706,10 +740,11 @@ public partial class MainWindow : Window {
         if(preview)return;
         if(!IsVisible)Show();Activate();
     }
-    void ShowInitializationResult(int exitCode,string error,bool cancelled,bool browserSelected) {
-        if(preview&&PresentInitializationDialog==null)return;
+    bool ShowInitializationResult(int exitCode,string error,bool cancelled,bool browserSelected) {
+        if(preview&&PresentInitializationDialog==null)return false;
         var dialog=CreateInitializationResultDialog(exitCode,error,cancelled,browserSelected);
         if(PresentInitializationDialog!=null)PresentInitializationDialog(dialog);else dialog.ShowDialog();
+        return exitCode==0&&!cancelled&&dialog.DialogResult==true;
     }
     async Task CheckUpdates(bool silent) {
         if(preview){updateStatus.Text="设计预览不检查在线更新";return;}

@@ -144,11 +144,35 @@ public partial class MainWindow {
         var updatePanel=Card("组件更新","更新组件与切换模式分别执行。");Row(updatePanel,Button("更新官方独立 CLI",async()=>await Run("official-cli-update","更新官方独立 CLI",true),true),Button("更新桌面版（含原生 CLI）",async()=>await Run("desktop-update","更新桌面版",true),false));
         var protect=Card("启动保护",Core.Value(status,"protectionInstalled","")=="True"?"已安装 · 登录时自动检查与维护":"未安装，或尚未读取状态");Row(protect,Button("安装 / 修复保护",async()=>await Run("guard-install","安装启动保护",true),true),Button("诊断助手",async()=>{repairTab=0;Navigate("连接与修复");await Run("doctor","诊断助手",false);},false),Button("卸载启动保护",async()=>await Run("guard-uninstall","卸载启动保护",true),false));protect.Children.Add(T("切换前请保存工作并退出 Codex。",12,MutedBrush));
     }
-    Window CreateActionDialog(string title,string message,bool confirmation){
-        var area=AvailableDialogArea();var dialog=new Window{Title=title,Width=540,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStyle=WindowStyle.None,WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush,FontFamily=FontFamily};LimitDialog(dialog);dialog.Resources.MergedDictionaries.Add(Resources);if(IsVisible)dialog.Owner=this;
+    Window DialogWindow(string title,double width){
+        var dialog=new Window{Title=title,Width=width,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStyle=WindowStyle.None,WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false,Background=BackgroundBrush,Foreground=TextBrush,FontFamily=FontFamily};
+        LimitDialog(dialog);dialog.Resources.MergedDictionaries.Add(Resources);if(IsVisible)dialog.Owner=this;
+        Motion.Dialog(dialog,preview);return dialog;
+    }
+    Window CreateMessageDialog(string title,string message,out TextBlock messageText,out WrapPanel actions){
+        var area=AvailableDialogArea();var dialog=DialogWindow(title,540);
         var panel=new Grid{Margin=new Thickness(20)};panel.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});panel.RowDefinitions.Add(new RowDefinition{Height=new GridLength(1,GridUnitType.Star)});panel.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});var heading=T(title,20,TextBrush);panel.Children.Add(heading);
-        var body=new SmoothScrollViewer{Content=T(message,13,MutedBrush),MaxHeight=Math.Max(70,Math.Min(380,area.Height-180)),VerticalScrollBarVisibility=ScrollBarVisibility.Auto};Grid.SetRow(body,1);panel.Children.Add(body);
-        var actions=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};if(confirmation){var cancel=Button("取消",()=>Motion.Close(dialog,false,preview),false);cancel.IsDefault=true;cancel.IsCancel=true;actions.Children.Add(cancel);}var accept=Button(confirmation?"确认并继续":"知道了",()=>Motion.Close(dialog,true,preview),true);accept.IsDefault=!confirmation;actions.Children.Add(accept);Grid.SetRow(actions,2);panel.Children.Add(actions);dialog.Content=Surface(panel);Motion.Dialog(dialog,preview);return dialog;
+        messageText=T(message,13,MutedBrush);
+        var body=new SmoothScrollViewer{Content=messageText,MaxHeight=Math.Max(70,Math.Min(380,area.Height-180)),VerticalScrollBarVisibility=ScrollBarVisibility.Auto};Grid.SetRow(body,1);panel.Children.Add(body);
+        actions=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
+        Grid.SetRow(actions,2);panel.Children.Add(actions);dialog.Content=Surface(panel);return dialog;
+    }
+    Window CreateActionDialog(string title,string message,bool confirmation){
+        TextBlock text;WrapPanel actions;var dialog=CreateMessageDialog(title,message,out text,out actions);
+        if(confirmation){var cancel=Button("取消",()=>Motion.Close(dialog,false,preview),false);cancel.IsDefault=true;cancel.IsCancel=true;actions.Children.Add(cancel);}
+        var accept=Button(confirmation?"确认并继续":"知道了",()=>Motion.Close(dialog,true,preview),true);accept.IsDefault=!confirmation;actions.Children.Add(accept);return dialog;
+    }
+    Window CreatePreflightDialog(){
+        const string title="正在准备初始化";
+        var dialog=DialogWindow(title,450);
+        var panel=new StackPanel{Margin=new Thickness(24)};
+        var header=new DockPanel();
+        header.Children.Add(new ActivityIndicator{State="running",Width=30,Height=30,Margin=new Thickness(0,0,12,0)});
+        var heading=T(title,20,TextBrush);heading.FontWeight=FontWeights.SemiBold;heading.VerticalAlignment=VerticalAlignment.Center;heading.Margin=new Thickness(0);
+        header.Children.Add(heading);panel.Children.Add(header);
+        var note=T("正在检查 Codex 是否运行，以及本次选择的设置。检查完成后会自动继续。",14,MutedBrush);
+        note.Margin=new Thickness(0,14,0,0);panel.Children.Add(note);
+        dialog.Content=Surface(panel);return dialog;
     }
     DockPanel IconHeading(string text,int size,Brush color,bool strong){
         var row=new DockPanel{Margin=new Thickness(0,0,0,8)};var icon=new System.Windows.Shapes.Path{Data=UiIcons.For(text,true),Stroke=Accent,StrokeThickness=1.6,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=size,Height=size,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Center};row.Children.Add(icon);var label=T(text,size,color);label.Margin=new Thickness(0);if(strong)label.FontWeight=FontWeights.SemiBold;row.Children.Add(label);return row;

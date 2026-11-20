@@ -4,10 +4,23 @@ using FileInfo=CodexKit.Native.NativeFileInfo;
 using System;using System.IO;using System.Linq;using System.Text;using System.Text.RegularExpressions;using System.Collections.Generic;using System.Runtime.InteropServices;using System.Security.Cryptography;using System.Xml;
 namespace CodexKit.Native {
 public sealed class WindowsNativeDesktop:INativeDesktop {
+    const string PackageFamily="OpenAI.Codex_2p2nqsd0c76g0";
+    [ComImport,Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+    class ApplicationActivationManager {}
+    [ComImport,Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IApplicationActivationManager {
+        void ActivateApplication([MarshalAs(UnmanagedType.LPWStr)]string appId,[MarshalAs(UnmanagedType.LPWStr)]string arguments,uint options,out uint processId);
+    }
+    internal static void Activate(){
+        var manager=(IApplicationActivationManager)new ApplicationActivationManager();
+        const uint noErrorUI=2;
+        try{uint processId;manager.ActivateApplication(PackageFamily+"!App",null,noErrorUI,out processId);}
+        finally{Marshal.ReleaseComObject(manager);}
+    }
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]static extern int GetPackagesByPackageFamily(string family,ref uint count,IntPtr names,ref uint length,IntPtr buffer);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]static extern int GetPackagePathByFullName(string package,ref uint length,StringBuilder path);
     public OfficialDesktop Discover(){
-        uint count=0,length=0;int rc=GetPackagesByPackageFamily("OpenAI.Codex_2p2nqsd0c76g0",ref count,IntPtr.Zero,ref length,IntPtr.Zero);if(count==0)throw new FileNotFoundException("当前用户未安装官方 Codex 桌面版。");if(rc!=122)throw new System.ComponentModel.Win32Exception(rc,"读取官方应用失败。");
+        uint count=0,length=0;int rc=GetPackagesByPackageFamily(PackageFamily,ref count,IntPtr.Zero,ref length,IntPtr.Zero);if(count==0)throw new FileNotFoundException("当前用户未安装官方 Codex 桌面版。");if(rc!=122)throw new System.ComponentModel.Win32Exception(rc,"读取官方应用失败。");
         var names=Marshal.AllocHGlobal(checked((int)count*IntPtr.Size));var buffer=Marshal.AllocHGlobal(checked((int)length*2));var candidates=new List<OfficialDesktop>();
         try{rc=GetPackagesByPackageFamily("OpenAI.Codex_2p2nqsd0c76g0",ref count,names,ref length,buffer);if(rc!=0)throw new System.ComponentModel.Win32Exception(rc);for(int i=0;i<count;i++){var name=Marshal.PtrToStringUni(Marshal.ReadIntPtr(names,i*IntPtr.Size));if(!Regex.IsMatch(name??"",@"^OpenAI\.Codex_[0-9.]+_x64__2p2nqsd0c76g0$"))continue;uint size=0;if(GetPackagePathByFullName(name,ref size,null)!=122)continue;var path=new StringBuilder((int)size);if(GetPackagePathByFullName(name,ref size,path)==0)candidates.Add(new OfficialDesktop{FullName=name,Install=path.ToString()});}}
         finally{Marshal.FreeHGlobal(names);Marshal.FreeHGlobal(buffer);}
