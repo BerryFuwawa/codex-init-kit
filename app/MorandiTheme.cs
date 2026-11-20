@@ -77,7 +77,13 @@ internal static class Motion {
         button.PreviewMouseLeftButtonUp+=(s,e)=>animate(1,140);
         button.LostMouseCapture+=(s,e)=>animate(1,140);
     }
-    internal static void Dialog(Window window,bool preview){window.SourceInitialized+=(s,e)=>MorandiTheme.StyleWindow(window);window.Loaded+=(s,e)=>{var root=window.Content as FrameworkElement;if(root!=null)Enter(root,preview,240);};}
+    internal static void Dialog(Window window,bool preview){
+        window.SourceInitialized+=(s,e)=>MorandiTheme.StyleWindow(window);
+        window.Loaded+=(s,e)=>{
+            var root=window.Template.FindName("DialogCard",window) as FrameworkElement??window.Content as FrameworkElement;
+            if(root!=null)Enter(root,preview,240);
+        };
+    }
     internal static void Close(Window window,bool? result,bool preview){
         if(!Enabled(preview)){if(result.HasValue)window.DialogResult=result;else window.Close();return;}
         var animation=Curve(window.Opacity,0,120);

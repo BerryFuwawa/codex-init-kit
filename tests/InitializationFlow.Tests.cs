@@ -220,6 +220,7 @@ public static class InitializationFlowTests {
             Assert(checks==1&&workers==0,"Repeated clicks bypassed the pending preflight");
             var wait=window.OwnedWindows.Cast<Window>().Single(w=>w.Title=="正在准备初始化");
             wait.UpdateLayout();
+            if(!running&&!fail)VerifyDialogEdges(wait);
             Assert(wait.IsVisible&&wait.IsEnabled&&!window.IsEnabled&&!Descendants<Button>(wait).Any(),"Pending preflight was dismissible or did not block the owner");
             Assert(Descendants<ActivityIndicator>(wait).Single().State=="running"&&Descendants<TextBlock>(wait).Any(x=>x.Text.Contains("检查完成后会自动继续")),"Wait note or indicator missing");
             wait.Close();Assert(wait.IsVisible,"User closed a pending preflight");Navigate(window,"概览");
@@ -232,6 +233,37 @@ public static class InitializationFlowTests {
             Assert(!(bool)Field(window,"busy")&&Convert.ToString(Field(window,"page"))=="初始化"&&(int)Field(window,"wizard")== (started?2:1),"Preflight did not restore the correct initialization page");
             Assert(!((Dictionary<string,object>)Call(window,"Options")).ContainsKey("allowCloseRunningApp"),"Preflight kept closure consent");
         }finally{Set(window,"busy",false);window.Close();Directory.Delete(root,true);SynchronizationContext.SetSynchronizationContext(previous);}
+    }
+    static void VerifyDialogEdges(Window dialog){
+        var card=(FrameworkElement)dialog.Content;
+        int width=(int)Math.Ceiling(dialog.ActualWidth),height=(int)Math.Ceiling(dialog.ActualHeight);
+        var image=new System.Windows.Media.Imaging.RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);
+        image.Render(dialog);
+        var pixels=new byte[width*height*4];image.CopyPixels(pixels,width*4,0);
+        Func<int,int,byte> alpha=(x,y)=>pixels[(y*width+x)*4+3];
+        Assert(dialog.AllowsTransparency&&alpha(0,0)==0&&alpha(width-1,0)==0&&alpha(0,height-1)==0&&alpha(width-1,height-1)==0,"Dialog corners were opaque");
+        var bottom=card.TranslatePoint(new Point(card.ActualWidth/2,card.ActualHeight),dialog);
+        var near=alpha((int)bottom.X,(int)bottom.Y+2);
+        Assert(near>alpha((int)bottom.X,(int)bottom.Y+12)&&near<255,"Dialog shadow was missing or solid");
+    }
+    static void VerifyOverviewLink(){
+        var window=new MainWindow(true){Opacity=0,ShowInTaskbar=false};
+        try{
+            window.Show();window.MinWidth=600;
+            Set(window,"status",new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});
+            Navigate(window,"概览");var link=(Button)Field(window,"recoveryGuide");var row=(Grid)link.Parent;
+            Assert(Equals(link.Content,"切换官方独立 CLI")&&link.Tag==null&&link.Background==Brushes.Transparent&&link.BorderThickness.Left==0,"Recovery link is not text-only");
+            double fullWidth=0;
+            var refresh=row.Children.OfType<Button>().Single(b=>Equals(b.Content,"刷新状态"));
+            foreach(var width in new[]{1000,800,608}){
+                window.Width=width;window.UpdateLayout();
+                if(width==1000)fullWidth=link.ActualWidth;
+                var start=link.TranslatePoint(new Point(),row).X;
+                var refreshEnd=refresh.TranslatePoint(new Point(refresh.ActualWidth,0),row).X;
+                Assert(fullWidth>0&&Math.Abs(start+link.ActualWidth-row.ActualWidth)<2&&Math.Abs(link.ActualWidth-fullWidth)<1&&start>=refreshEnd,"Recovery link clipped or away from right edge at "+width);
+            }
+            Click(link);Assert(Equals(Field(window,"page"),"CLI 管理"),"Recovery link did not open CLI management");
+        }finally{window.Close();}
     }
     static void VerifyLaunchRetry(){
         using(var scenario=new Scenario(0)){
@@ -265,7 +297,7 @@ public static class InitializationFlowTests {
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
-        VerifyInitializationGroups();
+        VerifyInitializationGroups();VerifyOverviewLink();
     }
 }
 }
