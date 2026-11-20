@@ -268,6 +268,28 @@ public static class InitializationFlowTests {
             Click(guide);Assert(Equals(Field(window,"page"),"CLI 管理"),"Recovery button did not open CLI management");
         }finally{window.Close();}
     }
+    sealed class PressableButton:Button {
+        internal void Press(bool value){IsPressed=value;}
+    }
+    static void VerifyButtonShadows(){
+        var window=new MainWindow(true){Opacity=0,ShowInTaskbar=false,Left=-20000,Top=-20000};
+        var test=new PressableButton{Style=(Style)window.Resources["KitButton"]};Motion.Button(test,true);
+        var panel=new StackPanel();panel.Children.Add(test);
+        var nav=new Button{Style=(Style)window.Resources["KitNavigation"]};Motion.Button(nav,true);panel.Children.Add(nav);
+        var choice=new RadioButton{Style=(Style)window.Resources["KitCliChoice"]};Motion.Button(choice,true);panel.Children.Add(choice);
+        window.Content=panel;
+        try{
+            window.Show();window.UpdateLayout();
+            foreach(var control in panel.Children.OfType<System.Windows.Controls.Primitives.ButtonBase>()){
+                var layer=(Border)control.Template.FindName("ShadowLayer",control);
+                Assert(layer.Effect!=null&&layer.Effect==Motion.GetButtonShadow(control)&&layer.Child==null&&control.Effect==null,"Shadow must sit beneath the control content");
+            }
+            var shadow=Motion.GetButtonShadow(test);double rest=shadow.ShadowDepth;
+            test.Press(true);Assert(shadow.ShadowDepth<rest&&!shadow.HasAnimatedProperties&&Motion.GetButtonShadow(nav).ShadowDepth==rest,"Static pressed shadow affected another button");
+            test.Press(false);Assert(shadow.ShadowDepth==rest,"Released shadow did not recover");
+            test.IsEnabled=false;Assert(shadow.Opacity==0,"Disabled button kept its shadow");
+        }finally{window.Close();}
+    }
     static void VerifyLaunchRetry(){
         using(var scenario=new Scenario(0)){
             int attempts=0,foregroundRequests=0;
@@ -300,7 +322,7 @@ public static class InitializationFlowTests {
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
-        VerifyInitializationGroups();VerifyOverviewRecoveryButton();
+        VerifyInitializationGroups();VerifyOverviewRecoveryButton();VerifyButtonShadows();
     }
 }
 }

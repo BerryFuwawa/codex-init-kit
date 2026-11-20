@@ -184,7 +184,7 @@ public partial class MainWindow : Window {
         else relayPreferenceRoot=Core.Root;
         remoteRelay.Checked+=RememberRelayChoice;
         remoteRelay.Unchecked+=RememberRelayChoice;
-        cliNative.Content="桌面版原生 CLI";cliStandalone.Content="官方独立 CLI";foreach(var choice in new[]{cliNative,cliStandalone}){choice.GroupName="InitializationCliMode";choice.Style=(Style)Resources["KitCliChoice"];choice.Checked+=(s,e)=>{if(!applyingCliDetection){cliChoiceManual=true;UpdateCliDetectionHint();}};choice.Click+=(s,e)=>{cliChoiceManual=true;UpdateCliDetectionHint();};}
+        cliNative.Content="桌面版原生 CLI";cliStandalone.Content="官方独立 CLI";foreach(var choice in new[]{cliNative,cliStandalone}){choice.GroupName="InitializationCliMode";choice.Style=(Style)Resources["KitCliChoice"];Motion.Button(choice,preview);choice.Checked+=(s,e)=>{if(!applyingCliDetection){cliChoiceManual=true;UpdateCliDetectionHint();}};choice.Click+=(s,e)=>{cliChoiceManual=true;UpdateCliDetectionHint();};}
         cliDetectionHint.FontSize=12;cliDetectionHint.Foreground=MutedBrush;cliDetectionHint.TextWrapping=TextWrapping.Wrap;cliDetectionHint.Margin=new Thickness(0,4,0,8);
         if(preview)ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});else UpdateCliDetectionHint();
         antiOverDefense.ToolTip="在全局 AGENTS.md 中写入 HERO 中文完整规则，以及实现、防御和自主交付规则。";

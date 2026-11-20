@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 
 namespace CodexKit {
 internal static class MorandiTheme {
@@ -46,7 +49,9 @@ internal static class MorandiTheme {
     }
 }
 
-internal static class Motion {
+public static class Motion {
+    public static readonly DependencyProperty ButtonShadowProperty=DependencyProperty.RegisterAttached("ButtonShadow",typeof(DropShadowEffect),typeof(Motion));
+    public static DropShadowEffect GetButtonShadow(DependencyObject element){return (DropShadowEffect)element.GetValue(ButtonShadowProperty);}
     internal static bool Enabled(bool preview){return !preview&&SystemParameters.ClientAreaAnimation;}
     static DoubleAnimationUsingKeyFrames Curve(double from,double to,int duration){
         var animation=new DoubleAnimationUsingKeyFrames{Duration=TimeSpan.FromMilliseconds(duration)};
@@ -55,11 +60,11 @@ internal static class Motion {
         return animation;
     }
     internal static void Value(DependencyObject target,DependencyProperty property,double value,int duration,bool enabled){
-        var element=target as UIElement;var transform=target as Transform;
-        if(!enabled){if(element!=null)element.BeginAnimation(property,null);else if(transform!=null)transform.BeginAnimation(property,null);target.SetValue(property,value);return;}
+        var element=target as UIElement;var animatable=target as Animatable;
+        if(!enabled){if(element!=null)element.BeginAnimation(property,null);else if(animatable!=null)animatable.BeginAnimation(property,null);target.SetValue(property,value);return;}
         var from=(double)target.GetValue(property);var animation=Curve(from,value,duration);
         if(element!=null)element.BeginAnimation(property,animation,HandoffBehavior.SnapshotAndReplace);
-        else if(transform!=null)transform.BeginAnimation(property,animation,HandoffBehavior.SnapshotAndReplace);
+        else if(animatable!=null)animatable.BeginAnimation(property,animation,HandoffBehavior.SnapshotAndReplace);
     }
     internal static void Enter(FrameworkElement element,bool preview,int duration){
         if(!Enabled(preview))return;
@@ -68,14 +73,36 @@ internal static class Motion {
         translate.BeginAnimation(TranslateTransform.YProperty,Curve(7,0,duration),HandoffBehavior.SnapshotAndReplace);
         element.BeginAnimation(UIElement.OpacityProperty,Curve(.35,1,duration),HandoffBehavior.SnapshotAndReplace);
     }
-    internal static void Button(Button button,bool preview){
-        var scale=new ScaleTransform(1,1);button.RenderTransformOrigin=new Point(.5,.5);button.RenderTransform=scale;
-        Action<double,int> animate=(value,duration)=>{Value(scale,ScaleTransform.ScaleXProperty,value,duration,Enabled(preview));Value(scale,ScaleTransform.ScaleYProperty,value,duration,Enabled(preview));};
-        button.MouseEnter+=(s,e)=>Value(button,UIElement.OpacityProperty,.9,120,Enabled(preview));
-        button.MouseLeave+=(s,e)=>{animate(1,140);Value(button,UIElement.OpacityProperty,1,140,Enabled(preview));};
-        button.PreviewMouseLeftButtonDown+=(s,e)=>animate(.975,90);
-        button.PreviewMouseLeftButtonUp+=(s,e)=>animate(1,140);
-        button.LostMouseCapture+=(s,e)=>animate(1,140);
+    static readonly DependencyPropertyDescriptor PressedProperty=DependencyPropertyDescriptor.FromProperty(ButtonBase.IsPressedProperty,typeof(ButtonBase));
+    internal static void Button(ButtonBase button,bool preview){
+        var scale=new ScaleTransform();var offset=new TranslateTransform();var transform=new TransformGroup();
+        transform.Children.Add(scale);transform.Children.Add(offset);
+        button.RenderTransformOrigin=new Point(.5,.5);button.RenderTransform=transform;
+        var shadow=new DropShadowEffect{Color=Colors.Black,Direction=270,ShadowDepth=2,BlurRadius=7,Opacity=.38};
+        button.SetValue(ButtonShadowProperty,shadow);
+        Action<bool> update=transition=>{
+            bool pressed=button.IsEnabled&&button.IsPressed;
+            bool raised=button.IsEnabled&&button.IsMouseOver;
+            bool motion=Enabled(preview),animate=transition&&motion;
+            int duration=pressed?80:150;
+            double depth=2,blur=7,opacity=.38,lift=0,size=1;
+            if(pressed){depth=1;blur=3;opacity=.18;lift=1;size=.975;}
+            else if(raised){depth=4;blur=10;opacity=.52;lift=-1;}
+            Value(scale,ScaleTransform.ScaleXProperty,motion?size:1,duration,animate);
+            Value(scale,ScaleTransform.ScaleYProperty,motion?size:1,duration,animate);
+            Value(offset,TranslateTransform.YProperty,motion?lift:0,duration,animate);
+            Value(shadow,DropShadowEffect.ShadowDepthProperty,depth,duration,animate);
+            Value(shadow,DropShadowEffect.BlurRadiusProperty,blur,duration,animate);
+            Value(shadow,DropShadowEffect.OpacityProperty,button.IsEnabled?opacity:0,duration,animate);
+        };
+        EventHandler pressChanged=(s,e)=>update(true);
+        button.Loaded+=(s,e)=>{
+            update(false);PressedProperty.AddValueChanged(button,pressChanged);
+        };
+        button.Unloaded+=(s,e)=>PressedProperty.RemoveValueChanged(button,pressChanged);
+        button.MouseEnter+=(s,e)=>update(true);
+        button.MouseLeave+=(s,e)=>update(true);
+        button.IsEnabledChanged+=(s,e)=>update(true);
     }
     internal static void Dialog(Window window,bool preview){
         window.SourceInitialized+=(s,e)=>MorandiTheme.StyleWindow(window);
