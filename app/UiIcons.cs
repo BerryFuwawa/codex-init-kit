@@ -8,6 +8,7 @@ internal static class UiIcons {
         if(key.Contains("取消")||key=="关闭")data="M5,5 L19,19 M19,5 L5,19";
         else if(key.Contains("上一步")||key.Contains("返回"))data="M14,5 L7,12 L14,19 M7,12 L21,12";
         else if(key.Contains("下一步")||key.Contains("查看变更"))data="M10,5 L17,12 L10,19 M3,12 L17,12";
+        else if(key.Contains("远控转发"))data="M3,7 H20 M16,3 L20,7 L16,11 M21,17 H4 M8,13 L4,17 L8,21";
         else if(key.Contains("切换"))data="M3,7 L20,7 L16,3 M20,17 L3,17 L7,21";
         else if(key.Contains("复制"))data="M8,8 L21,8 L21,21 L8,21 Z M16,8 L16,3 L3,3 L3,16 L8,16";
         else if(key.Contains("删除")||key.Contains("卸载"))data="M4,6 L20,6 M9,3 L15,3 M6,6 L7,21 L17,21 L18,6 M10,10 L10,17 M14,10 L14,17";

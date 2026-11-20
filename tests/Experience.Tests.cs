@@ -15,7 +15,13 @@ internal static partial class NativeDesktopTests {
                 UiCall(w,"Navigate","初始化");
                 var relay=(CheckBox)UiGet(w,"remoteRelay");
                 var save=(CheckBox)UiGet(w,"proxyEnabled");
-                Assert(relay.Parent!=null && relay.IsEnabled && relay.IsChecked==false,"Relay missing or enabled by default");
+                Assert(relay.Parent!=null && relay.IsEnabled && relay.IsChecked==true,"Relay should be selected by default");
+                relay.ApplyTemplate();
+                var icon=relay.Template.FindName("CheckIcon",relay) as System.Windows.Shapes.Path;
+                Assert(icon!=null && icon.Data!=null && icon.Visibility==Visibility.Visible,"Relay vector icon missing");
+                relay.IsChecked=false;
+                UiCall(w,"Navigate","初始化");
+                Assert(!Core.RemoteRelaySelected((Dictionary<string,object>)UiCall(w,"Options")),"Navigation reselected the relay");
                 relay.IsChecked=true;
                 ((ComboBox)UiGet(w,"proxyPortPreset")).SelectedIndex=2;
                 ((TextBox)UiGet(w,"proxyHost")).Text="127.0.0.3";

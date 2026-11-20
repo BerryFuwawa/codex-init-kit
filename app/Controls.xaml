@@ -34,9 +34,13 @@
         <Border x:Name="Box" Width="20" Height="20" CornerRadius="5" Background="#1C2937" BorderBrush="#AFBED0" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
           <Path x:Name="Tick" Data="M 4,9 L 8,13 L 15,5" Stroke="#172535" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
         </Border>
-        <TextBlock Grid.Column="1" Text="{TemplateBinding Content}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+        <DockPanel Grid.Column="1" VerticalAlignment="Center">
+          <Path x:Name="CheckIcon" Data="{TemplateBinding Tag}" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="16" Height="16" Margin="0,0,6,0" IsHitTestVisible="False"/>
+          <TextBlock Text="{TemplateBinding Content}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+        </DockPanel>
       </Grid>
       <ControlTemplate.Triggers>
+        <Trigger Property="Tag" Value="{x:Null}"><Setter TargetName="CheckIcon" Property="Visibility" Value="Collapsed"/></Trigger>
         <Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#9DAFC4"/><Setter TargetName="Box" Property="BorderBrush" Value="#9DAFC4"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger>
         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#AFBED0"/></Trigger>
         <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#AFBED0"/></Trigger>

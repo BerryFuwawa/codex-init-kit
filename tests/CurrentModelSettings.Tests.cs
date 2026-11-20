@@ -59,7 +59,8 @@ public static class CurrentModelSettingsTests {
                 childEffort.SelectedItem="xhigh";
 
                 var selected=(Dictionary<string,object>)type.GetMethod("Options",flags).Invoke(window,null);
-                var generated=Native.NativeInitializer.Config(new Native.NativePaths{Workspace=root},NativeDesktopWorkflow.Options(selected,0));
+                var selectedPort=(int)type.GetMethod("Port",flags).Invoke(window,null);
+                var generated=Native.NativeInitializer.Config(new Native.NativePaths{Workspace=root},NativeDesktopWorkflow.Options(selected,selectedPort));
                 Assert(ManagedToml.SavedValue(generated,"model")=="gpt-6.2-sol"&&ManagedToml.SavedValue(generated,"model_reasoning_effort")=="ultra","Parent selection did not reach the generated configuration");
                 Assert(ManagedToml.SavedValue(generated,"agents","default_subagent_model")=="gpt-6.2-astra"&&ManagedToml.SavedValue(generated,"agents","default_subagent_reasoning_effort")=="xhigh","Child selection did not reach the generated configuration");
                 Assert(File.ReadAllText(config)==before,"Changing the model controls saved settings before confirmation");
