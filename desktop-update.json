@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.4",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.4/CodexInitKit.exe",
-    "sha256":  "6899dddfc004811bd4faa5669a37c12da7b118b349084be22b3340760439e5da",
-    "notes":  "远控跟随你选的代理，卸载后会记住关闭状态。检查时拉宽窗口，进度条也会走到头。"
+    "version":  "2.3.5",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.5/CodexInitKit.exe",
+    "sha256":  "0ba48d8b928ecba4e5427f1625e79c3fef358f75b8f81713e0185908037e8e03",
+    "notes":  "初始化前会显示等待提示，完成后可以直接启动 Codex。首页切换 CLI 的按钮移到了右侧，按下按钮时反馈更清楚。修复了点击取消后偶尔弹出错误提示的问题。"
 }

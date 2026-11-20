@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.3.3
+# Codex Init Kit Desktop 2.3.5
 
 保存代理后，从原来的 Codex 图标重开即可生效。电脑名称和允许控制可在 Codex 或 Work 中设置。[用户资料与 Work 设置](DesktopProfile.md)
 
@@ -6,7 +6,7 @@
 
 原生 WPF 中文桌面工具，集中管理 Codex 初始化、浏览器连接、组件修复、CLI 和备份。默认窗口约 1000 × 740，最小 800 × 540；小屏幕可滚动查看，支持 Windows 缩放。
 
-当前公开版本为 v2.3.3。更新清单绑定 EXE 的 SHA-256。[公开版本](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [更新说明](Release-2.3.3.md)
+当前公开版本为 v2.3.5。[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [更新说明](Release-2.3.5.md)
 
 ## 遇到问题，先选哪项？
 

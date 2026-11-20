@@ -114,7 +114,10 @@ public static class Motion {
     internal static void Close(Window window,bool? result,bool preview){
         if(!Enabled(preview)){if(result.HasValue)window.DialogResult=result;else window.Close();return;}
         var animation=Curve(window.Opacity,0,120);
-        animation.Completed+=(s,e)=>{if(result.HasValue)window.DialogResult=result;else window.Close();};
+        animation.Completed+=(s,e)=>{
+            if(!window.IsVisible)return;
+            if(result.HasValue)window.DialogResult=result;else window.Close();
+        };
         window.BeginAnimation(UIElement.OpacityProperty,animation,HandoffBehavior.SnapshotAndReplace);
     }
 }

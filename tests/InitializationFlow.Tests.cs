@@ -290,6 +290,20 @@ public static class InitializationFlowTests {
             test.IsEnabled=false;Assert(shadow.Opacity==0,"Disabled button kept its shadow");
         }finally{window.Close();}
     }
+    static void VerifyAnimatedCancel(){
+        var window=new MainWindow(true);
+        try{
+            Set(window,"preview",false);
+            var dialog=(Window)Call(window,"CreateActionDialog","确认操作","测试取消",true);
+            dialog.WindowStartupLocation=WindowStartupLocation.Manual;dialog.Left=-20000;dialog.Top=-20000;
+            dialog.ContentRendered+=(s,e)=>{
+                var cancel=Descendants<Button>(dialog).Single(button=>button.IsCancel);
+                typeof(Button).GetMethod("OnClick",Private).Invoke(cancel,null);
+            };
+            Assert(dialog.ShowDialog()==false,"Cancel did not dismiss the confirmation");
+            Pump(Task.Delay(350));
+        }finally{window.Close();}
+    }
     static void VerifyLaunchRetry(){
         using(var scenario=new Scenario(0)){
             int attempts=0,foregroundRequests=0;
@@ -315,7 +329,7 @@ public static class InitializationFlowTests {
     public static void Run(){
         OverviewDuringInitialization();ReturnAfterInitialization();
         VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","现在可以打开 Codex");
-        VerifyLaunchRetry();
+        VerifyLaunchRetry();VerifyAnimatedCancel();
         VerifyOutcome(2,"连接与修复",Fixture("partial","更新桌面版：未完成"),"初始化部分完成","更新桌面版：未完成");
         VerifyOutcome(2,"更新与下载","模拟运行日志\r\n","初始化部分完成","请查看下方日志");
         VerifyOutcome(1,"CLI 管理",Fixture("failed","重建配置：未完成"),"初始化未完成","重建配置：未完成");

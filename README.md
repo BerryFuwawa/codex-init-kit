@@ -22,11 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.4.md">v2.3.4</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.5.md">v2.3.5</a></sub></p>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> **v2.3.4 · 关闭 TUN 也能让远控走代理。** 在「初始化 → 工作区与网络」勾选「开启远控转发」。以后换了代理地址或端口，保存后新连接就会跟着切换。[更新说明](docs/Release-2.3.4.md)
+> **v2.3.5 · 初始化完成后可直接启动 Codex。** 开始前能看到正在检查什么，完成后也可以留在结果页查看日志。[更新说明](docs/Release-2.3.5.md)
 
 > **你的对话和项目文件会保留。** 初始化先备份需要修改的配置，再合并所选功能管理的内容。原有权限、未知配置和未管理的自定义规则保留；只需要排查某个问题时，可运行单项检查或修复。
 
