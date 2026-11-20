@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.3",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.3/CodexInitKit.exe",
-    "sha256":  "e3d86c53fe12a0e6c4b19bead38cd097425d82ea82a449eaa21af1f0080e98e3",
-    "notes":  "保存代理后照常打开 Codex。模型设置加入 GPT-6.2 Sol 和 Astra。"
+    "version":  "2.3.4",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.4/CodexInitKit.exe",
+    "sha256":  "6899dddfc004811bd4faa5669a37c12da7b118b349084be22b3340760439e5da",
+    "notes":  "远控跟随你选的代理，卸载后会记住关闭状态。检查时拉宽窗口，进度条也会走到头。"
 }

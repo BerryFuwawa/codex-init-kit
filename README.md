@@ -22,13 +22,11 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 公开版本 <a href="docs/Release-2.3.3.md">v2.3.3</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.4.md">v2.3.4</a></sub></p>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> **v2.3.4 本地审阅版** · 初始化可选择开启远控转发，后续可在连接状态页管理。检查进度条随窗口宽度调整。[版本说明](docs/Release-2.3.4.md)
-
-> **v2.3.3 · 保存代理后，照常打开 Codex。** 保存后从原图标重开即可使用。模型设置加入 GPT-6.2 Sol 和 Astra，已有设置会照常载入。[更新说明](docs/Release-2.3.3.md) · [验证范围](docs/Validation-2.3.3.md)
+> **v2.3.4 · 关闭 TUN 也能让远控走代理。** 在「初始化 → 工作区与网络」勾选「开启远控转发」。以后换了代理地址或端口，保存后新连接就会跟着切换。[更新说明](docs/Release-2.3.4.md)
 
 > **你的对话和项目文件会保留。** 初始化先备份需要修改的配置，再合并所选功能管理的内容。原有权限、未知配置和未管理的自定义规则保留；只需要排查某个问题时，可运行单项检查或修复。
 
@@ -39,7 +37,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | 你可能正在搜索 | 可以先试什么 |
 | --- | --- |
 | **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「连接与修复」→「浏览器」，检查组件完整性，按需恢复官方文件，再测试真实浏览器操作。[查看浏览器连接指南](docs/BrowserConnection.md) |
-| **🔌 Codex 的 Dot / Remote 一直连接中，WebSocket 连不上？** | 保存代理配置并检查已保存的模型线路。通过日志和实际操作验证 Work 与桌面 WebSocket。[查看使用方法与验证范围](docs/WebSocket.md) |
+| **🔌 关闭 TUN 后，Codex 远控连不上？** | 在「连接与修复 → 连接状态」选好代理，点「开启远控转发」，再回到 Codex 刷新设备列表。这里也可以卸载转发服务。[远控设置](docs/WebSocket.md#控制其他设备时使用远控转发) |
 | **🖥️ Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
 | **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「连接与修复」→「电脑操作」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
@@ -49,8 +47,6 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 | **💬 Codex 总是啰嗦、反复确认，不按你的要求推进？** | 初始化写入基础工作规则；勾选「防止过度防御」后还会加入自主推进与交付规则，引导它明确目标、简洁沟通，在常规决策中继续工作。[查看规则说明](docs/AntiOverDefense.md) |
 | **📝 排查过的问题又从头试一遍？** | v2.2.9 的「按需笔记与文档管理」引导 Codex 记录可复用的失败条件、验证结果和替代方案，下次按索引查阅。[查看初始化选项](docs/Settings.md#按需笔记与文档管理) |
 | **⌨️ 能用命令完成，却经常要你配合点界面？** | v2.2.9 的「优先使用命令行」引导 Codex 在授权范围内用 CLI 或 PowerShell 直接执行并核验。[查看初始化选项](docs/Settings.md#优先使用命令行) |
-
-本版已在 Windows 10 x64 验证启动、只读预检和实际连接，并通过桌面、共享核心和界面回归。[查看验证范围](docs/Validation-2.3.3.md)
 
 工作规则用于引导 Codex 的行为，实际效果还会受到具体任务、用户指令和项目规则的影响。
 
