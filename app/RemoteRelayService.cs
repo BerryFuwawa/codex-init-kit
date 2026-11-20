@@ -17,6 +17,12 @@ internal sealed class RemoteRelayEvents : EventSource {
     [Event(1, Level=EventLevel.Warning)]
     public void ConnectionFailed(string detail) { WriteEvent(1, detail); }
 }
+internal sealed class RelayStatus {
+    internal string Text="已关闭";
+    internal bool Installed,CanRemove;
+    internal bool CanEnable=true;
+}
+
 internal sealed class RemoteRelayService : ServiceBase {
     internal const string NameInWindows = "CodexInitKitRelay";
     internal const string Switch = "--remote-relay-service";
@@ -117,14 +123,20 @@ internal sealed class RemoteRelayService : ServiceBase {
         }
     }
 
-    internal static string Describe(out bool configured) {
+    internal static bool OwnedInstallation {
+        get { string path=ImagePath();return path!=null && path.StartsWith(CommandPrefix,StringComparison.OrdinalIgnoreCase); }
+    }
+
+    internal static RelayStatus ReadStatus() {
         string path = ImagePath();
         bool mapped = RemoteControlHosts.HasEntry(RemoteControlHosts.Read(RemoteControlHosts.SystemFile));
         bool leftover = File.Exists(InstalledExe);
-        configured = path != null || mapped || leftover;
-        if (path == null) return mapped || leftover ? "需要清理 · 可关闭远控转发" : "已关闭";
+        if(path==null){
+            if(mapped || leftover)return new RelayStatus{Text="有残留文件或映射，可卸载清理",CanRemove=true,CanEnable=false};
+            return new RelayStatus();
+        }
         if (!path.StartsWith(CommandPrefix, StringComparison.OrdinalIgnoreCase))
-            return "同名服务使用了其他程序";
+            return new RelayStatus{Text="同名服务使用了其他程序",CanEnable=false};
         using (var service = new ServiceController(NameInWindows)) {
             var endpoint = path.Substring(CommandPrefix.Length).Split(' ');
             IPAddress address;
@@ -132,9 +144,10 @@ internal sealed class RemoteRelayService : ServiceBase {
             var target = endpoint.Length == 2 && IPAddress.TryParse(endpoint[0], out address) &&
                 Int32.TryParse(endpoint[1], out port) && port > 0 && port <= 65535
                 ? new IPEndPoint(address, port).ToString() : "未知代理";
-            if (service.Status == ServiceControllerStatus.Running && mapped) return "运行中 · " + target;
-            return (mapped ? "已设置映射" : "缺少 hosts 映射") + " · 服务" +
-                (service.Status == ServiceControllerStatus.Running ? "正在运行" : "尚未就绪");
+            bool running=service.Status==ServiceControllerStatus.Running;
+            string text=running && mapped ? "运行中 · "+target : (mapped ? "已设置映射" : "缺少 hosts 映射") +
+                " · 服务"+(running ? "正在运行" : "尚未就绪");
+            return new RelayStatus{Text=text,Installed=true,CanRemove=true,CanEnable=false};
         }
     }
 
@@ -147,7 +160,11 @@ internal sealed class RemoteRelayService : ServiceBase {
                 if (existing != null && !existing.StartsWith(CommandPrefix, StringComparison.OrdinalIgnoreCase))
                     throw new IOException("Windows 中已有同名服务，服务程序路径与本工具不同。");
                 if (sync && existing == null) return false;
-                if (target==null) { Remove(existing != null); return true; }
+                if (target==null) {
+                    Remove(existing != null);
+                    SaveAppliedChoice(false);
+                    return true;
+                }
                 if (target.Equals(new IPEndPoint(RemoteControlRelay.Loopback, 443)))
                     throw new IOException("上游代理不能是转发监听地址。");
                 // Check conflicts before creating a service or changing an existing mapping.
@@ -181,33 +198,44 @@ internal sealed class RemoteRelayService : ServiceBase {
                     if (created) {
                         try { Remove(true); }
                         catch (Exception cleanup) { throw new IOException(ex.Message + "；清理未完成：" + cleanup.Message, ex); }
-                    } else if (existing == null) DeleteHelper();
+                    } else if (existing == null) DeleteHelper(InstalledExe);
                     else if (!previouslyMapped) RemoteControlHosts.Set(RemoteControlHosts.SystemFile, false);
                     throw;
                 }
+                if(!sync)SaveAppliedChoice(true);
                 return true;
             } finally { gate.ReleaseMutex(); }
         }
     }
 
-    static void Remove(bool registered) {
-        if (RemoteControlHosts.HasEntry(RemoteControlHosts.Read(RemoteControlHosts.SystemFile)))
-            RemoteControlHosts.Set(RemoteControlHosts.SystemFile, false);
-        if (registered) {
-            using (var service = new ServiceController(NameInWindows)) {
-                if (service.Status != ServiceControllerStatus.Stopped) {
-                    if (service.Status != ServiceControllerStatus.StopPending) service.Stop();
-                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(12));
-                }
-            }
-            Sc("delete", NameInWindows);
-        }
-        DeleteHelper();
+    static void SaveAppliedChoice(bool installed){
+        try { RelayPreference.Save(Core.Root,installed,installed); }
+        catch(Exception ex){throw new IOException((installed?"服务已开启":"服务已卸载")+"，但初始化选项未保存。",ex);}
     }
 
-    static void DeleteHelper() {
-        for (int attempt = 0; File.Exists(InstalledExe); attempt++) {
-            try { File.Delete(InstalledExe); break; }
+    static void Remove(bool registered) {
+        Remove(RemoteControlHosts.SystemFile,InstalledExe,registered ? (Action)Unregister : null);
+    }
+
+    static void Unregister(){
+        using(var service=new ServiceController(NameInWindows)){
+            if(service.Status!=ServiceControllerStatus.Stopped){
+                if(service.Status!=ServiceControllerStatus.StopPending)service.Stop();
+                service.WaitForStatus(ServiceControllerStatus.Stopped,TimeSpan.FromSeconds(12));
+            }
+        }
+        Sc("delete",NameInWindows);
+    }
+
+    internal static void Remove(string hosts,string executable,Action unregister){
+        if(RemoteControlHosts.HasEntry(RemoteControlHosts.Read(hosts)))RemoteControlHosts.Set(hosts,false);
+        if(unregister!=null)unregister();
+        DeleteHelper(executable);
+    }
+
+    static void DeleteHelper(string executable) {
+        for (int attempt = 0; File.Exists(executable); attempt++) {
+            try { File.Delete(executable); break; }
             catch (IOException ex) {
                 // SCM can report Stopped shortly before the service process releases its executable.
                 int code = ex.HResult & 0xffff;
@@ -219,7 +247,7 @@ internal sealed class RemoteRelayService : ServiceBase {
                 Thread.Sleep(100);
             }
         }
-        string dir = Path.GetDirectoryName(InstalledExe);
+        string dir = Path.GetDirectoryName(executable);
         if (Directory.Exists(dir) && Directory.GetFileSystemEntries(dir).Length == 0) Directory.Delete(dir);
     }
     static void Sc(params string[] args) {

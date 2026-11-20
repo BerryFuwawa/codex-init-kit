@@ -7,6 +7,66 @@ internal static partial class NativeDesktopTests {
     static object UiCall(MainWindow w,string n,params object[] values){return typeof(MainWindow).GetMethod(n,UiPrivate).Invoke(w,values);}
     static MainWindow TestWindow(){if(Application.Current==null)new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};return new MainWindow(true);}
     static void ExperienceChecks(){
+        Check("跨窗口继承远控选择及卸载状态",()=>{
+            var folder=Path.Combine(root,"relay-preferences");
+            var state=new RelayStatus();
+            Func<MainWindow> open=()=>{
+                var w=TestWindow();UiSet(w,"relayPreferenceRoot",folder);
+                UiSet(w,"readRelayStatus",new Func<RelayStatus>(()=>state));
+                UiCall(w,"Navigate","初始化");return w;
+            };
+            Func<MainWindow,Button> uninstall=w=>InitializationFlowTests.Descendants<Button>(w.Content as DependencyObject)
+                .Single(x=>Convert.ToString(x.Content)=="卸载远控转发服务");
+            var window=open();
+            try{
+                var box=(CheckBox)UiGet(window,"remoteRelay");
+                Assert(box.IsChecked==true && !uninstall(window).IsEnabled,"First-use default or uninstall availability");
+                box.IsChecked=false;
+            }finally{window.Close();}
+            window=open();
+            try{
+                var box=(CheckBox)UiGet(window,"remoteRelay");
+                Assert(box.IsChecked==false,"Skipped choice lost on reopening");
+                box.IsChecked=true;
+            }finally{window.Close();}
+            Assert(RelayPreference.Load(folder,false),"Explicit opt-in lost before installation");
+            state=new RelayStatus{Installed=true,CanRemove=true,CanEnable=false,Text="运行中"};
+            RelayPreference.Save(folder,true,true);
+            window=open();
+            try{
+                var box=(CheckBox)UiGet(window,"remoteRelay");
+                Assert(box.IsChecked==true && uninstall(window).IsEnabled,"Installed service was not inherited");
+                UiCall(window,"Navigate","连接与修复");
+                Assert(uninstall(window).IsEnabled,"Missing maintenance uninstall action");
+                state=new RelayStatus();
+                Assert(!RelayPreference.Load(folder,false),"Externally removed service was selected again");
+                RelayPreference.Save(folder,false,false);
+                UiCall(window,"Navigate","初始化");
+                Assert(box.IsChecked==false && !uninstall(window).IsEnabled,"Same-window uninstall left stale controls");
+                state=new RelayStatus{CanEnable=false,CanRemove=true,Text="有残留文件或映射，可卸载清理"};
+                UiCall(window,"Navigate","初始化");
+                Assert(box.IsChecked==false && uninstall(window).IsEnabled,"Residual files cannot be cleaned from initialization");
+                state=new RelayStatus();
+            }finally{window.Close();}
+            window=open();
+            try{Assert(((CheckBox)UiGet(window,"remoteRelay")).IsChecked==false,"Uninstall not inherited after reopening");}
+            finally{window.Close();}
+        });
+        Check("旧版初始化和卸载记录继承",()=>{
+            var folder=Path.Combine(root,"relay-legacy");var logs=Path.Combine(folder,"Logs");
+            Directory.CreateDirectory(logs);
+            Action<string,string> record=(title,state)=>{
+                string id=Guid.NewGuid().ToString("N");var file=Path.Combine(logs,id+".log");File.WriteAllText(file,"");
+                var op=OperationRecord.Create(id,title,file);op.state=state;op.Save();
+            };
+            record("读取当前状态","complete");record("初始化","cancelled");
+            Assert(RelayPreference.Load(folder,false),"A read-only or cancelled operation suppressed first-use default");
+            record("初始化","complete");
+            Assert(!RelayPreference.Load(folder,false) && RelayPreference.Load(folder,true),"Legacy initialized machine did not follow actual service");
+            var other=Path.Combine(folder,"uninstalled");
+            logs=Path.Combine(other,"Logs");Directory.CreateDirectory(logs);record("关闭远控转发","complete");
+            Assert(!RelayPreference.Load(other,false),"Legacy uninstall was not inherited");
+        });
         Check("完整代理地址继承与不支持地址保留",()=>{var folder=Path.Combine(root,"proxy-address");Directory.CreateDirectory(folder);var env=Path.Combine(folder,".env");foreach(var addr in new[]{"http://192.168.9.8:3067","http://[::1]:7897","http://127.0.0.1:54321"}){System.IO.File.WriteAllText(env,"HTTPS_PROXY='"+addr+"' # proxy\n");var saved=ProxyPortSettings.LoadAddress(folder);var expected=new Uri(addr);Assert(saved.Configured&&saved.Port==expected.Port&&System.Net.IPAddress.Parse(saved.Host).Equals(System.Net.IPAddress.Parse(expected.Host.Trim('[',']'))),"proxy address lost");}foreach(var addr in new[]{"https://127.0.0.1:3067","http://name:pass@127.0.0.1:3067","http://proxy.example:3067"}){var original="HTTP_PROXY="+addr+"\n";System.IO.File.WriteAllText(env,original);bool rejected=false;try{ProxyPortSettings.LoadAddress(folder);}catch(InvalidDataException){rejected=true;}Assert(rejected&&System.IO.File.ReadAllText(env)==original,"unsupported proxy changed");}});
         Check("启动窗口同时继承IP与端口",()=>{var before=Environment.GetEnvironmentVariable("CODEX_HOME");var home=Path.Combine(root,"proxy-window");Directory.CreateDirectory(home);System.IO.File.WriteAllText(Path.Combine(home,".env"),"HTTP_PROXY=http://192.168.9.8:3067\n");var w=TestWindow();try{Environment.SetEnvironmentVariable("CODEX_HOME",home);UiCall(w,"LoadCurrentProxyPort");Assert((string)UiCall(w,"ProxySummary")=="http://192.168.9.8:3067","startup address changed");}finally{Environment.SetEnvironmentVariable("CODEX_HOME",before);w.Close();}});
         Check("网络配置页与确认页使用同一远控转发选择",()=>{

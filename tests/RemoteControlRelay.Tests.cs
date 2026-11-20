@@ -19,6 +19,21 @@ internal static class RemoteControlRelayTests {
             Check(start.Verb == "runas" && start.Arguments.StartsWith("--worker " + operation + " "),
                 "Relay setting did not launch the privileged worker");
         }
+        var install=Path.Combine(directory,"relay-installed");
+        Directory.CreateDirectory(install);
+        var helper=Path.Combine(install,"CodexInitKitRelay.exe");
+        var hosts=Path.Combine(directory,"uninstall-hosts");
+        const string originalHosts="127.0.0.1 localhost\r\n";
+        File.WriteAllText(hosts,originalHosts);RemoteControlHosts.Set(hosts,true);File.WriteAllText(helper,"fixture");
+        bool called=false;
+        RemoteRelayService.Remove(hosts,helper,()=>{
+            Check(File.ReadAllText(hosts)==originalHosts && File.Exists(helper),"Uninstall order or unrelated hosts changed");
+            called=true;
+        });
+        Check(called && !File.Exists(helper) && !Directory.Exists(install),"Service helper was not removed");
+        Directory.CreateDirectory(install);File.WriteAllText(helper,"fixture");RemoteControlHosts.Set(hosts,true);
+        RemoteRelayService.Remove(hosts,helper,null);
+        Check(File.ReadAllText(hosts)==originalHosts && !File.Exists(helper),"Leftover cleanup failed without registration");
         var path = Path.Combine(directory, "relay-hosts");
         foreach (var text in new[] { "", "# user", "127.0.0.1 localhost\r\n", "# 中文注释\n" }) {
             var original = Encoding.UTF8.GetBytes(text);

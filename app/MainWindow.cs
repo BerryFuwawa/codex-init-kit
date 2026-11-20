@@ -178,6 +178,11 @@ public partial class MainWindow : Window {
         proxyHost.Text="";proxyHost.Width=280;proxyHost.HorizontalAlignment=HorizontalAlignment.Left;proxyHost.ToolTip="留空使用 127.0.0.1。软路由在局域网其他设备时，请填写可访问的路由器 IP 地址；请先启动提供该地址的代理软件。";
         var checks=new[]{remoteRelay,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,guard,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,subagents};var labels=new[]{"开启远控转发","保存当前用户代理","文件夹管理功能","防止过度防御","按需笔记与文档管理","优先使用命令行","启用 Codex 记忆","CLI 启动保护与修复","CUA 检查与修复","浏览器组件检查与修复","更新官方CLI","更新桌面版（含原生CLI）","子代理多线程"};for(int i=0;i<checks.Length;i++){checks[i].Style=(Style)Resources["KitCheck"];checks[i].Content=labels[i];checks[i].IsChecked=checks[i]!=subagents;}
         remoteRelay.Tag=UiIcons.For("远控转发");
+        remoteRelay.Margin=new Thickness(0,6,12,6);
+        if(preview)readRelayStatus=()=>new RelayStatus();
+        else relayPreferenceRoot=Core.Root;
+        remoteRelay.Checked+=RememberRelayChoice;
+        remoteRelay.Unchecked+=RememberRelayChoice;
         cliNative.Content="桌面版原生 CLI";cliStandalone.Content="官方独立 CLI";foreach(var choice in new[]{cliNative,cliStandalone}){choice.GroupName="InitializationCliMode";choice.Style=(Style)Resources["KitCliChoice"];choice.Checked+=(s,e)=>{if(!applyingCliDetection){cliChoiceManual=true;UpdateCliDetectionHint();}};choice.Click+=(s,e)=>{cliChoiceManual=true;UpdateCliDetectionHint();};}
         cliDetectionHint.FontSize=12;cliDetectionHint.Foreground=MutedBrush;cliDetectionHint.TextWrapping=TextWrapping.Wrap;cliDetectionHint.Margin=new Thickness(0,4,0,8);
         if(preview)ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});else UpdateCliDetectionHint();
@@ -191,7 +196,7 @@ public partial class MainWindow : Window {
         githubMirrors.IsChecked=network.githubMirrorEnabled;githubCustomMirror.Text=network.customGithubMirror;githubCustomMirror.IsEnabled=network.githubMirrorEnabled;
         githubMirrors.Checked+=(a,b)=>githubCustomMirror.IsEnabled=true;githubMirrors.Unchecked+=(a,b)=>githubCustomMirror.IsEnabled=false;
         githubLogView.IsReadOnly=true;githubLogView.TextWrapping=TextWrapping.Wrap;githubLogView.Height=150;githubLogView.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;githubLogView.Background=B("#101620");githubLogView.Foreground=TextBrush;githubLogView.BorderThickness=new Thickness(0);githubLogView.Padding=new Thickness(10);githubViewport=new LogViewport(githubLogView);
-        proxyEnabled.Checked+=(s,e)=>{remoteRelay.IsEnabled=proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=true;};proxyEnabled.Unchecked+=(s,e)=>{remoteRelay.IsChecked=false;remoteRelay.IsEnabled=proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=false;};
+        proxyEnabled.Checked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=true;RefreshRelayChoice();remoteRelay.IsEnabled=relayStatus.CanEnable || relayStatus.Installed;};proxyEnabled.Unchecked+=(s,e)=>{remoteRelay.IsChecked=false;remoteRelay.IsEnabled=proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=false;};
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
         var effortText=new FrameworkElementFactory(typeof(TextBlock));effortText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding{Converter=new EffortLabels()});var effortTemplate=new DataTemplate{VisualTree=effortText};parentEffort.ItemTemplate=effortTemplate;childEffort.ItemTemplate=effortTemplate;
         parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem="medium";childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="medium";
@@ -534,7 +539,8 @@ public partial class MainWindow : Window {
                 else if(op=="doctor"){diagnosticAdvice=DiagnosticAdvice.Build(diagnosisContext,process.ExitCode,rawDiagnosticText);var completed=process.ExitCode==0||DiagnosticAdvice.CompletedReport(rawDiagnosticText);banner.Text=completed?"诊断完成 · 已生成操作建议":"诊断未完成 · 已生成排查建议";if(completed)progress.Value=100;repairTab=0;Navigate("连接与修复");if(!preview)CreateDiagnosticDialog().ShowDialog();}
                 else if(op=="relay-enable"||op=="relay-disable"){
                     banner.Text=process.ExitCode==0?title+"完成":title+"未完成 · 查看日志";
-                    repairTab=0;Navigate("连接与修复");
+                    if(page=="初始化")Navigate(page);
+                    else {repairTab=0;Navigate("连接与修复");}
                     if(process.ExitCode!=0&&!preview)MessageBox.Show(this,chineseLogText,title,MessageBoxButton.OK,MessageBoxImage.Warning);
                 }
                 else if(op=="proxy"){
