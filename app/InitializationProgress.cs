@@ -20,6 +20,7 @@ internal sealed class InitializationProgress {
         Stages.Add(new InitializationStage("preflight","前置检查"));
         if(Convert.ToBoolean(options["desktopUpdate"]))Stages.Add(new InitializationStage("desktop","更新桌面版"));
         Stages.Add(new InitializationStage("base","配置、目录与 CUA"));
+        if(Core.RemoteRelaySelected(options))Stages.Add(new InitializationStage("relay","开启远控转发"));
         if(Convert.ToBoolean(options["officialCliUpdate"]))Stages.Add(new InitializationStage("official","更新官方独立 CLI"));
         if(protection)Stages.Add(new InitializationStage("guard","安装启动保护"));
         Stages.Add(new InitializationStage("cli","应用所选 CLI"));

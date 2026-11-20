@@ -57,7 +57,7 @@ public const string Version = "2.3.4";
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"remoteRelay", false}, {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
@@ -95,6 +95,7 @@ public const string Version = "2.3.4";
     public static Dictionary<string,object> NormalizeOptions(Dictionary<string,object> source) {
         var normalized=DefaultOptions();
         if(source==null) return normalized;
+        normalized["remoteRelay"]=RemoteRelaySelected(source);
         normalized["folderManagement"]=ReadOptionBoolean(source,"folderManagement",true);
         normalized["antiOverDefense"]=ReadOptionBoolean(source,"antiOverDefense",true);
         normalized["workJournal"]=ReadOptionBoolean(source,"workJournal",true);
@@ -144,7 +145,16 @@ public const string Version = "2.3.4";
         var json=Json.Serialize(NormalizeOptions(options));
         return Convert.ToBase64String(new UTF8Encoding(false).GetBytes(json));
     }
-    internal static bool WorkerNeedsAdmin(string operation,bool guard,Dictionary<string,object> options){var retry=Value(options,"retryStages","");return NeedsAdmin(operation)||operation=="guard-install"||operation=="initialize"&&guard&&(retry.Length==0||retry.Split(',').Contains("guard"));}
+    internal static bool RemoteRelaySelected(Dictionary<string,object> options) {
+        return ReadOptionBoolean(options,"remoteRelay",false);
+    }
+    internal static bool WorkerNeedsAdmin(string operation,bool guard,Dictionary<string,object> options){
+        if(operation!="initialize")return NeedsAdmin(operation)||operation=="guard-install";
+        string retry=Value(options,"retryStages","");
+        var stages=retry.Split(',');
+        return (guard && (retry.Length==0 || stages.Contains("guard"))) ||
+            (RemoteRelaySelected(options) && (retry.Length==0 || stages.Contains("relay")));
+    }
     public static int Worker(string[] args) {
         // All executable code comes from this EXE's embedded resources, never a supplied job/script path.
         if((args.Length!=7 && args.Length!=8) || args.Length<2 || !Operations.Contains(args[1])) return 64;

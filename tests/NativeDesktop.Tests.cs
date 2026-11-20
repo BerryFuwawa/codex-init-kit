@@ -7,6 +7,27 @@ internal static partial class NativeDesktopTests {
     static void Assert(bool value,string message){if(!value)throw new InvalidDataException(message);}
     static void Check(string name,Action body){try{body();checks[name]=true;}catch(Exception ex){checks[name]=false;failures.Add(name+"："+ex);}}
     internal static int Run(string outputRoot){root=Path.GetFullPath(outputRoot);Directory.CreateDirectory(root);checks.Clear();failures.Clear();
+        Check("初始化仅在选中时开启远控转发，并可单独重试",()=>{
+            var f=new Fixture();
+            var settings=Settings();
+            Assert(f.Run(settings,false)==0 && f.RelayTarget==null,"Default initialization enabled the relay");
+            settings["remoteRelay"]=true;
+            settings["proxyHost"]="127.0.0.4";
+            f.Fail="relay";
+            Assert(f.Run(settings,false,15432)==2 && f.Trace.Count(x=>x=="relay")==1,"Relay failure must be retryable");
+            Assert(f.RelayTarget.Equals(new System.Net.IPEndPoint(System.Net.IPAddress.Parse("127.0.0.4"),15432)),"Wrong relay target");
+            Assert(ProxyPortSettings.LoadAddress(f.P.Home).Port==15432,"Selected relay port not saved");
+            f.Trace.Clear();f.Fail="";settings["retryStages"]="relay";
+            Assert(f.Run(settings,false,15432)==0 && f.Trace.Contains("relay") && !f.Trace.Contains("desktop") && !f.Trace.Contains("browser"),"Relay-only retry ran unrelated stages");
+            var timeline=new InitializationProgress();timeline.Reset(settings,false);timeline.Finish(f.Result());
+            Assert(timeline.Stages.Single(x=>x.Id=="relay").State=="complete" && timeline.Summary.Contains("127.0.0.4:15432"),"Relay result missing from initialization");
+            Assert(Core.WorkerNeedsAdmin("initialize",false,settings),"Relay-only retry missing elevation");
+            settings["retryStages"]="browser";
+            Assert(!Core.WorkerNeedsAdmin("initialize",false,settings) && !Core.WorkerNeedsAdmin("initialize-preflight",false,settings),"Unrelated operation elevated");
+            settings.Remove("retryStages");Assert(Core.WorkerNeedsAdmin("initialize",false,settings),"Relay installation missing elevation");
+            bool rejected=false;try{NativeDesktopWorkflow.Options(settings,0);}catch(ArgumentException){rejected=true;}
+            Assert(rejected,"Accepted a relay without a proxy");
+        });
         Check("代理排除项与注释保留",()=>{var o=new NativeOptions{Proxy=true,ProxyPort=3067};var original="NO_PROXY=localhost,internal.example,10.0.0.0/8\nPRIVATE_KEY=fixture\n";var result=NativeDesktopReconcile.EnvironmentText(original,o);Assert(result.Contains("internal.example")&&result.Contains("10.0.0.0/8")&&result.Contains("PRIVATE_KEY=fixture")&&NativeDesktopReconcile.EnvironmentText(result,o)==result,"proxy exclusions lost");});
         Check("单文件版本元数据与核心一致",()=>{var info=System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location);Assert(info.FileVersion==Core.Version&&NativeData.Version==Core.Version,"file and core versions diverged");});
         Check("保存新代理后新连接切换且已建立连接继续传输",()=>{
@@ -186,6 +207,8 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
         internal Dictionary<string,object> Result(){return Core.ReadJson(Log.Last(x=>x.StartsWith("@@INIT_RESULT@@")).Substring(15));}
         public string DetectCli(){Trace.Add("detect");return Mode;}public void CaptureSelection(){Trace.Add("capture");}public void RestoreSelection(){Trace.Add("restore");}
         public bool DesktopSafe{get{return Safe;}}void Step(string name){Trace.Add(name);if(Fail==name)throw new IOException("模拟 "+name+" 未完成");}
+        public System.Net.IPEndPoint RelayTarget;
+        public void EnableRelay(System.Net.IPEndPoint target){RelayTarget=target;Step("relay");}
         public void DesktopUpdate(){Step("desktop");}public void OfficialCli(bool onlyIfMissing){Step(onlyIfMissing?"official-missing":"official");}public void Protection(){Step("guard");}public void Browser(){Step("browser");}
         public void SelectCli(string mode){Step("select:"+mode);Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=mode!="desktop-native",Kind="String",Value=mode});}
         public void VerifyCli(string mode){Step("verify:"+mode);Verified++;if(VerifyFailure==Verified)throw new IOException("模拟最终状态变化");}
