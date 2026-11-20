@@ -246,23 +246,26 @@ public static class InitializationFlowTests {
         var near=alpha((int)bottom.X,(int)bottom.Y+2);
         Assert(near>alpha((int)bottom.X,(int)bottom.Y+12)&&near<255,"Dialog shadow was missing or solid");
     }
-    static void VerifyOverviewLink(){
+    static void VerifyOverviewRecoveryButton(){
         var window=new MainWindow(true){Opacity=0,ShowInTaskbar=false};
         try{
             window.Show();window.MinWidth=600;
             Set(window,"status",new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});
-            Navigate(window,"概览");var link=(Button)Field(window,"recoveryGuide");var row=(Grid)link.Parent;
-            Assert(Equals(link.Content,"切换官方独立 CLI")&&link.Tag==null&&link.Background==Brushes.Transparent&&link.BorderThickness.Left==0,"Recovery link is not text-only");
+            Navigate(window,"概览");var guide=(Button)Field(window,"recoveryGuide");var row=(Grid)guide.Parent;
+            var label=(TextBlock)guide.Content;const string caption="遇到了未知错误？尝试切换官方独立CLI";
+            Assert(label.Text==caption&&label.TextWrapping==TextWrapping.NoWrap&&guide.Tag.ToString()==UiIcons.For(caption).ToString()&&guide.Background==MorandiTheme.Danger,"Recovery button lost its caption, icon or color");
             double fullWidth=0;
             var refresh=row.Children.OfType<Button>().Single(b=>Equals(b.Content,"刷新状态"));
-            foreach(var width in new[]{1000,800,608}){
+            foreach(var width in new[]{1000,800,608,1000}){
                 window.Width=width;window.UpdateLayout();
-                if(width==1000)fullWidth=link.ActualWidth;
-                var start=link.TranslatePoint(new Point(),row).X;
+                if(fullWidth==0)fullWidth=guide.ActualWidth;
+                var start=guide.TranslatePoint(new Point(),row);
                 var refreshEnd=refresh.TranslatePoint(new Point(refresh.ActualWidth,0),row).X;
-                Assert(fullWidth>0&&Math.Abs(start+link.ActualWidth-row.ActualWidth)<2&&Math.Abs(link.ActualWidth-fullWidth)<1&&start>=refreshEnd,"Recovery link clipped or away from right edge at "+width);
+                bool fitsTogether=row.ActualWidth>=fullWidth+refreshEnd+refresh.Margin.Right;
+                Assert((Grid.GetRow(guide)==0)==fitsTogether,"Recovery button row mismatch at "+width);
+                Assert(fullWidth>0&&Math.Abs(start.X+guide.ActualWidth-row.ActualWidth)<2&&Math.Abs(guide.ActualWidth-fullWidth)<1&&(start.X>=refreshEnd||start.Y>=refresh.ActualHeight),"Recovery button clipped or away from right edge at "+width);
             }
-            Click(link);Assert(Equals(Field(window,"page"),"CLI 管理"),"Recovery link did not open CLI management");
+            Click(guide);Assert(Equals(Field(window,"page"),"CLI 管理"),"Recovery button did not open CLI management");
         }finally{window.Close();}
     }
     static void VerifyLaunchRetry(){
@@ -297,7 +300,7 @@ public static class InitializationFlowTests {
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
-        VerifyInitializationGroups();VerifyOverviewLink();
+        VerifyInitializationGroups();VerifyOverviewRecoveryButton();
     }
 }
 }
