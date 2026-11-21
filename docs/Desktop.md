@@ -1,4 +1,4 @@
-# Codex Init Kit Desktop 2.3.5
+# Codex Init Kit 中文使用手册（Windows）
 
 保存代理后，从原来的 Codex 图标重开即可生效。电脑名称和允许控制可在 Codex 或 Work 中设置。[用户资料与 Work 设置](DesktopProfile.md)
 

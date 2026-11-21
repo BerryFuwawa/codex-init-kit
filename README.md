@@ -1,12 +1,6 @@
-<div align="center">
-  <img src="assets/readme-banner.png" alt="Codex Init Kit：Windows 上的 Codex 初始化、浏览器连接修复与维护恢复工具" width="100%">
-</div>
+# Codex Init Kit · Windows 版 Codex 中文配置与修复工具
 
-# Codex Init Kit：Windows Codex 初始化与故障修复
-
-**把配置、连接检查和日常维护，放进一个中文桌面工具。**
-
-Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、排查浏览器连接问题、检查 CUA 组件、切换官方 CLI，以及备份和恢复配置。第一次配置可以使用向导；已经在使用 Codex，也可以只运行需要的检查或单项修复。
+Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中文界面。第一次在 Windows 上使用 Codex，可以用向导设置工作目录、模型和 HTTP 代理。已经装好 Codex 的用户，可以单独排查 Chrome 连不上、手机远控看不到电脑或桌面版打不开的问题。
 
 <p align="center">
   <a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest"><img src="https://img.shields.io/github/v/release/BerryFuwawa/codex-init-kit?label=Release&amp;style=flat-square&amp;color=6b8fd3" alt="最新发布版本"></a>
@@ -16,13 +10,17 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 </p>
 
 <p align="center">
-  <strong><a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe">⬇ 下载 Windows 桌面版</a></strong>
+  <strong><a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe">下载 Codex Init Kit 中文版（Windows x64）</a></strong>
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/releases/latest">最新版本与校验文件</a>
   &nbsp; · &nbsp; <a href="docs/Desktop.md">使用手册</a>
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
 <p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.5.md">v2.3.5</a></sub></p>
+
+<div align="center">
+  <img src="assets/readme-banner.png" alt="Codex Init Kit 中文桌面工具" width="100%">
+</div>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
@@ -32,15 +30,21 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ---
 
-## 遇到这些问题？
+## Windows 上的 Codex 连接与启动问题
 
-| 你可能正在搜索 | 可以先试什么 |
+| 使用时遇到的问题 | 在 Codex Init Kit 中怎么处理 |
 | --- | --- |
-| **🌐 Codex 连不上 Chrome / 浏览器控制不可用** | 打开「连接与修复」→「浏览器」，检查组件完整性，按需恢复官方文件，再测试真实浏览器操作。[查看浏览器连接指南](docs/BrowserConnection.md) |
-| **🔌 关闭 TUN 后，Codex 远控连不上？** | 在「连接与修复 → 连接状态」选好代理，点「开启远控转发」，再回到 Codex 刷新设备列表。这里也可以卸载转发服务。[远控设置](docs/WebSocket.md#控制其他设备时使用远控转发) |
+| **Codex 怎么配置 Karing 或 v2rayN 代理？** | 打开「连接与修复 → 连接状态」，选择代理软件或填写它当前的 HTTP 代理 IP 和端口，点「保存代理配置」。[代理设置与模型线路检查](docs/WebSocket.md#配置与检查) |
+| **关闭 TUN 后，手机上的 Codex Remote 或 Dot 看不到电脑** | 保持代理软件运行，在「连接与修复 → 连接状态」点「开启远控转发」，完成 Windows 授权，再刷新设备列表。[远控转发设置与卸载](docs/WebSocket.md#控制其他设备时使用远控转发) |
+| **Codex 连不上 Chrome，无法控制浏览器** | 打开「连接与修复 → 浏览器」检查组件；需要时修复，再用测试标签页验证 Codex 能否读到网页标题。[Chrome 连接排查步骤](docs/BrowserConnection.md) |
 | **🖥️ Codex 桌面版打不开 / 无法加载组织设置** | 使用桌面原生 CLI 时，可尝试切换官方独立 CLI 后重启验证；若日志中有 `EPERM`、`rename_staging` 等特征，也可检查桌面启动组件。[查看操作方法](docs/DesktopStartupRecovery.md) |
-| **🐢 Codex 启动很慢，并且运行的时候卡的不行，CUA 目录反复产生临时文件** | 在「连接与修复」→「电脑操作」检查电脑操作组件，按需补齐并校验当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
+| **Codex 启动慢，CUA 目录反复生成临时文件** | 在「连接与修复 → 电脑操作」检查电脑操作组件，按需补齐当前版本的文件。[查看 CUA 说明](docs/Desktop.md#遇到问题先选哪项) |
 | **🧩 Codex CLI 找不到、路径错误或启动异常** | 运行诊断，检查组件；也可在桌面原生 CLI 和官方独立 CLI 间切换。[查看 CLI 与维护说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
+
+## Codex 初始化与工作习惯
+
+| 想调整什么 | 在初始化向导中怎么设置 |
+| --- | --- |
 | **🚀 刚安装 Codex，不知道怎样配置模型、代理和工作目录** | 从「初始化」选择功能，查看变更摘要，确认后一次完成。[查看初始化选项](docs/Settings.md) |
 | **🛡️ Codex 防御性太强，总是重复校验、添加不必要的保护？** | 初始化时勾选默认开启的「防止过度防御」，将 HERO 中文完整规则和防御边界写入全局 `AGENTS.md`。[查看规则说明](docs/AntiOverDefense.md) |
 | **🗂️ Codex 的对话工作文件、项目和交付物总是乱放？** | 初始化时勾选默认开启的「文件夹管理」，创建按用途分类的目录，约定无项目任务的存放位置；已有文件不会自动搬移。[查看初始化选项](docs/Settings.md#可选功能) |
@@ -61,7 +65,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 此外，可分别更新官方独立 CLI 与 Microsoft Store 桌面版；记忆和「防止过度防御」默认勾选，子代理多线程默认关闭。[查看全部初始化选项](docs/Settings.md)
 
-## 下载后，三步开始
+## Windows 下载与初始化
 
 1. **下载并启动**：下载 [CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)，双击打开。所需脚本已包含在 EXE 中。
 2. **先看概览**：查看当前环境；只想检查或修复时，直接进入「连接与修复」→「浏览器」或「CLI 管理」。
@@ -129,9 +133,9 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 不会清除已有对话、项目文件或已有记忆文件。初始化先备份需要修改的内容，合并工具管理的配置和规则，保留未管理的自定义内容。如果只需要检查或单项修复，可以跳过完整初始化。[查看初始化说明](docs/Settings.md)
 
-### 必须使用代理吗？
+### Codex 怎么使用 Karing、v2rayN 或自定义代理端口？
 
-不需要。初始化中的 HTTP 代理默认开启，可按实际情况修改 IP 和端口，也可以取消勾选。工具不会安装或启动代理软件；CLI 代理在初始化或连接状态页保存；浏览器网络需单独验收。[查看代理设置](docs/Settings.md#代理开关)
+先打开代理软件，查看它当前的 HTTP 或混合代理监听端口。在「连接与修复 → 连接状态」选择对应预设；如果实际端口不同，就选「自定义代理端口」，填写实际 IP 和端口并保存。重新打开 Codex 后，可在同一页点「检查已保存的模型线路」。能直接联网的用户可以在初始化时取消勾选代理。[代理开关与端口设置](docs/Settings.md#代理开关)
 
 ### 初始化默认使用什么模型和 CLI？
 
@@ -143,7 +147,7 @@ Codex Init Kit 面向 Windows 用户，帮助你初始化 Codex 工作环境、�
 
 ## 文档与反馈
 
-- [桌面版使用手册](docs/Desktop.md) · [初始化选项](docs/Settings.md) · [v2.2.13 更新说明](docs/Release-2.2.13.md) · [v2.2.12 更新说明](docs/Release-2.2.12.md)
+- [Windows 中文使用手册](docs/Desktop.md) · [Codex 初始化选项](docs/Settings.md) · [各版本更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 - [浏览器连接与 Chrome 验证](docs/BrowserConnection.md) · [桌面启动故障处理](docs/DesktopStartupRecovery.md) · [配置兼容检查](docs/ConfigCompatibility.md)
 - [中文与原始日志](docs/Logs.md) · [GitHub 下载加速](docs/GitHubMirrors.md) · [防止过度防御](docs/AntiOverDefense.md)
 

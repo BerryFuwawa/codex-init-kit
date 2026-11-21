@@ -1,6 +1,8 @@
-# 模型与 Work 网络检查
+# Windows 上的 Codex 代理配置与手机远控排查
 
-当前源码使用官方运行时读取的持久配置。公开 v2.3.2 的额外启动入口已从源码移除；继续使用原来的 Codex 图标。[持久配置与验证范围](PersistentNetwork.md)
+使用 Karing、v2rayN 或自定义 HTTP 代理时，先在代理软件里确认监听地址和端口。在 Codex Init Kit 的「连接与修复 → 连接状态」保存相同的地址和端口，再用原来的图标打开 Codex。[持久代理配置说明](PersistentNetwork.md)
+
+如果模型能回复，但关闭 TUN 后手机上的 Codex Remote 或 Dot 仍看不到电脑，可以单独开启远控转发。开启后保持代理软件运行，即可退出 Init Kit。[远控转发设置与卸载](#控制其他设备时使用远控转发)
 
 ## 配置与检查
 
