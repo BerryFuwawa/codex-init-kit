@@ -15,11 +15,40 @@ internal sealed class ActivityIndicator : FrameworkElement {
     internal bool Animating {get;private set;}
     void Stop(){rotation.BeginAnimation(RotateTransform.AngleProperty,null);rotation.Angle=0;Animating=false;}
     void RefreshMotion(){Stop();if(state=="running"&&allowMotion&&IsLoaded&&IsVisible&&SystemParameters.ClientAreaAnimation){rotation.BeginAnimation(RotateTransform.AngleProperty,new DoubleAnimation(0,360,TimeSpan.FromSeconds(1.2)){RepeatBehavior=RepeatBehavior.Forever});Animating=true;}}
-    protected override void OnRender(DrawingContext dc){base.OnRender(dc);double size=Math.Min(ActualWidth,ActualHeight);if(size<1)return;double unit=size/24;dc.PushTransform(new ScaleTransform(unit,unit));var color=state=="incomplete"||state=="failed"?MorandiTheme.Warning:state=="complete"?MorandiTheme.Accent:MorandiTheme.Muted;var pen=new Pen(color,2){StartLineCap=PenLineCap.Round,EndLineCap=PenLineCap.Round,LineJoin=PenLineJoin.Round};
-        if(state=="running"){dc.DrawEllipse(null,new Pen(MorandiTheme.Border,2),new Point(12,12),8,8);dc.DrawGeometry(null,pen,Geometry.Parse("M12,4 A8,8 0 1 1 4,12"));}
-        else if(state=="complete")dc.DrawGeometry(null,pen,Geometry.Parse("M5,12 L10,17 L19,7"));
-        else if(state=="incomplete"||state=="failed"){dc.DrawGeometry(null,pen,Geometry.Parse("M12,3 L22,21 L2,21 Z M12,9 L12,14 M12,17 L12,18"));}
-        else if(state=="skipped")dc.DrawGeometry(null,pen,Geometry.Parse("M5,12 L19,12"));
-        else dc.DrawEllipse(null,new Pen(MorandiTheme.Border,1.5),new Point(12,12),7,7);dc.Pop();}
+    protected override void OnRender(DrawingContext dc){
+        base.OnRender(dc);
+        double size=Math.Min(ActualWidth,ActualHeight);
+        if(size<1)return;
+        dc.PushTransform(new ScaleTransform(size/24,size/24));
+        var center=new Point(12,12);
+        var color=state=="incomplete"||state=="failed"?MorandiTheme.Warning:state=="complete"?MorandiTheme.Accent:MorandiTheme.Muted;
+        var pen=new Pen(color,2){StartLineCap=PenLineCap.Round,EndLineCap=PenLineCap.Round,LineJoin=PenLineJoin.Round};
+        switch(state){
+            case "running":
+                dc.DrawEllipse(null,new Pen(MorandiTheme.Border,1.8),center,8,8);
+                dc.DrawGeometry(null,pen,Geometry.Parse("M4,12 A8,8 0 0 1 18.9,8"));
+                dc.DrawEllipse(color,null,new Point(18.9,8),2,2);
+                break;
+            case "complete":
+                dc.DrawEllipse(null,pen,center,9,9);
+                dc.DrawGeometry(null,pen,Geometry.Parse("M7.5,12.2 L10.1,14.7 Q10.9,15.4 11.6,14.6 L16.7,9.3"));
+                break;
+            case "incomplete":
+            case "failed":
+                dc.DrawGeometry(null,pen,Geometry.Parse("M9.7,5.4 Q12,1.3 14.3,5.4 L20.4,16.3 Q22.2,20 18,20 H6 Q1.8,20 3.6,16.3 Z M12,9.1 V12.8"));
+                dc.DrawEllipse(color,null,new Point(12,16.2),1.1,1.1);
+                break;
+            case "skipped":
+                dc.DrawEllipse(null,pen,center,8.5,8.5);
+                dc.DrawLine(pen,new Point(8,12),new Point(16,12));
+                break;
+            default:
+                dc.DrawEllipse(null,new Pen(MorandiTheme.Border,1.6),center,8.5,8.5);
+                dc.DrawEllipse(color,null,new Point(9,12),1.2,1.2);
+                dc.DrawEllipse(color,null,new Point(15,12),1.2,1.2);
+                break;
+        }
+        dc.Pop();
+    }
 }
 }

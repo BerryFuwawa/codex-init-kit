@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -52,6 +53,9 @@ public partial class MainWindow : Window {
     readonly ComboBox parentModel=new ComboBox(),childModel=new ComboBox();
     readonly ComboBox parentEffort=new ComboBox(),childEffort=new ComboBox();
     readonly TextBlock modelCheck=new TextBlock();
+    readonly TextBox maxConcurrentSubagentsInput=new TextBox();
+    readonly TextBlock maxConcurrentSubagentsError=new TextBlock();
+    long lastMaxConcurrentSubagents=Native.NativeOptions.DefaultMaxConcurrentSubagents;
     ModelCatalog modelCatalog;
     Dictionary<string,object> status, update,diagnosisContext;
     string diagnosticAdvice="";
@@ -78,17 +82,17 @@ public partial class MainWindow : Window {
         proxyHost.Text="192.168.1.20";var settings=Options();if(Convert.ToString(settings["proxyHost"])!="192.168.1.20")throw new InvalidOperationException("Custom proxy host was not preserved");
         proxyHost.Text="not-an-ip";var rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsafe proxy host accepted");
         proxyEnabled.IsChecked=false;port.Text="invalid";proxyHost.Text="not-an-ip";settings=Options();if(Port()!=0||port.IsEnabled||proxyHost.IsEnabled||Convert.ToString(settings["proxyHost"])!="")throw new InvalidOperationException("Disabled proxy did not ignore its fields");proxyEnabled.IsChecked=true;port.Text="10808";proxyHost.Text="";
-        var defaults=Options();if(Convert.ToString(defaults["parentModel"])!="gpt-6.1-sol"||Convert.ToString(defaults["parentEffort"])!="medium"||!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Default parent model must be directly editable while subagents stay disabled");
+        var defaults=Options();if(Convert.ToString(defaults["parentModel"])!="gpt-6.2-sol"||Convert.ToString(defaults["parentEffort"])!="medium"||!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Default parent model must be directly editable while subagents stay disabled");
         if(!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Disabled subagents allowed child selection");
-        subagents.IsChecked=true;if(!childModel.IsEnabled||childEffort.IsEnabled||!AutoAssign)throw new InvalidOperationException("Default automatic assignment unavailable");parentModel.SelectedItem="gpt-6-astra";childModel.SelectedItem="gpt-6-luna";parentEffort.SelectedItem="ultra";childEffort.SelectedItem="high";settings=Options();if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childEffort"])!="high"||parentModel.IsEditable||childModel.IsEditable||!InitSummary().Contains("gpt-6-luna / 高（high）"))throw new InvalidOperationException("Preset model selection failed");
+        subagents.IsChecked=true;if(!childModel.IsEnabled||childEffort.IsEnabled||!AutoAssign)throw new InvalidOperationException("Default automatic assignment unavailable");parentModel.SelectedItem="gpt-6-astra";childModel.SelectedItem="gpt-6-luna";parentEffort.SelectedItem="ultra";childEffort.SelectedItem="high";settings=Options();if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childEffort"])!="high"||parentModel.IsEditable||childModel.IsEditable||!InitSummary().Contains("GPT 6 Luna / 高（High）"))throw new InvalidOperationException("Preset model selection failed");
         var presetModels=modelCatalog.Models.Keys;
         if(!parentModel.Items.Cast<string>().SequenceEqual(presetModels)||!childModel.Items.Cast<string>().SequenceEqual(new[]{AutoAssignLabel}.Concat(presetModels))||childEffort.Items.Contains("ultra"))throw new InvalidOperationException("Preset dropdown choices were lost");
-        childModel.SelectedItem="gpt-5.5";if(!childEffort.Items.Cast<string>().SequenceEqual(new[]{"low","medium","high","xhigh"}))throw new InvalidOperationException("Effort choices did not follow model selection");
-        childEffort.ItemsSource=new[]{"ultra"};childEffort.SelectedItem="ultra";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsupported UI effort accepted");RefreshEfforts(childEffort,"gpt-5.5","high");
+        childModel.SelectedItem="gpt-5.6-luna";if(!childEffort.Items.Cast<string>().SequenceEqual(new[]{"low","medium","high","xhigh","max"}))throw new InvalidOperationException("Effort choices did not follow model selection");
+        childEffort.ItemsSource=new[]{"ultra"};childEffort.SelectedItem="ultra";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsupported UI effort accepted");RefreshEfforts(childEffort,"gpt-5.6-luna","high");
         parentModel.SelectedItem=null;parentModel.Text="vendor/custom";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unlisted model accepted");parentModel.SelectedItem="gpt-6.1-sol";
         folderManagement.IsChecked=false;subagents.IsChecked=false;cuaRepair.IsChecked=false;guard.IsChecked=false;settings=Options();if((bool)settings["folderManagement"]||(bool)settings["subagents"]||(bool)settings["cuaRepair"]||childModel.IsEnabled||childEffort.IsEnabled||!parentModel.IsEnabled||!parentEffort.IsEnabled||Convert.ToString(settings["childEffort"])!="high")throw new InvalidOperationException("Optional setup switches failed");
-        subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled||Convert.ToString(childModel.SelectedItem)!="gpt-5.5")throw new InvalidOperationException("Re-enabling subagents lost custom selection");
-        parentModel.SelectedItem="gpt-6.1-sol";childModel.SelectedItem="gpt-6.1-sol";parentEffort.SelectedItem="medium";childEffort.SelectedItem="medium";folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
+        subagents.IsChecked=true;if(!childModel.IsEnabled||!childEffort.IsEnabled||Convert.ToString(childModel.SelectedItem)!="gpt-5.6-luna")throw new InvalidOperationException("Re-enabling subagents lost custom selection");
+        parentModel.SelectedItem=Core.DefaultParentModel;childModel.SelectedItem="gpt-6.1-sol";parentEffort.SelectedItem=Core.DefaultParentEffort;childEffort.SelectedItem="medium";folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
         var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as Grid;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||!InitializationFlowTests.Descendants<Button>(completionPanel).Select(b=>Convert.ToString(b.Content)).SequenceEqual(new[]{"启动Codex","关闭"})||!InitializationFlowTests.Descendants<TextBlock>(completionPanel).Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion actions are missing");
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"runtimeModeDetail","桌面应用自带 CLI"},{"currentCliPath",""},{"protectionInstalled",false}};Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("DesktopNative","由桌面应用自动选择");status["runtimeMode"]="OfficialStandalone";status["runtimeModeDetail"]="官方独立 CLI";status["currentCliPath"]="C:\\Users\\Test\\.codex\\bin\\codex.exe";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("OfficialStandalone","C:\\Users\\Test\\.codex\\bin\\codex.exe");status["runtimeMode"]="Unknown";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("Unknown","C:\\Users\\Test\\.codex\\bin\\codex.exe");status=null;
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
@@ -115,8 +119,10 @@ public partial class MainWindow : Window {
         if(!mirrorNotes.Any(note=>note.Text=="顺序：官方 → 自定义 → 内置 10 个镜像")||
            !mirrorNotes.Any(note=>note.FontSize==12&&note.Text=="内置站点："+GitHubTransfer.BuiltInMirrorNames)||
            GitHubTransfer.BuiltInMirrorNames.Split('、').Length!=10)throw new InvalidDataException("GitHub mirror order or built-in site note is missing");
-        parentEffort.ItemTemplate.Seal();var effortLabel=(TextBlock)parentEffort.ItemTemplate.LoadContent();effortLabel.DataContext="medium";effortLabel.Measure(new Size(200,40));effortLabel.Arrange(new Rect(0,0,200,40));effortLabel.UpdateLayout();effortLabel.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();if(effortLabel.Text!="中（medium）"||Convert.ToString(Options()["parentEffort"])!="medium"||!InitSummary().Contains("gpt-6.1-sol / 中（medium）"))throw new InvalidDataException("Effort labels changed the underlying config value");
-        foreach(var effort in new[]{"none","minimal","low","medium","high","xhigh","max","ultra"})if(!EffortLabels.Display(effort).EndsWith("（"+effort+"）"))throw new InvalidDataException("Effort label did not include its original identifier: "+effort);
+        if(RenderedChoice(parentModel,"gpt-6.2-sol")!="GPT 6.2 Sol"||RenderedChoice(childModel,"gpt-6.2-astra")!="GPT 6.2 Astra"||RenderedChoice(childModel,"vendor/custom-id")!="vendor/custom-id")
+            throw new InvalidDataException("Incorrect model display name");
+        if(RenderedChoice(parentEffort,"medium")!="中（Medium）"||RenderedChoice(childEffort,"xhigh")!="很高（Xhigh）"||Convert.ToString(Options()["parentEffort"])!="medium"||!InitSummary().Contains("GPT 6.2 Sol / 中（Medium）"))
+            throw new InvalidDataException("Incorrect effort display name or stored value");
         VerifyChineseLogs();
         VerifyLogScrolling();
         VerifyRollbackSelection();
@@ -125,12 +131,13 @@ public partial class MainWindow : Window {
         update=new Dictionary<string,object>{{"version",Core.Version}};ApplyUpdateState();if(updateNotice.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Update notice shown for current version");
         var current=new Version(Core.Version);update["version"]=new Version(current.Major,current.Minor,current.Build+1).ToString();ApplyUpdateState();Navigate("概览");UpdateLayout();if(updateNotice.Visibility!=Visibility.Visible||!updateStatus.Text.StartsWith("检测到更新"))throw new InvalidOperationException("Update notice missing");update=null;ApplyUpdateState();
         ApplyCurrentModelSettings(new CurrentModelSettings{ParentModel="gpt-6-astra",ParentEffort="max",ChildModel="gpt-6-luna",ChildEffort="high"});settings=Options();
-        if((bool)settings["subagents"]||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high"||!InitSummary().Contains("保留模型设置 gpt-6-luna / 高（high）"))throw new InvalidDataException("Disabled subagents lost inherited model preferences");
+        if((bool)settings["subagents"]||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high"||!InitSummary().Contains("保留模型设置 GPT 6 Luna / 高（High）"))throw new InvalidDataException("Disabled subagents lost inherited model preferences");
         subagents.IsChecked=true;settings=Options();
         if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["parentEffort"])!="max"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high")throw new InvalidDataException("Current model selections were not applied");
         parentModel.SelectedItem="gpt-6.1-terra";parentEffort.SelectedItem="ultra";subagents.IsChecked=false;subagents.IsChecked=true;Navigate("概览");Navigate("初始化");CheckModels();settings=Options();
         if(Convert.ToString(settings["parentModel"])!="gpt-6.1-terra"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high")throw new InvalidDataException("Navigation or model check changed a user selection");
-        ApplyCurrentModelSettings(new CurrentModelSettings{ParentModel="future/model",ParentEffort="high",ChildModel="gpt-5.5",ChildEffort="max"});CheckModels();settings=Options();
+        if(!modelCheck.Text.Contains("配置核对通过：GPT 6.1 Terra / 极高（Ultra）")||!modelCheck.Text.Contains("配置核对通过：GPT 6 Luna / 高（High）"))throw new InvalidDataException("Model check labels were not formatted");
+        ApplyCurrentModelSettings(new CurrentModelSettings{ParentModel="future/model",ParentEffort="high",ChildModel="gpt-6-luna",ChildEffort="max"});CheckModels();settings=Options();
         if(Convert.ToString(settings["parentModel"])!="future/model"||Convert.ToString(settings["childEffort"])!="max"||!modelCheck.Text.Contains("尚未验证"))throw new InvalidDataException("An inherited model or effort was not retained");
     }
     public void RenderPages(string directory){
@@ -153,7 +160,7 @@ public partial class MainWindow : Window {
     }
     public MainWindow(bool isPreview) {
         logViewport=new LogViewport(log);
-        preview=isPreview;if(preview)StartOperation=(op,id,disk,proxy,protect,options)=>{throw new InvalidOperationException("设计预览不会执行初始化或维护操作。");};modelCatalog=ModelCatalog.Preset(); Title="Codex Init Kit"; Width=1000; Height=740; MinWidth=800; MinHeight=540; WindowStartupLocation=WindowStartupLocation.CenterScreen;
+        preview=isPreview;if(preview)StartOperation=(op,id,disk,proxy,protect,options)=>{throw new InvalidOperationException("设计预览不会执行初始化或维护操作。");};modelCatalog=preview?ModelCatalog.Preset():ModelCatalog.Load(CurrentModelSettings.CodexHome()); Title="Codex Init Kit"; Width=1000; Height=740; MinWidth=800; MinHeight=540; WindowStartupLocation=WindowStartupLocation.CenterScreen;
         SourceInitialized+=(s,e)=>{MorandiTheme.StyleWindow(this);var area=SystemParameters.WorkArea;MinWidth=Math.Min(800,Math.Max(320,area.Width-24));MinHeight=Math.Min(540,Math.Max(280,area.Height-24));Width=Math.Min(Width,Math.Max(MinWidth,area.Width-24));Height=Math.Min(Height,Math.Max(MinHeight,area.Height-24));};
         Icon=Brand.WindowIcon();UseLayoutRounding=true;SnapsToDevicePixels=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);
         Background=BackgroundBrush; Foreground=TextBrush; FontFamily=new FontFamily("Microsoft YaHei UI"); FontSize=14;
@@ -199,10 +206,19 @@ public partial class MainWindow : Window {
         githubLogView.IsReadOnly=true;githubLogView.TextWrapping=TextWrapping.Wrap;githubLogView.Height=150;githubLogView.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;githubLogView.Background=B("#101620");githubLogView.Foreground=TextBrush;githubLogView.BorderThickness=new Thickness(0);githubLogView.Padding=new Thickness(10);githubViewport=new LogViewport(githubLogView);
         proxyEnabled.Checked+=(s,e)=>{proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=true;RefreshRelayChoice();remoteRelay.IsEnabled=relayStatus.CanEnable || relayStatus.Installed;};proxyEnabled.Unchecked+=(s,e)=>{remoteRelay.IsChecked=false;remoteRelay.IsEnabled=proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=false;};
         parentEffort.Style=(Style)Resources["KitCombo"];childEffort.Style=(Style)Resources["KitCombo"];foreach(var input in new[]{parentModel,childModel,parentEffort,childEffort})input.Margin=new Thickness(0,0,0,10);
-        var effortText=new FrameworkElementFactory(typeof(TextBlock));effortText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding{Converter=new EffortLabels()});var effortTemplate=new DataTemplate{VisualTree=effortText};parentEffort.ItemTemplate=effortTemplate;childEffort.ItemTemplate=effortTemplate;
-        parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem="medium";childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="medium";
-        parentModel.Text="gpt-6.1-sol";childModel.Text=AutoAssignLabel;
-        foreach(var input in new[]{parentModel,childModel}){input.Style=(Style)Resources["KitCombo"];input.IsEditable=false;input.IsTextSearchEnabled=true;input.FontSize=14;input.ToolTip="可选择内置模型或已配置的模型。";}
+        maxConcurrentSubagentsInput.Style=(Style)Resources["KitInput"];
+        maxConcurrentSubagentsInput.ToolTip="同时运行的子代理数量上限。";
+        maxConcurrentSubagentsInput.Text=lastMaxConcurrentSubagents.ToString(CultureInfo.InvariantCulture);
+        maxConcurrentSubagentsInput.TextChanged+=(s,e)=>UpdateMaxConcurrentSubagentsMessage();
+        maxConcurrentSubagentsError.Text=MaxConcurrentSubagentsError;
+        maxConcurrentSubagentsError.Foreground=MorandiTheme.Warning;
+        maxConcurrentSubagentsError.FontSize=12;
+        maxConcurrentSubagentsError.TextWrapping=TextWrapping.Wrap;
+        parentEffort.ItemTemplate=childEffort.ItemTemplate=LabelTemplate(new EffortLabels());
+        parentModel.ItemTemplate=childModel.ItemTemplate=LabelTemplate(new ModelLabels());
+        parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem=Core.DefaultParentEffort;childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="medium";
+        parentModel.Text=Core.DefaultParentModel;childModel.Text=AutoAssignLabel;
+        foreach(var input in new[]{parentModel,childModel}){input.Style=(Style)Resources["KitCombo"];input.IsEditable=false;input.IsTextSearchEnabled=true;input.FontSize=14;input.ToolTip="可选择当前模型列表中的模型或已配置的自定义模型。";}
         RefreshModelChoices();
         var modelTextProperty=System.ComponentModel.DependencyPropertyDescriptor.FromProperty(ComboBox.TextProperty,typeof(ComboBox));modelTextProperty.AddValueChanged(parentModel,(s,e)=>RefreshEfforts(parentEffort,parentModel.Text,"high"));
         parentModel.SelectionChanged+=(s,e)=>{if(parentModel.SelectedItem!=null)RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"medium");};childModel.SelectionChanged+=(s,e)=>{if(childModel.SelectedItem!=null)UpdateModelInputs();};
@@ -234,7 +250,9 @@ public partial class MainWindow : Window {
         row.Children.Add(new TextBlock{Text="阁下的代理端口：",Width=108,Height=36,FontSize=12,Foreground=TextBrush,VerticalAlignment=VerticalAlignment.Center});
         port.Margin=new Thickness(0,0,0,6);row.Children.Add(port);
         proxyPortPreset.Margin=new Thickness(8,0,0,6);row.Children.Add(proxyPortPreset);
-        var hintContent=new StackPanel{Orientation=Orientation.Horizontal};hintContent.Children.Add(new System.Windows.Shapes.Path{Data=Geometry.Parse("M21,12 A9,9 0 1 1 3,12 A9,9 0 1 1 21,12 M12,10 L12,17 M12,6.5 L12,7"),Stroke=Accent,StrokeThickness=1.6,StrokeStartLineCap=PenLineCap.Round,Width=12,Height=12,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,5,0)});hintContent.Children.Add(new TextBlock{Text="常用端口预设",FontSize=11,Foreground=Accent,VerticalAlignment=VerticalAlignment.Center});
+        var hintContent=new StackPanel{Orientation=Orientation.Horizontal};
+        hintContent.Children.Add(new System.Windows.Shapes.Path{Data=UiIcons.For("提示"),Stroke=Accent,StrokeThickness=1.6,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=12,Height=12,Stretch=Stretch.Uniform,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,5,0)});
+        hintContent.Children.Add(new TextBlock{Text="常用端口预设",FontSize=11,Foreground=Accent,VerticalAlignment=VerticalAlignment.Center});
         var hint=new Border{Name="ProxyPresetHint",Child=hintContent,Background=MorandiTheme.Group,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(7,4,7,4),Margin=new Thickness(8,0,0,0),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,ToolTip="选择代理软件后会自动填写常用端口；如果软件中改过端口，请选择自定义代理端口。"};row.Children.Add(hint);return row;
     }
     static TextBlock T(string text,int size,Brush color) { return new TextBlock{Text=text,FontSize=size,Foreground=color,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)}; }
@@ -264,11 +282,11 @@ public partial class MainWindow : Window {
             if(index%2==0)group.Margin=new Thickness(0,0,10,10);grid.Children.Add(group);
         }
         parent.Children.Add(grid);
-        var optional=new StackPanel();optional.Children.Add(subagents);optional.Children.Add(T("默认关闭，启用后可设置子模型与思考强度。",12,MutedBrush));
+        var optional=new StackPanel();optional.Children.Add(subagents);optional.Children.Add(T("默认关闭，启用后可设置子模型、思考强度与最大并发数。",12,MutedBrush));
         parent.Children.Add(new Border{Background=B("#151C28"),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,10),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { RememberReading();pageScroll.StopAnimation();logViewport.Detach();if(githubViewport!=null)githubViewport.Detach();wizardActions.Children.Clear();wizardActions.Visibility=Visibility.Collapsed;foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,remoteRelay,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
+    void Navigate(string name) { RememberReading();pageScroll.StopAnimation();logViewport.Detach();if(githubViewport!=null)githubViewport.Detach();wizardActions.Children.Clear();wizardActions.Visibility=Visibility.Collapsed;foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,remoteRelay,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,maxConcurrentSubagentsInput,maxConcurrentSubagentsError,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
         foreach(var section in navigationSections.Values.Distinct())section.Foreground=navigationSections.ContainsKey(name)&&navigationSections[name]==section?Accent:TextBrush;
         if(name=="概览")Overview();else if(name=="初始化")Wizard();else if(name=="连接与修复")RepairPage();else if(name=="CLI 管理")CliPage();else if(name=="备份与回滚")BackupPage();else if(name=="更新与下载")Updates();else LogsPage();
         if(log.Parent!=null){UpdateLogView();logViewport.Attach();}if(githubLogView.Parent!=null&&githubViewport!=null)githubViewport.Attach();UpdateBusyControls();ApplyCompactLayout();Motion.Enter(content,preview,220);
@@ -307,47 +325,111 @@ public partial class MainWindow : Window {
     int Port() { if(proxyEnabled.IsChecked!=true)return 0;int v; if(!int.TryParse(port.Text,out v)||v<1||v>65535)throw new InvalidOperationException("代理端口需为 1–65535 的整数。"); return v; }
     const string AutoAssignLabel="自动指派";
     const string AutoEffortLabel="由父模型决定";
+    const string ParentModelLabel="默认模型与父模型";
+    const string MaxConcurrentSubagentsLabel="最大并发数";
+    static readonly string MaxConcurrentSubagentsError=MaxConcurrentSubagentsLabel+"须为 1 到 "+Core.MaxSupportedConcurrentSubagents.ToString(CultureInfo.InvariantCulture)+" 的整数。";
     bool AutoAssign { get { return Equals(childModel.SelectedItem,AutoAssignLabel); } }
     void ApplyCurrentModelSettings(CurrentModelSettings current){
         modelCatalog.IncludeCurrent(current.ParentModel,current.ParentEffort);
         if(!current.AutoAssign)modelCatalog.IncludeCurrent(current.ChildModel,current.ChildEffort);
         RefreshModelChoices();
-        parentModel.SelectedItem=current.ParentModel;
+        bool keepParent=modelCatalog.Models.ContainsKey(current.ParentModel);
+        parentModel.SelectedItem=keepParent?current.ParentModel:DefaultAvailableParent();
+        lastMaxConcurrentSubagents=current.MaxConcurrentSubagents;
+        maxConcurrentSubagentsInput.Text=lastMaxConcurrentSubagents.ToString(CultureInfo.InvariantCulture);
         subagents.IsChecked=current.Subagents;
-        childModel.SelectedItem=current.AutoAssign?AutoAssignLabel:current.ChildModel;
-        RefreshEfforts(parentEffort,current.ParentModel,"medium");
-        parentEffort.SelectedItem=current.ParentEffort;
-        if(!current.AutoAssign){
+        childModel.SelectedItem=current.AutoAssign||!modelCatalog.Models.ContainsKey(current.ChildModel)?AutoAssignLabel:current.ChildModel;
+        SelectParentEffort(keepParent?current.ParentEffort:Core.DefaultParentEffort);
+        if(!AutoAssign){
             RefreshEfforts(childEffort,current.ChildModel,"medium");
             childEffort.SelectedItem=current.ChildEffort;
         }
     }
-    void UpdateModelInputs(){parentModel.IsEnabled=true;parentEffort.IsEnabled=true;childModel.IsEnabled=subagents.IsChecked==true;childEffort.IsEnabled=childModel.IsEnabled&&!AutoAssign;RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"medium");RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"medium");modelCheck.Text=modelSettingsError.Length>0?modelSettingsError:modelCatalog.Source+"\n"+(subagents.IsChecked==true?(AutoAssign?"父模型按任务分工，自行选择子模型和思考强度。":"子代理已开启：将写入所选子代理模型和思考强度。"):"子代理未开启：子模型与思考强度已禁用，勾选子代理多线程后可设置。");}
+    string DefaultAvailableParent(){return modelCatalog.Models.ContainsKey(Core.DefaultParentModel)?Core.DefaultParentModel:modelCatalog.Models.Keys.First();}
+    void SelectParentEffort(string preferred){
+        var model=(string)parentModel.SelectedItem;
+        RefreshEfforts(parentEffort,model,preferred);
+        var entry=modelCatalog.Models[model];
+        parentEffort.SelectedItem=entry.Efforts.Contains(preferred)?preferred:entry.Efforts.Contains(entry.DefaultEffort)?entry.DefaultEffort:entry.Efforts[0];
+    }
+    void ResetModelSettings(){
+        parentModel.SelectedItem=DefaultAvailableParent();
+        childModel.SelectedItem=AutoAssignLabel;
+        maxConcurrentSubagentsInput.Text=Native.NativeOptions.DefaultMaxConcurrentSubagents.ToString(CultureInfo.InvariantCulture);
+        UpdateModelInputs();
+        SelectParentEffort(Core.DefaultParentEffort);
+    }
+    void UpdateModelInputs(){
+        parentModel.IsEnabled=true;parentEffort.IsEnabled=true;
+        childModel.IsEnabled=subagents.IsChecked==true;
+        childEffort.IsEnabled=childModel.IsEnabled&&!AutoAssign;
+        maxConcurrentSubagentsInput.IsEnabled=childModel.IsEnabled;
+        UpdateMaxConcurrentSubagentsMessage();
+        RefreshEfforts(parentEffort,Convert.ToString(parentModel.SelectedItem),"medium");
+        RefreshEfforts(childEffort,Convert.ToString(childModel.SelectedItem),"medium");
+        modelCheck.Text=modelSettingsError.Length>0?modelSettingsError:modelCatalog.Source+"\n"+(subagents.IsChecked==true
+            ?(AutoAssign?"父模型按任务分工，自行选择子模型和思考强度。":"子代理已开启：将写入所选子代理模型和思考强度。")
+            :"可在功能选择中开启子代理多线程。");
+    }
+    void UpdateMaxConcurrentSubagentsMessage(){
+        long value;
+        bool valid=Core.TryMaxConcurrentSubagents(maxConcurrentSubagentsInput.Text,out value);
+        if(valid)lastMaxConcurrentSubagents=value;
+        maxConcurrentSubagentsError.Visibility=subagents.IsChecked==true&&!valid?Visibility.Visible:Visibility.Collapsed;
+    }
+    long ReadMaxConcurrentSubagents(){
+        if(subagents.IsChecked!=true)return lastMaxConcurrentSubagents;
+        long value;
+        if(!Core.TryMaxConcurrentSubagents(maxConcurrentSubagentsInput.Text,out value))
+            throw new InvalidOperationException(MaxConcurrentSubagentsError);
+        return value;
+    }
+    bool FocusInvalidSubagentConcurrency(){
+        if(maxConcurrentSubagentsError.Visibility!=Visibility.Visible)return false;
+        maxConcurrentSubagentsInput.Focus();
+        return true;
+    }
     void RefreshEfforts(ComboBox combo,string model,string fallback){if(combo==childEffort&&AutoAssign){combo.ItemsSource=new[]{AutoEffortLabel};combo.SelectedIndex=0;return;}CatalogModel entry;var values=modelCatalog.Models.TryGetValue((model??"").Trim(),out entry)?entry.Efforts:new string[0];var current=Convert.ToString(combo.SelectedItem);combo.ItemsSource=values;combo.SelectedItem=values.Contains(current)?current:values.Contains(fallback)?fallback:entry!=null&&values.Contains(entry.DefaultEffort)?entry.DefaultEffort:values.FirstOrDefault();}
     string Effort(ComboBox combo,string fallback){return Convert.ToString(combo.SelectedItem);}
-    void CheckModels(){try{if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);RefreshModelChoices();RefreshEfforts(parentEffort,parentModel.Text,"high");RefreshEfforts(childEffort,childModel.Text,"high");var p=Model(parentModel,"gpt-6.1-sol");var c=AutoAssign?Core.DefaultChildModel:Model(childModel,"gpt-6.1-sol");modelCheck.Text=modelCatalog.Source+"\n"+EffortLabels.InText(modelCatalog.Check(p,Effort(parentEffort,"medium")))+"\n"+(subagents.IsChecked==true?(AutoAssign?AutoAssignLabel:EffortLabels.InText(modelCatalog.Check(c,Effort(childEffort,"medium")))):"子代理未开启：跳过子模型检查。")+"\n预设列表不代表当前账号一定有调用权限。";}catch(Exception ex){modelCheck.Text=ex.Message;}}
+    void CheckModels(){try{if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);RefreshModelChoices();RefreshEfforts(parentEffort,parentModel.Text,"high");RefreshEfforts(childEffort,childModel.Text,"high");var p=Model(parentModel,Core.DefaultParentModel);var c=AutoAssign?Core.DefaultChildModel:Model(childModel,Core.DefaultChildModel);modelCheck.Text=modelCatalog.Source+"\n"+modelCatalog.Check(p,Effort(parentEffort,Core.DefaultParentEffort))+"\n"+(subagents.IsChecked==true?(AutoAssign?AutoAssignLabel:modelCatalog.Check(c,Effort(childEffort,Core.DefaultChildEffort))):"子代理未开启：跳过子模型检查。")+"\n预设列表不代表当前账号一定有调用权限。";}catch(Exception ex){modelCheck.Text=ex.Message;}}
+    static string RenderedChoice(ComboBox combo,string raw){
+        combo.ItemTemplate.Seal();
+        var text=(TextBlock)combo.ItemTemplate.LoadContent();
+        text.DataContext=raw;
+        text.Measure(new Size(240,40));
+        text.Arrange(new Rect(0,0,240,40));
+        text.UpdateLayout();
+        text.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
+        return text.Text;
+    }
+    static DataTemplate LabelTemplate(System.Windows.Data.IValueConverter converter){
+        var text=new FrameworkElementFactory(typeof(TextBlock));
+        text.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding{Converter=converter});
+        return new DataTemplate{VisualTree=text};
+    }
     void RefreshModelChoices(){
         foreach(var combo in new[]{parentModel,childModel}){
             var values=combo==parentModel?modelCatalog.Models.Keys.ToArray():new[]{AutoAssignLabel}.Concat(modelCatalog.Models.Keys).ToArray();
             var current=Convert.ToString(combo.SelectedItem);
-            if(current.Length==0)current=combo==parentModel?"gpt-6.1-sol":AutoAssignLabel;
+            if(current.Length==0)current=combo==parentModel?Core.DefaultParentModel:AutoAssignLabel;
             combo.ItemsSource=values;
             combo.SelectedItem=values.Contains(current)?current:values.FirstOrDefault();
         }
     }
     string Model(ComboBox input,string fallback){var value=Convert.ToString(input.SelectedItem);if(!modelCatalog.Models.ContainsKey(value))throw new InvalidOperationException("请从下拉框选择模型。");return value;}
     string ProxyHost() { if(proxyEnabled.IsChecked!=true)return "";var text=(proxyHost.Text??"").Trim();if(text.Length==0)return Core.DefaultProxyHost;System.Net.IPAddress address;if(!System.Net.IPAddress.TryParse(text,out address))throw new InvalidOperationException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");return address.ToString(); }
-    Dictionary<string,object> Options(){if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);var p=Model(parentModel,"gpt-6.1-sol");var pe=Effort(parentEffort,"medium");var c=AutoAssign?Core.DefaultChildModel:Model(childModel,"gpt-6.1-sol");var ce=AutoAssign?Core.DefaultChildEffort:Effort(childEffort,"medium");modelCatalog.Check(p,pe);if(subagents.IsChecked==true&&!AutoAssign)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"remoteRelay",proxyEnabled.IsChecked==true && remoteRelay.IsChecked==true},{"folderManagement",folderManagement.IsChecked==true},{"antiOverDefense",antiOverDefense.IsChecked==true},{"workJournal",workJournal.IsChecked==true},{"commandLineFirst",commandLineFirst.IsChecked==true},{"memories",memories.IsChecked==true},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"cliMode",cliChoiceManual?(cliStandalone.IsChecked==true?"official-standalone":"desktop-native"):"auto"},{"parentModel",p},{"parentEffort",pe},{"childAutoAssign",AutoAssign},{"childModel",c},{"childEffort",ce}};}
+    Dictionary<string,object> Options(){if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);var p=Model(parentModel,Core.DefaultParentModel);var pe=Effort(parentEffort,Core.DefaultParentEffort);var c=AutoAssign?Core.DefaultChildModel:Model(childModel,Core.DefaultChildModel);var ce=AutoAssign?Core.DefaultChildEffort:Effort(childEffort,Core.DefaultChildEffort);modelCatalog.Check(p,pe);if(subagents.IsChecked==true&&!AutoAssign)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"remoteRelay",proxyEnabled.IsChecked==true && remoteRelay.IsChecked==true},{"folderManagement",folderManagement.IsChecked==true},{"antiOverDefense",antiOverDefense.IsChecked==true},{"workJournal",workJournal.IsChecked==true},{"commandLineFirst",commandLineFirst.IsChecked==true},{"memories",memories.IsChecked==true},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"cliMode",cliChoiceManual?(cliStandalone.IsChecked==true?"official-standalone":"desktop-native"):"auto"},{"parentModel",p},{"parentEffort",pe},{"maxConcurrentSubagents",ReadMaxConcurrentSubagents()},{"childAutoAssign",AutoAssign},{"childModel",c},{"childEffort",ce}};}
     Dictionary<string,object> ProxyOptions(){return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror}};}
     GitHubNetworkOptions NetworkOptions(){return new GitHubNetworkOptions{githubMirrorEnabled=githubMirrors.IsChecked==true,customGithubMirror=githubMirrors.IsChecked==true?GitHubNetworkOptions.NormalizePrefix(githubCustomMirror.Text):""};}
-    string ModelChecks(Dictionary<string,object> options){return EffortLabels.InText(modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true&&!AutoAssign?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。");}
+    string ModelChecks(Dictionary<string,object> options){return modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true&&!AutoAssign?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。";}
     string ProxySummary(){var value=Port();if(value==0)return "关闭（不写入本地 HTTP 代理）";var host=ProxyHost();if(host.Contains(":")&&!host.StartsWith("["))host="["+host+"]";return "http://"+host+":"+value;}
     string Drive() { if(drive.SelectedItem==null)throw new InvalidOperationException("请选择可用的工作盘。"); return Convert.ToString(drive.SelectedItem); }
     string RelaySummary(){
         if(proxyEnabled.IsChecked!=true)return "取消保存代理，同时移除已启用的转发";
         return remoteRelay.IsChecked==true ? "通过 "+ProxySummary()+" 转发，安装 Windows 服务并设置 chatgpt.com 的系统 hosts 映射" : "跳过安装";
     }
-    string InitSummary() {var options=Options();return "工作盘："+Drive()+":\n父模型："+options["parentModel"]+" / "+EffortLabels.Display(Convert.ToString(options["parentEffort"]))+"\n子代理："+(AutoAssign?(subagents.IsChecked==true?AutoAssignLabel:"关闭，保留自动指派"):subagents.IsChecked==true?options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])):"关闭，不写入子代理规则；保留模型设置 "+options["childModel"]+" / "+EffortLabels.Display(Convert.ToString(options["childEffort"])))+"\n本次保存的 CLI 选择："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n远控转发："+RelaySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\n浏览器组件检查："+(browserRepair.IsChecked==true?"校验并按需恢复官方组件":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 可选远控转发 → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器组件检查。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、登录和用户资料保留。电脑名称和允许控制由你在 Codex/Work 中设置。完整初始化开始前确认关闭 Codex；变更前备份，未完成项可单独重试。";}
+    static string ModelSettingLabel(object model,object effort){return ModelLabels.Display(Convert.ToString(model))+" / "+EffortLabels.Display(Convert.ToString(effort));}
+    string InitSummary() {var options=Options();var child=ModelSettingLabel(options["childModel"],options["childEffort"]);return "工作盘："+Drive()+":\n"+ParentModelLabel+"："+ModelSettingLabel(options["parentModel"],options["parentEffort"])+"\n子代理："+(AutoAssign?(subagents.IsChecked==true?AutoAssignLabel:"关闭，保留自动指派"):subagents.IsChecked==true?child:"关闭，不写入子代理规则；保留模型设置 "+child)+"\n"+MaxConcurrentSubagentsLabel+"："+options["maxConcurrentSubagents"]+(subagents.IsChecked==true?"":"（保留设置）")+"\n本次保存的 CLI 选择："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n远控转发："+RelaySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\n浏览器组件检查："+(browserRepair.IsChecked==true?"校验并按需恢复官方组件":"跳过")+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 可选远控转发 → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器组件检查。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、登录和用户资料保留。电脑名称和允许控制由你在 Codex/Work 中设置。完整初始化开始前确认关闭 Codex；变更前备份，未完成项可单独重试。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
@@ -487,8 +569,42 @@ public partial class MainWindow : Window {
         titleRow.Children.Add(new Image{Source=(DrawingImage)Resources[model==parentModel?"ParentModelMark":"ChildModelMark"],Width=28,Height=28,Margin=new Thickness(0,0,8,0)});
         var heading=T(label,16,TextBrush);heading.FontWeight=FontWeights.Bold;heading.Margin=new Thickness(0);heading.VerticalAlignment=VerticalAlignment.Center;
         titleRow.Children.Add(heading);panel.Children.Add(titleRow);
-        var row=new Grid();row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(2,GridUnitType.Star)});row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(1,GridUnitType.Star)});
-        var id=T("模型 ID",13,MutedBrush);id.VerticalAlignment=VerticalAlignment.Center;id.Margin=new Thickness(0,0,12,10);row.Children.Add(id);Grid.SetColumn(model,1);row.Children.Add(model);var strength=T("思考强度",13,MutedBrush);strength.VerticalAlignment=VerticalAlignment.Center;strength.Margin=new Thickness(18,0,12,10);Grid.SetColumn(strength,2);row.Children.Add(strength);Grid.SetColumn(effort,3);row.Children.Add(effort);row.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});row.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});row.SizeChanged+=(s,e)=>{bool narrow=row.ActualWidth<520;Grid.SetColumn(strength,narrow?0:2);Grid.SetColumn(effort,narrow?1:3);Grid.SetRow(strength,narrow?1:0);Grid.SetRow(effort,narrow?1:0);row.ColumnDefinitions[2].Width=narrow?new GridLength(0):GridLength.Auto;row.ColumnDefinitions[3].Width=narrow?new GridLength(0):new GridLength(1,GridUnitType.Star);strength.Margin=new Thickness(narrow?0:18,0,12,10);};panel.Children.Add(row);
+
+        var grid=new Grid();
+        var modelColumn=new ColumnDefinition{Width=new GridLength(1.3,GridUnitType.Star)};
+        grid.ColumnDefinitions.Add(modelColumn);
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(164)});
+        for(int index=0;index<4;index++)grid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+
+        bool isChild=model==childModel;
+        var labels=isChild?new[]{"模型名称","思考强度",MaxConcurrentSubagentsLabel}:new[]{"模型名称","思考强度"};
+        var inputs=isChild?new Control[]{model,effort,maxConcurrentSubagentsInput}:new Control[]{model,effort};
+        var captions=new TextBlock[inputs.Length];
+        for(int index=0;index<inputs.Length;index++){
+            var input=inputs[index];
+            var caption=T(labels[index],13,MutedBrush);
+            captions[index]=caption;
+            caption.Margin=new Thickness(0,0,12,4);
+            input.Margin=new Thickness(0,0,index==2?0:12,10);
+            System.Windows.Automation.AutomationProperties.SetLabeledBy(input,caption);
+            Grid.SetColumn(caption,index);Grid.SetColumn(input,index);Grid.SetColumnSpan(input,1);Grid.SetRow(input,1);
+            grid.Children.Add(caption);grid.Children.Add(input);
+        }
+        grid.SizeChanged+=(s,e)=>{
+            if(!e.WidthChanged)return;
+            bool compact=e.NewSize.Width<505;
+            modelColumn.Width=new GridLength(compact?0:1.3,GridUnitType.Star);
+            Grid.SetColumnSpan(captions[0],compact?3:1);
+            Grid.SetColumnSpan(model,compact?3:1);
+            model.Margin=new Thickness(0,0,compact?0:12,10);
+            for(int index=1;index<inputs.Length;index++){
+                Grid.SetRow(captions[index],compact?2:0);
+                Grid.SetRow(inputs[index],compact?3:1);
+            }
+        };
+        panel.Children.Add(grid);
+        if(isChild)panel.Children.Add(maxConcurrentSubagentsError);
     }
     void VerifyMaintenanceModes(){
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown"}){

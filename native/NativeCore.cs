@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.6";
+    public const string Version="2.3.7";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -46,13 +46,24 @@ public sealed class NativePaths {
     public void Validate(){foreach(var p in new[]{Home,LocalData,RoamingData,Documents,UserTools})if(String.IsNullOrWhiteSpace(p)||!Path.IsPathRooted(p))throw new ArgumentException("初始化目录必须为明确的绝对路径。");if(!Directory.Exists(Documents))throw new DirectoryNotFoundException("Documents 目录不可用："+Documents);}
 }
 public sealed class NativeOptions {
+    public const long DefaultMaxConcurrentSubagents=6, MaxSupportedConcurrentSubagents=long.MaxValue-1;
+    public long MaxConcurrentSubagents=DefaultMaxConcurrentSubagents;
     public bool Confirm,AllowClose,Folder=true,Subagents=true,Cua=true,Proxy=true;
     public bool ChildAutoAssign,DesktopProfile,AntiOverDefense=true,WorkJournal=true,CommandLineFirst=true,Memories=true;
     public string ProxyHost="127.0.0.1",ParentModel="gpt-6.1-sol",ChildModel="gpt-6.1-sol",ParentEffort="high",ChildEffort="high";
     public int ProxyPort=10808;
     public string[] ApprovedProcesses;
     public string ProxyUrl {get{if(!Proxy)return null;var host=ProxyHost.Trim().Trim('[',']');return "http://"+(host.Contains(":")?"["+host+"]":host)+":"+ProxyPort;}}
-    public void Validate(NativePaths paths){paths.Validate();if(Folder&&(String.IsNullOrWhiteSpace(paths.Workspace)||!Path.IsPathRooted(paths.Workspace)))throw new ArgumentException("请明确选择工作目录或工作盘。");if(Folder&&!Directory.Exists(Path.GetPathRoot(paths.Workspace)))throw new DirectoryNotFoundException("所选工作盘不可用。");if(Proxy&&(ProxyPort<1||ProxyPort>65535))throw new ArgumentException("代理端口须为 1–65535。");if(Proxy){var h=ProxyHost.Trim().Trim('[',']');if(String.IsNullOrEmpty(h)||Uri.CheckHostName(h)==UriHostNameType.Unknown||h.Contains("/"))throw new ArgumentException("代理 IP／主机名无效。");}foreach(var model in new[]{ParentModel,ChildModel})if(!Regex.IsMatch(model??"",@"^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$"))throw new ArgumentException("模型 ID 无效。");foreach(var effort in new[]{ParentEffort,ChildEffort})if(!new[]{"low","medium","high","xhigh","max","ultra"}.Contains(effort))throw new ArgumentException("思考强度无效。");}
+    public void Validate(NativePaths paths){
+        paths.Validate();
+        if(Folder&&(String.IsNullOrWhiteSpace(paths.Workspace)||!Path.IsPathRooted(paths.Workspace)))throw new ArgumentException("请明确选择工作目录或工作盘。");
+        if(Folder&&!Directory.Exists(Path.GetPathRoot(paths.Workspace)))throw new DirectoryNotFoundException("所选工作盘不可用。");
+        if(Proxy&&(ProxyPort<1||ProxyPort>65535))throw new ArgumentException("代理端口须为 1–65535。");
+        if(Proxy){var h=ProxyHost.Trim().Trim('[',']');if(String.IsNullOrEmpty(h)||Uri.CheckHostName(h)==UriHostNameType.Unknown||h.Contains("/"))throw new ArgumentException("代理 IP／主机名无效。");}
+        foreach(var model in new[]{ParentModel,ChildModel})if(!Regex.IsMatch(model??"",@"^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$"))throw new ArgumentException("模型 ID 无效。");
+        foreach(var effort in new[]{ParentEffort,ChildEffort})if(!new[]{"low","medium","high","xhigh","max","ultra"}.Contains(effort))throw new ArgumentException("思考强度无效。");
+        if(DesktopProfile&&(MaxConcurrentSubagents<(Subagents?1:0)||MaxConcurrentSubagents>MaxSupportedConcurrentSubagents))throw new ArgumentException("子代理并发上限必须是有效的整数。");
+    }
 }
 public sealed class NativeStep {public string name,state,message;}
 public sealed class NativeResult {

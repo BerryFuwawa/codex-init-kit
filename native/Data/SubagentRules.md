@@ -36,7 +36,7 @@ Subagents do not have an independent configured state and may not change the par
 
 The parent task must not wait for an opt-in confirmation and must not run a first-task confirmation flow. Continue the original task immediately while automatically deciding whether temporary configured subagents are useful.
 
-The parent may use any available main model, including gpt-6-sol (GPT6sol), GPT-6-astra, or any other model. Using another main model does not prevent the parent from invoking configured subagents.
+The parent keeps the model selected for the current conversation. Use the configured assignment mode for subagents.
 
 如中途需要启用 configured Subagent，请发送“开启多线程”。
 如中途需要停用 configured Subagent，请发送“停用多线程”。

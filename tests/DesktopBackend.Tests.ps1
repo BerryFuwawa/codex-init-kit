@@ -155,8 +155,13 @@ enabled = true
     Assert ($resolved.Drive -eq 'D:') 'Job drive was not loaded.'
     Assert ($resolved.ProxyPort -eq 12345) 'Job proxy port was not loaded.'
     Assert (-not $resolved.InstallProtection) 'Job install flag was not loaded.'
-    Assert ($resolved.Options.parentModel -eq 'gpt-6.1-sol' -and $resolved.Options.parentEffort -eq 'medium' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'medium') 'Default parent and child must be GPT-6.1-SOL MEDIUM.'
+    Assert ($resolved.Options.parentModel -eq 'gpt-6.2-sol' -and $resolved.Options.parentEffort -eq 'medium' -and $resolved.Options.childModel -eq 'gpt-6.1-sol' -and $resolved.Options.childEffort -eq 'medium') 'Default parent or manual child fallback changed.'
     Assert ($resolved.Options.cliMode -eq 'auto' -and (Convert-BackendOptions @{cliMode='official-standalone'}).cliMode -eq 'official-standalone') 'CLI mode default or explicit selection was lost.'
+    Assert ($resolved.Options.maxConcurrentSubagents -eq 6 -and (Convert-BackendOptions @{subagents=$false;maxConcurrentSubagents=12}).maxConcurrentSubagents -eq 12) 'Default or disabled concurrency preference was lost.'
+    Assert ((Convert-BackendOptions @{maxConcurrentSubagents=([long]::MaxValue-1)}).maxConcurrentSubagents -eq ([long]::MaxValue-1)) 'Largest supported concurrency was rejected.'
+    foreach($invalid in @(0,-1,'1.5',[long]::MaxValue)){
+        $rejected=$false;try{Convert-BackendOptions @{maxConcurrentSubagents=$invalid}}catch{$rejected=$true};Assert $rejected ('Invalid concurrency accepted: '+$invalid)
+    }
     $rejected=$false;try{Convert-BackendOptions @{cliMode='unknown'}}catch{$rejected=$true};Assert $rejected 'Invalid CLI mode accepted.'
     Assert ($resolved.Options.proxyHost -eq '127.0.0.1' -and -not $resolved.Options.subagents -and $resolved.Options.folderManagement) 'Default proxy or feature selections are wrong.'
     Assert ($resolved.Options.antiOverDefense -and -not (Convert-BackendOptions @{antiOverDefense=$false}).antiOverDefense) 'Anti-over-defense default or explicit false was lost.'
@@ -191,18 +196,18 @@ enabled = true
     Assert ((Convert-BackendOptions $null).memories -and -not (Convert-BackendOptions @{memories=$false}).memories) 'Memory option default or explicit false was lost.'
     $memoryConfig=Join-Path $scratch 'memory-config.toml';$memoryWriter=Join-Path $scratch 'write-memory.cmd'
     $memoryState=Join-Path $scratch 'memories\keep.txt';[void][IO.Directory]::CreateDirectory((Split-Path $memoryState -Parent));[IO.File]::WriteAllText($memoryState,'existing memory')
-    $memoryHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_MEMORY_HOME%`"`r`nset `"CONFIG_FILE=%CODEX_TEST_CONFIG%`"`r`nset `"DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol`"`r`nset `"DEFAULT_PARENT_REASONING_EFFORT=high`"`r`nset `"LUNA_MAX_THREADS=6`"`r`ncall :WRITE_CONFIG`r`nexit /b %errorlevel%`r`n"
+    $memoryHeader="@echo off`r`nsetlocal EnableExtensions EnableDelayedExpansion`r`nset `"CODEX_HOME_DIR=%CODEX_TEST_MEMORY_HOME%`"`r`nset `"CONFIG_FILE=%CODEX_TEST_CONFIG%`"`r`nset `"DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol`"`r`nset `"DEFAULT_PARENT_REASONING_EFFORT=high`"`r`ncall :WRITE_CONFIG`r`nexit /b %errorlevel%`r`n"
     [IO.File]::WriteAllText($memoryWriter,$memoryHeader+$generatedConfigBlock,$script:InputEncoding)
     foreach($enabled in @('true','false','true')){
-        $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES=$enabled;CODEX_GUI_SUBAGENTS='0';CODEX_GUI_CHILD_MODEL='gpt-6-luna';CODEX_GUI_CHILD_EFFORT='high';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
+        $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES=$enabled;CODEX_GUI_SUBAGENTS='0';CODEX_GUI_CHILD_MODEL='gpt-6-luna';CODEX_GUI_CHILD_EFFORT='high';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch;LUNA_MAX_THREADS='12'} $script:InputEncoding
         $text=[IO.File]::ReadAllText($memoryConfig)
         Assert ($written.ExitCode -eq 0 -and $text.Contains('memories = '+$enabled) -and $text.Contains('generate_memories = '+$enabled) -and $text.Contains('use_memories = '+$enabled)) 'Actual configuration did not write all three selected memory flags.'
         Assert (([regex]::Matches($text,'(?m)^\[memories\]')).Count -eq 1 -and [IO.File]::ReadAllText($memoryState) -eq 'existing memory') 'Repeated configuration duplicated memory tables or changed existing memories.'
-        Assert ($text.Contains('multi_agent = false') -and $text.Contains('default_subagent_model = "gpt-6-luna"') -and $text.Contains('default_subagent_reasoning_effort = "high"') -and -not $text.Contains('enabled = true')) 'Disabled subagents lost model preferences or were enabled.'
+        Assert ($text -match '(?m)^\[agents\]\r?\ndefault_subagent_model = "gpt-6-luna"\r?\ndefault_subagent_reasoning_effort = "high"\r?\nenabled = false\r?\nmax_concurrent_threads_per_session = 12\r?$' -and $text -match '(?m)^\[features\.multi_agent_v2\]\r?\nenabled = false\r?$' -and $text -notmatch '(?m)^multi_agent\s*=') 'Disabled subagents lost model or concurrency preferences, or V2 remained enabled.'
     }
     $written=Invoke-ChildProcess $memoryWriter @() $scratch @{CODEX_GUI_MEMORIES='true';CODEX_GUI_SUBAGENTS='1';CODEX_GUI_CHILD_MODEL='gpt-6-luna';CODEX_GUI_CHILD_EFFORT='high';CODEX_TEST_CONFIG=$memoryConfig;CODEX_TEST_MEMORY_HOME=$scratch} $script:InputEncoding
     $text=[IO.File]::ReadAllText($memoryConfig)
-    Assert ($written.ExitCode -eq 0 -and $text.Contains('default_subagent_model = "gpt-6-luna"') -and $text.Contains('default_subagent_reasoning_effort = "high"')) 'Enabled subagent model defaults were not written to the actual config.'
+    Assert ($written.ExitCode -eq 0 -and $text -match '(?m)^\[agents\]\r?\ndefault_subagent_model = "gpt-6-luna"\r?\ndefault_subagent_reasoning_effort = "high"\r?\nenabled = true\r?\nmax_concurrent_threads_per_session = 6\r?$' -and $text -match '(?m)^\[features\.multi_agent_v2\]\r?\nenabled = true\r?$' -and $text -notmatch '(?m)^multi_agent\s*=') 'Enabled V2 subagent settings or default concurrency were not written to the actual config.'
     Assert ($adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_CHECKSUM_URL%"') -lt $adapterText.IndexOf('call :DOWNLOAD_FILE "%RTK_RELEASE_URL%"')) 'RTK ZIP started before its checksum list.'
     Assert ($adapterText.Contains('GitHubDownload.ps1') -and -not $adapterText.Contains('call :VERIFY_RTK_ZIP')) 'Desktop RTK download did not use the shared validation path.'
     Assert ($adapterText.Contains('--codex-gui-action')) 'GUI init entry was not added.'
@@ -264,18 +269,29 @@ exit /b 0
     $configVerifier = [regex]::Match($adapterText,'(?ms)^:VERIFY_CONFIG\r?\n.*?(?=^:VERIFY_FULL\r?$)').Value
     $configFixturePath = Join-Path $codeHome 'config-validation.toml'
     $configAgentsPath = Join-Path $codeHome 'config-validation-agents.md'
-    $configFixtureText = "model = `"gpt-6.1-sol`"`r`nmodel_reasoning_effort = `"medium`"`r`nenabled-reasoning-efforts = [low, medium, high, xhigh, max, ultra]`r`ncontext_management.experimental_mode = true`r`nmulti_agent = false`r`n"
-    [IO.File]::WriteAllText($configFixturePath,$configFixtureText,[Text.UTF8Encoding]::new($false))
+    $configFixtureText = "model = `"gpt-6.1-sol`"`r`nmodel_reasoning_effort = `"medium`"`r`n[desktop]`r`nenabled-reasoning-efforts = [low, medium, high, xhigh, max, ultra]`r`n[features]`r`ncontext_management.experimental_mode = true`r`n"
+    $closedConfig = $configFixtureText+"[features.multi_agent_v2]`r`nenabled = false`r`n[other]`r`nenabled = true`r`n[agents]`r`nenabled = false`r`nmax_concurrent_threads_per_session = 12`r`n"
+    [IO.File]::WriteAllText($configFixturePath,$closedConfig,[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText($configAgentsPath,"BEGIN CODEX LUNA PROMPT V1.3`r`nEND CODEX LUNA PROMPT V1.3`r`n",[Text.UTF8Encoding]::new($false))
     $configFlowPath = Join-Path $scratch 'config-validation.cmd'
-    $configHeader = @('@echo off','setlocal EnableExtensions EnableDelayedExpansion','set "CONFIG_FILE=%CODEX_TEST_CONFIG%"','set "AGENTS_FILE=%CODEX_TEST_AGENTS%"','set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"','set "DEFAULT_PARENT_REASONING_EFFORT=medium"','set "LUNA_MAX_THREADS=6"','call :VERIFY_CONFIG','exit /b !errorlevel!') -join "`r`n"
+    $configHeader = @('@echo off','setlocal EnableExtensions EnableDelayedExpansion','set "CONFIG_FILE=%CODEX_TEST_CONFIG%"','set "AGENTS_FILE=%CODEX_TEST_AGENTS%"','set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"','set "DEFAULT_PARENT_REASONING_EFFORT=medium"','set "LUNA_MAX_THREADS=12"','call :VERIFY_CONFIG','exit /b !errorlevel!') -join "`r`n"
     [IO.File]::WriteAllText($configFlowPath,$configHeader + "`r`n" + $configVerifier,[Text.Encoding]::GetEncoding(936))
-    $configEnvironment = @{CODEX_TEST_CONFIG=$configFixturePath;CODEX_TEST_AGENTS=$configAgentsPath;CODEX_GUI_SUBAGENTS='0'}
+    $configEnvironment = @{CODEX_TEST_CONFIG=$configFixturePath;CODEX_TEST_AGENTS=$configAgentsPath;MULTI_AGENT_ENABLED='false'}
     $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
     Assert ($configResult.ExitCode -eq 0) 'Unchecked subagents failed config validation because old rules existed.'
-    $configEnvironment.CODEX_GUI_SUBAGENTS = '1'
+    $configEnvironment.MULTI_AGENT_ENABLED = 'true'
     $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
-    Assert ($configResult.ExitCode -ne 0) 'Enabled subagents passed config validation with multi_agent disabled.'
+    Assert ($configResult.ExitCode -ne 0) 'Enabled subagents passed config validation with agents.enabled disabled.'
+    $openConfig = $closedConfig.Replace('enabled = false','enabled = true')
+    $v1Config = $openConfig.Replace("[features.multi_agent_v2]`r`nenabled = true","[features.multi_agent_v2]`r`nenabled = false")
+    foreach ($incorrectConfig in @($v1Config,$openConfig.Replace('max_concurrent_threads_per_session = 12','max_concurrent_threads_per_session = 6'))) {
+        [IO.File]::WriteAllText($configFixturePath,$incorrectConfig,[Text.UTF8Encoding]::new($false))
+        $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
+        Assert ($configResult.ExitCode -ne 0) 'Enabled subagents validated without V2 or the requested concurrency.'
+    }
+    [IO.File]::WriteAllText($configFixturePath,$openConfig,[Text.UTF8Encoding]::new($false))
+    $configResult = Invoke-ChildProcess $configFlowPath @() $scratch $configEnvironment $script:InputEncoding
+    Assert ($configResult.ExitCode -eq 0) 'Enabled V2 agents failed validation with the requested concurrency.'
 
     # Exercise the actual embedded verifier against the marker names written
     # by the installer, rather than a mock verifier that always returns PASS.
@@ -456,7 +472,6 @@ exit /b 0
     Assert ($featureText.Contains('if /i "%CODEX_GUI_CUA_REPAIR%"=="1" call :RUN_CUA_REPAIR')) 'CUA stage was not made optional.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_SUBAGENTS%"=="1" call :INSTALL_LUNA_PROMPT')) 'Luna stage was not made optional.'
     Assert ($featureText.Contains('set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"')) 'Base initialization still forced the Luna manager.'
-    Assert ($featureText.Contains('echo multi_agent = false')) 'Disabled subagents did not explicitly disable the multi-agent feature.'
     Assert ($featureText.Contains('if /i "%CODEX_GUI_FOLDER_MANAGEMENT%"=="1" call :VERIFY_FOLDER_BINDING')) 'Selected folder management lost binding verification.'
     Assert ($featureText.Contains('CODEX_GUI_PROXY_DISABLED')) 'Proxy-disabled initialization did not clear the default endpoint.'
     Remove-InitAdapter $featureAdapter
@@ -692,13 +707,15 @@ END CODEX LUNA PROMPT V1.3
     $desktopPmCode=$desktopPmCode.Replace('if ($env:CODEX_PROMPT_MANAGER_ACTION -eq ''select-drive'') {',$driveFixture+"`n"+'if ($env:CODEX_PROMPT_MANAGER_ACTION -eq ''select-drive'') {')
     [IO.File]::WriteAllText($desktopPmPath,$desktopPmCode,[Text.UTF8Encoding]::new($true))
     foreach($case in @(
-        @{name='standalone';gui='0';parent='gpt-6.1-sol';parentEffort='high';child='gpt-6.1-sol';childEffort='high'},
-        @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'},
-        @{name='desktop-luna';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high'},
+        @{name='standalone';gui='0';parent='gpt-6.1-sol';parentEffort='high';child='gpt-6.1-sol';childEffort='high';threads=6},
+        @{name='custom';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high';threads=12},
+        @{name='desktop-luna';gui='1';parent='gpt-6-astra';parentEffort='ultra';child='gpt-6-luna';childEffort='high';threads=17},
         @{name='desktop-folder';gui='1'}
     )){
         $fixtureHome=Join-Path $scratch ('prompt-model-'+$case.name);[void][IO.Directory]::CreateDirectory($fixtureHome)
-        [IO.File]::WriteAllText((Join-Path $fixtureHome 'config.toml'),"model = `"old`"`nmodel_reasoning_effort = `"low`"`n",[Text.UTF8Encoding]::new($false))
+        $oldConfig="model = `"old`"`nmodel_reasoning_effort = `"low`"`n"
+        if ($case.name -ne 'desktop-folder') { $oldConfig += "`n[features]`nmulti_agent = true`n`n[features.multi_agent_v2]`nenabled = false`n" }
+        [IO.File]::WriteAllText((Join-Path $fixtureHome 'config.toml'),$oldConfig,[Text.UTF8Encoding]::new($false))
         $oldBlock="user instruction`nBEGIN CODEX LUNA PROMPT V1.3`nmodel = gpt-5.6-luna`nEND CODEX LUNA PROMPT V1.3`n"
         if($case.name -eq 'desktop-folder'){$oldBlock="user instruction`n"}
         [IO.File]::WriteAllText((Join-Path $fixtureHome 'AGENTS.md'),$oldBlock,[Text.UTF8Encoding]::new($false))
@@ -708,6 +725,7 @@ END CODEX LUNA PROMPT V1.3
         $action=if($case.name -eq 'desktop-folder'){'install-folder'}else{'install-luna'}
         $psi.Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$managerPath+'"'
         foreach($entry in @{CODEX_HOME_DIR=$fixtureHome;CODEX_PROMPT_MANAGER_ACTION=$action;CODEX_FOLDER_DRIVE='D';CODEX_GUI_NO_PAUSE=$case.gui;CODEX_GUI_PARENT_MODEL=$case.parent;CODEX_GUI_PARENT_EFFORT=$case.parentEffort;CODEX_GUI_CHILD_MODEL=$case.child;CODEX_GUI_CHILD_EFFORT=$case.childEffort}.GetEnumerator()){$psi.EnvironmentVariables[$entry.Key]=[string]$entry.Value}
+        if ($case.gui -eq '1' -and $case.threads) { $psi.EnvironmentVariables['LUNA_MAX_THREADS'] = [string]$case.threads }
         $child=[Diagnostics.Process]::Start($psi);$out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(30000)){$child.Kill();throw 'Prompt manager fixture timed out.'}
         Assert ($child.ExitCode -eq 0) ('Prompt manager '+$case.name+' failed: '+$out.Result+' '+$err.Result);$child.Dispose()
@@ -746,7 +764,12 @@ END CODEX LUNA PROMPT V1.3
         }
         if($case.name -eq 'desktop-luna'){Assert ($fixtureAgents.Contains('## 主任务职责') -and -not $fixtureAgents.Contains('## Parent responsibilities')) 'Desktop Luna did not install the localized rules.'}
         Assert ($fixtureConfig -match ('(?m)^model = "'+[regex]::Escape($case.parent)+'"\r?$') -and $fixtureConfig -match ('(?m)^model_reasoning_effort = "'+$case.parentEffort+'"\r?$')) ('Parent selection lost in '+$case.name)
+        Assert ($fixtureConfig -match ('(?m)^\[agents\]\r?\nenabled = true\r?\n(?:\r?\n)*max_concurrent_threads_per_session = '+$case.threads+'\r?$') -and $fixtureConfig -match '(?m)^\[features\.multi_agent_v2\]\r?\nenabled = true\r?$' -and $fixtureConfig -notmatch '(?m)^multi_agent\s*=') ('Luna installation did not migrate to V2 with the expected concurrency in '+$case.name)
         Assert ($fixtureAgents.Contains('model = '+$case.child) -and $fixtureAgents.Contains('model_reasoning_effort = '+$case.childEffort) -and $fixtureAgents.Contains('user instruction')) ('Child selection or existing text lost in '+$case.name)
+        $parentPolicy = if($case.name -eq 'desktop-luna'){'主任务沿用当前对话的模型'}else{'The parent keeps the current conversation model'}
+        Assert ($fixtureAgents.Contains($parentPolicy) -and $fixtureAgents -notmatch '(?i)gpt-6-sol|gpt-6-astra') ('Luna rules named example parent models in '+$case.name)
+        $threadPolicy = if($case.name -eq 'desktop-luna'){ '最多 '+$case.threads+' 个' }else{ 'up to '+$case.threads+' running concurrently.' }
+        Assert ($fixtureAgents.Contains($threadPolicy) -and -not $fixtureAgents.Contains('{{MAX_CONCURRENT_SUBAGENTS}}')) ('Luna rules lost the selected concurrency in '+$case.name)
         Assert (([regex]::Matches($fixtureAgents,'(?m)^BEGIN CODEX LUNA PROMPT V1\.3\r?$')).Count -eq 1 -and $fixtureAgents -notmatch 'Do not create Sol, Terra|model = gpt-5\.6-luna') ('Legacy block was not safely replaced in '+$case.name)
     }
     $rebuildSection = [regex]::Match($originalInitText,'(?ms)^:REBUILD_AGENTS_FILE\r?\n.*?(?=^:VERIFY_AGENTS_CONTENT\r?$)').Value
@@ -1026,22 +1049,23 @@ END CODEX LUNA PROMPT V1.3
     # proxy rewrite and scoped-model finalization remain real.
     $tailAgents = "@fixture-RTK.md`n<!-- BEGIN CODEX INIT WORK RULES -->`nGOAL`nfixture`n<!-- END CODEX INIT WORK RULES -->`nBEGIN CODEX FOLDER MANAGEMENT PROMPT V1.0`nfolder fixture`nEND CODEX FOLDER MANAGEMENT PROMPT V1.0`n"
     [IO.File]::WriteAllText($agentsPath,$tailAgents,[Text.UTF8Encoding]::new($false))
-    [IO.File]::WriteAllText($config,"model = `"old-parent`"`nmodel_reasoning_effort = `"low`"`n[features]`nmulti_agent = false`n",[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($config,"model = `"old-parent`"`nmodel_reasoning_effort = `"low`"`n[agents]`nenabled = false`n",[Text.UTF8Encoding]::new($false))
     $tailAgentsHash = HashFile $agentsPath
     $realChildProcess = (Get-Item Function:Invoke-ChildProcess).ScriptBlock
     try {
         function Invoke-ChildProcess {
             param($FilePath,$Arguments,$WorkingDirectory,$Environment,$Encoding,[switch]$ClearProxyEnvironment)
             Assert ($Environment.CODEX_GUI_SUBAGENTS -eq '0') 'Unchecked subagents were not passed to the CMD worker.'
+            Assert ($Environment.LUNA_MAX_THREADS -eq '12') 'Concurrency preference was not passed to the CMD worker.'
             Assert ($Environment.CODEX_GUI_FOLDER_MANAGEMENT -eq '1') 'Default folder management was not passed to the CMD worker.'
             return [pscustomobject]@{ ExitCode=0; Output='RESULT = PASS'; Error='' }
         }
-        $tailOptions = @{subagents=$false;folderManagement=$true;cuaRepair=$true;parentModel='vendor/tail:v1';parentEffort='medium'}
+        $tailOptions = @{subagents=$false;maxConcurrentSubagents=12;folderManagement=$true;cuaRepair=$true;parentModel='vendor/tail:v1';parentEffort='medium'}
         $tailResult = Invoke-InitOperation 'one-click' $payload 'D' 10808 $tailOptions
         Assert ($tailResult -eq 0) 'Unchecked-subagent initialization failed after the successful CMD stages.'
         Assert ((HashFile $agentsPath) -eq $tailAgentsHash) 'Finalization changed the freshly rebuilt AGENTS file when subagents were off.'
         $tailConfig = [IO.File]::ReadAllText($config)
-        Assert ($tailConfig -match '(?m)^model = "vendor/tail:v1"\r?$' -and $tailConfig -match '(?m)^multi_agent = false\r?$') 'Finalization did not retain the selected parent and disabled multi-agent state.'
+        Assert ($tailConfig -match '(?m)^model = "vendor/tail:v1"\r?$' -and $tailConfig -match '(?m)^\[agents\]\r?\nenabled = false\r?$') 'Finalization did not retain the selected parent and disabled subagent state.'
         Assert ((Invoke-InitOperation 'proxy' $payload $null 10808 $tailOptions) -eq 0 -and (HashFile $agentsPath) -eq $tailAgentsHash) 'Proxy-only changes rewrote the global rules.'
     } finally { Set-Item Function:Invoke-ChildProcess $realChildProcess }
 

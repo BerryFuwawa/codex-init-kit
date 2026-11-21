@@ -13,6 +13,7 @@ public partial class MainWindow {
         remoteRelay.IsEnabled=!busy && proxyEnabled.IsChecked==true && (relayStatus.Installed || relayStatus.CanEnable);
         childModel.IsEnabled=!locked&&subagents.IsChecked==true;
         childEffort.IsEnabled=childModel.IsEnabled&&!AutoAssign;
+        maxConcurrentSubagentsInput.IsEnabled=childModel.IsEnabled;
         githubCustomMirror.IsEnabled=!locked&&githubMirrors.IsChecked==true;
         foreach(var b in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)){var label=Convert.ToString(b.Content);if(label==UninstallRelayLabel){b.IsEnabled=!busy && relayStatus.CanRemove;continue;}bool operation=new[]{"开启远控转发","关闭远控转发","确认并开始","保存代理","检查已保存","检查组件","修复组件","检查更新","下载并更新","更新官方","更新桌面","仅保存","保存 WS","保存下载","修复并启动","修复连接","检查连接","检查 WebSocket","验证重启","检查 CUA","检查并修复","开始诊断","安装 /","卸载启动","恢复原始","撤销 WebSocket","清理已","仅重试","切换官方","切换桌面","启动 Codex"}.Any(x=>label.StartsWith(x,StringComparison.Ordinal));if(operation){b.IsEnabled=!busy;b.ToolTip=busy?"当前操作正在执行，请等待结果后再操作。":null;}}
         UpdateRollbackActions();
@@ -32,7 +33,17 @@ public partial class MainWindow {
     string FeedbackText(){var record=VisibleRecord();return "Codex Init Kit "+(record==null?OperationRecord.BuildVersion:record.version)+"\n操作："+(record==null?operationTitle:record.title)+"\n时间："+(record==null?"未记录":record.started)+"\n结果："+(record==null?"未记录":record.StateLabel)+"\n摘要："+(record==null||String.IsNullOrWhiteSpace(record.summary)?"未提供":record.summary)+"\n\n"+LogToCopy();}
     void RecoverInitializationResult(int code,string error,bool cancelled){initializationProgress.Stopped(code,error,cancelled);if(!cancelled){if(code!=0)foreach(var stage in initializationProgress.Stages.Where(x=>x.State=="running")){stage.State="uncertain";stage.Detail="未收到此步骤的完成结果；重试前会先检查。";}incompleteInitializationStages=initializationProgress.Stages.Where(x=>x.State=="incomplete"||x.State=="uncertain").Select(x=>x.Id).ToArray();if(code!=0&&incompleteInitializationStages.Length==0)incompleteInitializationStages=new[]{"preflight"};}else incompleteInitializationStages=new string[0];}
     string SavedValue(string key){return Core.Value(status,key,status==null?"正在读取…":"未设置");}
-    void AddDraftSummary(StackPanel parent){var changed=new List<string>();Action<string,string,string> diff=(name,saved,wanted)=>{if(saved!=wanted)changed.Add(name+"："+saved+" → "+wanted);};diff("代理",SavedValue("configProxy"),ProxyDisplay());diff("父模型",SavedValue("configModel"),Convert.ToString(parentModel.SelectedItem));diff("思考强度",SavedValue("configEffort"),Convert.ToString(parentEffort.SelectedItem));if(folderManagement.IsChecked==true)diff("无项目任务目录",SavedValue("configWorkspace"),Convert.ToString(drive.SelectedItem)+@":\Codex\Conversations");parent.Children.Add(T(changed.Count==0?"父模型、强度与代理等本页对比项未发现变化；其他所选功能执行时检查。":"待应用设置（尚未写入）\n"+String.Join("\n",changed),12,MutedBrush));}
+    void AddDraftSummary(StackPanel parent){
+        var changed=new List<string>();
+        Action<string,string,string,Func<string,string>> diff=(name,saved,wanted,display)=>{
+            if(saved!=wanted)changed.Add(name+"："+display(saved)+" → "+display(wanted));
+        };
+        diff("代理",SavedValue("configProxy"),ProxyDisplay(),value=>value);
+        diff(ParentModelLabel,SavedValue("configModel"),Convert.ToString(parentModel.SelectedItem),ModelLabels.Display);
+        diff("思考强度",SavedValue("configEffort"),Convert.ToString(parentEffort.SelectedItem),EffortLabels.Display);
+        if(folderManagement.IsChecked==true)diff("无项目任务目录",SavedValue("configWorkspace"),Convert.ToString(drive.SelectedItem)+@":\Codex\Conversations",value=>value);
+        parent.Children.Add(T(changed.Count==0?"模型、强度与代理等本页对比项未发现变化；其他所选功能执行时检查。":"待应用设置（尚未写入）\n"+String.Join("\n",changed),12,MutedBrush));
+    }
     void AddChangeSummary(StackPanel panel){AddDraftSummary(panel);panel.Children.Add(T("配置和组件会先检查：相同内容跳过；首次实际变更前备份。完整初始化开始时若 Codex 正在运行，会询问关闭；这会中断该桌面实例中的其他对话。",12,MutedBrush));}
     void LimitDialog(Window dialog){var area=AvailableDialogArea();dialog.Width=Math.Min(dialog.Width,Math.Max(280,area.Width-24));dialog.MaxHeight=Math.Max(200,area.Height-24);dialog.UseLayoutRounding=true;dialog.SnapsToDevicePixels=true;}
     internal Func<Rect> DialogArea;

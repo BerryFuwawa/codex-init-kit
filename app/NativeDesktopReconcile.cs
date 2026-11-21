@@ -1,11 +1,26 @@
 using File=CodexKit.Native.NativeFile;
 using Directory=CodexKit.Native.NativeDirectory;
-using System;using System.IO;using System.Text;using System.Linq;using System.Collections.Generic;using System.Text.RegularExpressions;using CodexKit.Native;
+using System;using System.IO;using System.Text;using System.Linq;using System.Globalization;using System.Collections.Generic;using System.Text.RegularExpressions;using CodexKit.Native;
 namespace CodexKit {
 // 保留原文，仅修改初始化工具负责的键；无法定位的写法在备份和修改前报告。
 internal static class ManagedToml {
     sealed class Entry {internal int First,Last;internal string[] Path,Table;internal string Value;}
     sealed class Document {internal List<string> Lines;internal List<Entry> Entries=new List<Entry>();internal Dictionary<string,int> Ends=new Dictionary<string,int>();}
+    sealed class ValueLocation {internal Entry Entry;internal int Offset;}
+    static readonly string[] AgentsEnabledPath={"agents","enabled"};
+    static readonly string[] LegacyMultiAgentPath={"features","multi_agent"};
+    static readonly string[] V2Path={"features","multi_agent_v2"};
+    static readonly string[] V2EnabledPath={"features","multi_agent_v2","enabled"};
+    const string ConcurrencyKey="max_concurrent_threads_per_session";
+    static readonly string[] AgentsConcurrencyPath={"agents",ConcurrencyKey};
+    static readonly string[] LegacyConcurrencyPath={"agents","max_threads"};
+    static readonly string[] V2ConcurrencyPath={"features","multi_agent_v2",ConcurrencyKey};
+    static readonly string[] V2ModelOverridesPath={"features","multi_agent_v2","expose_spawn_agent_model_overrides"};
+    static readonly Regex InlineTokens=new Regex(
+        "\"\"\"(?:\\\\[\\s\\S]|\"(?!\"\")|[^\"\\\\])*\"{3,5}|'''[\\s\\S]*?'{3,5}|"+
+        "\"(?:\\\\.|[^\"\\\\])*\"|'[^']*'|#[^\\r\\n]*|[{}\\[\\],=]");
+    static readonly Regex BoolValue=new Regex(@"\G\s*(?<value>true|false)(?=\s*(?:[#},]|$))");
+    static readonly Regex IntegerValue=new Regex(@"\G\s*(?<value>0x[0-9a-fA-F](?:_?[0-9a-fA-F])*|0o[0-7](?:_?[0-7])*|0b[01](?:_?[01])*|[+-]?(?:0|[1-9](?:_?[0-9])*))(?=\s*(?:[#},]|$))");
     static string Id(IEnumerable<string> path){return String.Join("\u001f",path);}
     static Document Read(string text){
         var doc=new Document{Lines=Regex.Matches(text,"[^\\r\\n]*(?:\\r\\n|\\n|\\r|$)").Cast<Match>().Where(x=>x.Length>0).Select(x=>x.Value).ToList()};
@@ -28,8 +43,146 @@ internal static class ManagedToml {
     }
     internal static string SavedValue(string text,params string[] path){try{var entry=Read(text).Entries.FirstOrDefault(x=>x.Path.SequenceEqual(path));if(entry==null)return "未设置";var value=entry.Value.Trim();var m=Regex.Match(value,@"^(?:""(?<v>(?:\\.|[^""\\])*)""|'(?<v>[^']*)')\s*(?:#.*)?$");if(!m.Success)return "未能识别";return value.StartsWith("\"")?NativeData.Json.Deserialize<string>("\""+m.Groups["v"].Value+"\""):m.Groups["v"].Value;}catch(InvalidDataException){return "未能识别";}}
     static string Comparable(string value){var b=new StringBuilder();char quote='\0';bool escape=false;foreach(char c in value){if(quote!='\0'){b.Append(c);if(escape)escape=false;else if(c=='\\'&&quote=='"')escape=true;else if(c==quote)quote='\0';}else if(c=='#')break;else if(c=='"'||c=='\''){quote=c;b.Append(c);}else if(!Char.IsWhiteSpace(c))b.Append(c);}return b.ToString();}
+    static int InlineMember(string value,int start,params string[] path){
+        while(start>=0&&start<value.Length&&Char.IsWhiteSpace(value[start]))start++;
+        if(start<0||start>=value.Length||value[start]!='{')return -1;
+        int keyStart=start+1,depth=1;
+        foreach(Match token in InlineTokens.Matches(value,keyStart)){
+            switch(token.Value){
+                case "{":case "[":depth++;break;
+                case "}":case "]":if(--depth==0)return -1;break;
+                case ",":if(depth==1)keyStart=token.Index+1;break;
+                case "=":
+                    if(depth==1){
+                        var key=ConfigCompatibility.KeyParts(value.Substring(keyStart,token.Index-keyStart));
+                        if(key!=null&&key.SequenceEqual(path))return token.Index+1;
+                    }
+                    break;
+            }
+        }
+        return -1;
+    }
+    static ValueLocation FindValue(Document doc,string[] path){
+        foreach(var entry in doc.Entries.Where(x=>path.Take(x.Path.Length).SequenceEqual(x.Path)).OrderByDescending(x=>x.Path.Length)){
+            int offset=0,consumed=entry.Path.Length;
+            while(consumed<path.Length){
+                int member=-1;
+                int count;
+                for(count=path.Length-consumed;count>0;count--){
+                    member=InlineMember(entry.Value,offset,path.Skip(consumed).Take(count).ToArray());
+                    if(member>=0)break;
+                }
+                if(member<0)break;
+                offset=member;
+                consumed+=count;
+            }
+            if(consumed==path.Length)return new ValueLocation{Entry=entry,Offset=offset};
+        }
+        return null;
+    }
+    static Group Scalar(ValueLocation location,Regex pattern){
+        return location==null?null:pattern.Match(location.Entry.Value,location.Offset).Groups["value"];
+    }
+    static long ReadPositiveInteger(ValueLocation location,string[] path){
+        var error="子代理并发设置必须为正整数："+String.Join(".",path);
+        var value=Scalar(location,IntegerValue);
+        if(value!=null&&value.Success){
+            var digits=value.Value.Replace("_","");
+            try{
+                long result;
+                if(digits.StartsWith("0x"))result=Convert.ToInt64(digits.Substring(2),16);
+                else if(digits.StartsWith("0o"))result=Convert.ToInt64(digits.Substring(2),8);
+                else if(digits.StartsWith("0b"))result=Convert.ToInt64(digits.Substring(2),2);
+                else result=Int64.Parse(digits,CultureInfo.InvariantCulture);
+                if(result>0)return result;
+            }catch(OverflowException ex){throw new InvalidDataException(error,ex);}
+        }
+        throw new InvalidDataException(error);
+    }
+    static long MaxConcurrentSubagents(Document doc){
+        var v2=FindValue(doc,V2ConcurrencyPath);
+        if(v2!=null)return ReadPositiveInteger(v2,V2ConcurrencyPath)-1;
+        var configured=FindValue(doc,AgentsConcurrencyPath);
+        if(configured!=null)return ReadPositiveInteger(configured,AgentsConcurrencyPath);
+        var legacy=FindValue(doc,LegacyConcurrencyPath);
+        return legacy==null?NativeOptions.DefaultMaxConcurrentSubagents:ReadPositiveInteger(legacy,LegacyConcurrencyPath);
+    }
+    static bool V2Enabled(Document doc){
+        var flag=Scalar(FindValue(doc,V2EnabledPath)??FindValue(doc,V2Path),BoolValue);
+        return flag!=null&&flag.Value=="true";
+    }
+    internal static bool V2Enabled(string text){return V2Enabled(Read(text));}
+    internal static void ReadSubagentSettings(string text,out bool v2Enabled,out long maxConcurrentSubagents){
+        var doc=Read(text);
+        v2Enabled=V2Enabled(doc);
+        maxConcurrentSubagents=MaxConcurrentSubagents(doc);
+    }
+    static void EditValue(Document doc,Entry entry,int offset,int length,string value){
+        int line=entry.First+entry.Value.Take(offset).Count(c=>c=='\n');
+        int column=line==entry.First?ConfigCompatibility.EqualSign(doc.Lines[line])+1+offset:offset-entry.Value.LastIndexOf('\n',offset-1)-1;
+        doc.Lines[line]=doc.Lines[line].Remove(column,length).Insert(column,value);
+        entry.Value=entry.Value.Remove(offset,length).Insert(offset,value);
+    }
+    static bool SetV2Member(Document doc,string[] path,Regex pattern,string value){
+        var location=FindValue(doc,path);
+        var scalar=Scalar(location,pattern);
+        if(scalar!=null&&scalar.Success){
+            if(scalar.Value!=value)EditValue(doc,location.Entry,scalar.Index,scalar.Length,value);
+            return true;
+        }
+        if(location!=null)throw new InvalidDataException("无法识别子代理设置："+String.Join(".",path));
+        var feature=FindValue(doc,V2Path);
+        if(feature==null)return false;
+        var flag=Scalar(feature,BoolValue);
+        if(path.SequenceEqual(V2EnabledPath)&&flag.Success){
+            if(flag.Value!=value)EditValue(doc,feature.Entry,flag.Index,flag.Length,value);
+            return true;
+        }
+        var member=path.Last()+" = "+value;
+        if(flag.Success){
+            EditValue(doc,feature.Entry,flag.Index,flag.Length,"{ enabled = "+flag.Value+", "+member+" }");
+            return true;
+        }
+        int brace=feature.Offset;
+        while(brace<feature.Entry.Value.Length&&Char.IsWhiteSpace(feature.Entry.Value[brace]))brace++;
+        if(brace==feature.Entry.Value.Length||feature.Entry.Value[brace]!='{')return false;
+        bool empty=feature.Entry.Value.Substring(brace+1).TrimStart().StartsWith("}");
+        EditValue(doc,feature.Entry,brace+1,0," "+member+(empty?" ":","));
+        return true;
+    }
+    static void MergeSubagentSettings(Document doc,List<Entry> wanted,HashSet<string> owned){
+        var agentsEnabled=wanted.FirstOrDefault(x=>x.Path.SequenceEqual(AgentsEnabledPath));
+        if(agentsEnabled==null)return;
+        bool enabled=Comparable(agentsEnabled.Value)=="true";
+        owned.Add(Id(LegacyMultiAgentPath));
+        var desiredV2=wanted.FirstOrDefault(x=>x.Path.SequenceEqual(V2EnabledPath));
+        if(desiredV2!=null){
+            if(SetV2Member(doc,V2EnabledPath,BoolValue,enabled?"true":"false"))wanted.Remove(desiredV2);
+        }else if(V2Enabled(doc)){
+            SetV2Member(doc,V2EnabledPath,BoolValue,"false");
+        }
+        owned.Remove(Id(V2EnabledPath));
+
+        var concurrency=wanted.FirstOrDefault(x=>x.Path.SequenceEqual(AgentsConcurrencyPath));
+        var dedicated=wanted.FirstOrDefault(x=>x.Path.SequenceEqual(V2ConcurrencyPath));
+        if(concurrency!=null){
+            owned.Add(Id(LegacyConcurrencyPath));
+            if(FindValue(doc,V2ConcurrencyPath)!=null){
+                long agents=Int64.Parse(concurrency.Value,CultureInfo.InvariantCulture);
+                SetV2Member(doc,V2ConcurrencyPath,IntegerValue,(agents+1).ToString(CultureInfo.InvariantCulture));
+            }
+        }else if(dedicated!=null){
+            owned.Remove(Id(AgentsConcurrencyPath));
+            if(SetV2Member(doc,V2ConcurrencyPath,IntegerValue,Comparable(dedicated.Value)))wanted.Remove(dedicated);
+        }
+        if(enabled){
+            var overrides=Scalar(FindValue(doc,V2ModelOverridesPath),BoolValue);
+            if(overrides!=null&&overrides.Value=="false")SetV2Member(doc,V2ModelOverridesPath,BoolValue,"true");
+        }
+    }
     internal static string Merge(string current,string desired,string allOwned){
-        var doc=Read(current);var wanted=Read(desired).Entries;var owned=Read(allOwned).Entries.Select(x=>Id(x.Path)).ToArray();var replacements=new Dictionary<int,string>();var removed=new HashSet<int>();var inserts=new Dictionary<int,List<string>>();var newTables=new Dictionary<string,List<string>>();string newline=current.Contains("\r\n")?"\r\n":"\n";
+        var doc=Read(current);var wanted=Read(desired).Entries;var owned=new HashSet<string>(Read(allOwned).Entries.Select(x=>Id(x.Path)));var replacements=new Dictionary<int,string>();var removed=new HashSet<int>();var inserts=new Dictionary<int,List<string>>();var newTables=new Dictionary<string,List<string>>();string newline=current.Contains("\r\n")?"\r\n":"\n";
+        MergeSubagentSettings(doc,wanted,owned);
         foreach(var entry in doc.Entries.Where(x=>owned.Contains(Id(x.Path)))){
             var target=wanted.SingleOrDefault(x=>Id(x.Path)==Id(entry.Path));if(target!=null&&Comparable(entry.Value)==Comparable(target.Value))continue;
             for(int n=entry.First;n<=entry.Last;n++)removed.Add(n);

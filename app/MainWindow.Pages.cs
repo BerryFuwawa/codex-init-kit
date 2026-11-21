@@ -40,7 +40,7 @@ public partial class MainWindow {
             var children=new StackPanel{Margin=new Thickness(5,0,0,0)};
             foreach(var item in group.Skip(1)){
                 var name=item;var button=Button(name,async()=>{Navigate(name);if((name=="CLI 管理"||name=="备份与回滚")&&!preview&&!busy)await RefreshStatusQuietly();},false);
-                button.Style=(Style)Resources["KitNavigation"];button.Tag=Geometry.Parse(NavigationIcon(name));button.FontSize=12.5;button.HorizontalAlignment=HorizontalAlignment.Stretch;button.HorizontalContentAlignment=HorizontalAlignment.Left;button.Padding=new Thickness(10,8,5,8);button.Margin=new Thickness(0,1,0,1);button.BorderThickness=new Thickness(0);button.BorderBrush=Brushes.Transparent;
+                button.Style=(Style)Resources["KitNavigation"];button.FontSize=12.5;button.HorizontalAlignment=HorizontalAlignment.Stretch;button.HorizontalContentAlignment=HorizontalAlignment.Left;button.Padding=new Thickness(10,8,5,8);button.Margin=new Thickness(0,1,0,1);button.BorderThickness=new Thickness(0);button.BorderBrush=Brushes.Transparent;
                 children.Children.Add(button);navigation.Add(button);navigationSections[name]=caption;
             }
             section.Children.Add(new Border{BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1,0,0,0),Margin=new Thickness(11,0,0,0),Child=children});nav.Children.Add(section);
@@ -54,7 +54,7 @@ public partial class MainWindow {
         links.Children.Add(Link("关于与许可",ShowLicenses));
         foot.Children.Add(links);Grid.SetRow(foot,2);rail.Children.Add(foot);
         var main=new Grid{Margin=new Thickness(19,15,19,12)};main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition());main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});Grid.SetColumn(main,1);layout.Children.Add(main);
-        var titles=new StackPanel();heading.FontSize=24;heading.FontWeight=FontWeights.SemiBold;var headingRow=new DockPanel();pageHeadingIcon=new System.Windows.Shapes.Path{Data=UiIcons.For("概览",true),Stroke=Accent,StrokeThickness=1.6,Width=22,Height=22,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,10,0),VerticalAlignment=VerticalAlignment.Center};headingRow.Children.Add(pageHeadingIcon);headingRow.Children.Add(heading);titles.Children.Add(headingRow);subtitle.Foreground=MutedBrush;subtitle.FontSize=12;subtitle.TextWrapping=TextWrapping.Wrap;subtitle.Margin=new Thickness(0,4,0,12);titles.Children.Add(subtitle);main.Children.Add(titles);
+        var titles=new StackPanel();heading.FontSize=24;heading.FontWeight=FontWeights.SemiBold;var headingRow=new DockPanel();pageHeadingIcon=new System.Windows.Shapes.Path{Data=UiIcons.For("概览",true),Stroke=Accent,StrokeThickness=1.7,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=22,Height=22,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,10,0),VerticalAlignment=VerticalAlignment.Center};headingRow.Children.Add(pageHeadingIcon);headingRow.Children.Add(heading);titles.Children.Add(headingRow);subtitle.Foreground=MutedBrush;subtitle.FontSize=12;subtitle.TextWrapping=TextWrapping.Wrap;subtitle.Margin=new Thickness(0,4,0,12);titles.Children.Add(subtitle);main.Children.Add(titles);
         Grid.SetRow(pageNavigation,1);main.Children.Add(pageNavigation);
         pageScroll.Content=content;pageScroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;pageScroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;Grid.SetRow(pageScroll,2);main.Children.Add(pageScroll);
         wizardActions.Margin=new Thickness(0,8,0,0);Grid.SetRow(wizardActions,3);main.Children.Add(wizardActions);
@@ -62,17 +62,6 @@ public partial class MainWindow {
         banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");var statusLine=new DockPanel();operationActivity.Visibility=Visibility.Collapsed;statusLine.Children.Add(operationActivity);statusLine.Children.Add(banner);line.Children.Add(statusLine);
         var updates=new StackPanel{HorizontalAlignment=HorizontalAlignment.Right};updateNotice=Button("检测到更新，点击更新",async()=>await InstallUpdate(),false);updateNotice.Visibility=Visibility.Collapsed;updateNotice.Margin=new Thickness(0);updateNotice.Padding=new Thickness(8,3,8,3);updates.Children.Add(updateNotice);updateStatus.FontSize=11;updateStatus.Foreground=MutedBrush;updateStatus.Text="自动检查更新";updates.Children.Add(updateStatus);Grid.SetColumn(updates,1);line.Children.Add(updates);bottom.Children.Add(line);
         progress.Style=(Style)Resources["KitProgress"];progress.Height=3;progress.Maximum=100;progress.Margin=new Thickness(0,7,0,0);bottom.Children.Add(progress);Grid.SetRow(bottom,4);main.Children.Add(bottom);
-    }
-    static string NavigationIcon(string page){
-        switch(page){
-            case "概览":return "M3,10 L12,3 L21,10 M5,9 L5,21 L19,21 L19,9 M9,21 L9,14 L15,14 L15,21";
-            case "初始化":return "M5,20 L18,7 M3,8 L7,8 M5,6 L5,10 M17,2 L17,6 M15,4 L19,4 M17,16 L21,16 M19,14 L19,18";
-            case "连接与修复":return "M9,15 L15,9 M7,13 L5,15 C2,18 6,22 9,19 L12,16 M12,8 L15,5 C18,2 22,6 19,9 L17,11";
-            case "CLI 管理":return "M3,4 L21,4 L21,20 L3,20 Z M6,9 L10,12 L6,15 M13,16 L18,16";
-            case "备份与回滚":return "M4,8 C6,3 15,2 19,7 C25,15 15,24 7,19 M3,3 L3,9 L9,9 M12,7 L12,13 L16,15";
-            case "更新与下载":return "M12,3 L12,16 M7,11 L12,16 L17,11 M4,17 L4,21 L20,21 L20,17";
-            default:return "M5,3 L16,3 L20,7 L20,21 L5,21 Z M8,9 L16,9 M8,13 L16,13 M8,17 L14,17";
-        }
     }
     void ShowLicenses(){
         var text="Codex Init Kit\nCopyright © 2026 BerryFuwawa\n\n项目源码： https://github.com/"+Core.Repository+"\n\n";
@@ -108,7 +97,7 @@ public partial class MainWindow {
         };
         hero.Children.Add(new TextBlock{Name="DataPreservationNotice",Text="本工具不会初始化数据与对话",FontSize=12,HorizontalAlignment=HorizontalAlignment.Left,TextWrapping=TextWrapping.NoWrap,Foreground=MutedBrush,Margin=new Thickness(0,8,0,0),ToolTip="初始化会备份并重建配置，保留现有对话记录和项目文件。"});
         var current=Card("当前环境",preview?"设计预览 · 以下为示例，不代表真实检测":status==null?"正在读取状态…":"配置与文件检查 · 当前运行实例未核验");
-        var mode=Core.Value(status,"runtimeMode","");Pair(current,"已保存 CLI",status==null?"未检测":RuntimeMode(mode));Pair(current,"保存的 CLI 路径",Core.Value(status,"currentCliPath","").Length==0&&mode=="DesktopNative"?"由桌面应用自动选择":Core.Value(status,"currentCliPath","未检测"));Pair(current,"已保存模型",SavedValue("configModel")+" · "+EffortLabels.Display(SavedValue("configEffort")));Pair(current,"无项目任务目录",SavedValue("configWorkspace"));Pair(current,"已保存代理",SavedValue("configProxy"));var draft=new StackPanel();AddDraftSummary(draft);current.Children.Add(new Expander{Header="查看待应用设置",Content=draft});
+        var mode=Core.Value(status,"runtimeMode","");Pair(current,"已保存 CLI",status==null?"未检测":RuntimeMode(mode));Pair(current,"保存的 CLI 路径",Core.Value(status,"currentCliPath","").Length==0&&mode=="DesktopNative"?"由桌面应用自动选择":Core.Value(status,"currentCliPath","未检测"));Pair(current,"已保存模型",ModelLabels.Display(SavedValue("configModel"))+" · "+EffortLabels.Display(SavedValue("configEffort")));Pair(current,"无项目任务目录",SavedValue("configWorkspace"));Pair(current,"已保存代理",SavedValue("configProxy"));var draft=new StackPanel();AddDraftSummary(draft);current.Children.Add(new Expander{Header="查看待应用设置",Content=draft});
         var quick=Card("常用操作","");Row(quick,Button("检查浏览器连接  →",()=>{repairTab=1;Navigate("连接与修复");},false),Button("查看备份与回滚  →",()=>Navigate("备份与回滚"),false));
     }
     string ProxyDisplay(){try{return ProxySummary();}catch(InvalidOperationException){return "端口尚未填写或无效，请在初始化中设置";}}
@@ -119,9 +108,31 @@ public partial class MainWindow {
             RefreshRelayChoice();
             var network=Card("工作目录与网络","已有项目文件保留在原位置。");network.Children.Add(T("工作盘",12,MutedBrush));network.Children.Add(drive);network.Children.Add(T("网络代理",15,TextBrush));network.Children.Add(proxyEnabled);network.Children.Add(ProxyPortRow());network.Children.Add(proxyPortNotice);network.Children.Add(T("代理 IP（留空为 127.0.0.1）",12,MutedBrush));network.Children.Add(proxyHost);Row(network,remoteRelay,UninstallRelayButton());network.Children.Add(T("沿用上次选择。勾选后，初始化将申请管理员权限、安装自启服务并修改系统 hosts。使用系统解析访问 chatgpt.com 的程序将经过上方代理。取消勾选只跳过安装，已安装的服务可单独卸载。",11,MutedBrush));network.Children.Add(T("此代理也供当前 Windows 用户下其他支持代理变量的程序使用。重新打开程序后采用。",11,MutedBrush));network.Children.Add(T("自动沿用已有端口，也可选择软件代填；修改过端口时请选择自定义代理端口。",11,MutedBrush));if(configurationTab==0)WizardActions(Button("返回概览",()=>Navigate("概览"),false),Button("下一步：功能选择 →",()=>{Port();configurationTab=1;Navigate("初始化");},true));((Border)network.Parent).Visibility=configurationTab==0?Visibility.Visible:Visibility.Collapsed;
             var features=Card("选择要启用的功能","按用途选择，确认后统一执行。");FeatureGroups(features);features.Children.Add(T("初始化后使用的 CLI",13,TextBrush));Row(features,cliNative,cliStandalone);features.Children.Add(cliDetectionHint);if(configurationTab==1)WizardActions(Button("上一步",()=>{configurationTab=0;Navigate("初始化");},false),Button("下一步：模型设置 →",()=>{configurationTab=2;Navigate("初始化");},true));((Border)features.Parent).Visibility=configurationTab==1?Visibility.Visible:Visibility.Collapsed;
-            var models=Card("模型设置","沿用当前全局设置，也可直接更换。");ModelSelectionRow(models,"父模型",parentModel,parentEffort);ModelSelectionRow(models,"子模型",childModel,childEffort);models.Children.Add(modelCheck);if(configurationTab==2)WizardActions(Button("检查所选配置",CheckModels,false),Button("上一步",()=>{configurationTab=1;Navigate("初始化");},false),Button("查看变更 →",()=>{try{Port();Drive();RequireCliChoice();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}},true));((Border)models.Parent).Visibility=configurationTab==2?Visibility.Visible:Visibility.Collapsed;
+            var models=Card("模型设置","沿用当前全局设置，也可直接更换。");
+            ModelSelectionRow(models,ParentModelLabel,parentModel,parentEffort);
+            ModelSelectionRow(models,"子模型",childModel,childEffort);
+            if(configurationTab==2){
+                var footer=new Grid();
+                footer.ColumnDefinitions.Add(new ColumnDefinition());
+                footer.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+                footer.Children.Add(modelCheck);
+                var reset=Button("恢复默认模型设置",ResetModelSettings,false);
+                reset.Background=MorandiTheme.Danger;reset.Foreground=Brushes.White;
+                reset.HorizontalAlignment=HorizontalAlignment.Right;reset.VerticalAlignment=VerticalAlignment.Bottom;
+                reset.Margin=new Thickness(12,6,0,0);
+                Grid.SetColumn(reset,1);footer.Children.Add(reset);models.Children.Add(footer);
+                WizardActions(Button("检查所选配置",()=>{if(!FocusInvalidSubagentConcurrency())CheckModels();},false),
+                    Button("上一步",()=>{configurationTab=1;Navigate("初始化");},false),
+                    Button("查看变更 →",()=>{
+                        if(FocusInvalidSubagentConcurrency())return;
+                        try{Port();Drive();RequireCliChoice();Options();wizard=1;Navigate("初始化");}catch(Exception ex){Error(ex);}
+                    },true));
+            }
+            ((Border)models.Parent).Visibility=configurationTab==2?Visibility.Visible:Visibility.Collapsed;
         }else if(wizard==1){
-            var p=Card("配置确认","先检查差异，首次实际修改前备份。");AddChangeSummary(p);Pair(p,"工作目录",Drive()+":\\Codex");Pair(p,"代理",ProxySummary());Pair(p,"远控转发",RelaySummary());Pair(p,"父模型",parentModel.SelectedItem+" / "+EffortLabels.Display(Convert.ToString(parentEffort.SelectedItem)));Pair(p,"子代理",subagents.IsChecked==true?Convert.ToString(childModel.SelectedItem):"关闭");Pair(p,"保存的 CLI 选择",CliChoiceSummary());
+            var p=Card("配置确认","先检查差异，首次实际修改前备份。");AddChangeSummary(p);Pair(p,"工作目录",Drive()+":\\Codex");Pair(p,"代理",ProxySummary());Pair(p,"远控转发",RelaySummary());Pair(p,ParentModelLabel,ModelSettingLabel(parentModel.SelectedItem,parentEffort.SelectedItem));Pair(p,"子代理",subagents.IsChecked==true?(AutoAssign?AutoAssignLabel:ModelSettingLabel(childModel.SelectedItem,childEffort.SelectedItem)):"关闭");
+            if(subagents.IsChecked==true)Pair(p,MaxConcurrentSubagentsLabel,lastMaxConcurrentSubagents.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Pair(p,"保存的 CLI 选择",CliChoiceSummary());
             var full=new Expander{Header="查看完整变更摘要",Content=T(InitSummary(),12,MutedBrush),Margin=new Thickness(0,9,0,9)};p.Children.Add(full);p.Children.Add(T("对话、记忆文件和项目文件保留。未管理的自定义规则保留，原文件同时进入备份。",12,MorandiTheme.Accent));WizardActions(Button("返回修改",()=>{if(!busy){wizard=0;Navigate("初始化");}},false),Button("确认并开始初始化",async()=>{try{RequireCliChoice();await BeginInitialization();}catch(Exception ex){Error(ex);}},true));
         }else ExecutionPage();
     }

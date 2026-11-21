@@ -35,12 +35,13 @@ $script:DefaultOptions = [ordered]@{
     githubMirrorEnabled = $true
     customGithubMirror = ''
     subagents = $false
+    maxConcurrentSubagents = 6L
     cuaRepair = $true
     browserRepair = $true
     officialCliUpdate = $true
     desktopUpdate = $true
     cliMode = 'auto'
-    parentModel = 'gpt-6.1-sol'
+    parentModel = 'gpt-6.2-sol'
     childModel = 'gpt-6.1-sol'
     parentEffort = 'medium'
     childEffort = 'medium'
@@ -132,6 +133,13 @@ function Convert-BackendOptions {
         parentEffort = Convert-BackendOptionString $options.parentEffort 'parentEffort' $script:DefaultOptions.parentEffort
         childEffort = Convert-BackendOptionString $options.childEffort 'childEffort' $script:DefaultOptions.childEffort
     }
+    $threadCount = & $get 'maxConcurrentSubagents'
+    if ($null -eq $threadCount) { $threadCount = $script:DefaultOptions.maxConcurrentSubagents }
+    $maxConcurrentSubagents = 0L
+    if ([string]$threadCount -cnotmatch '\A[0-9]+\z' -or -not [long]::TryParse([string]$threadCount,[ref]$maxConcurrentSubagents) -or $maxConcurrentSubagents -lt 1 -or $maxConcurrentSubagents -eq [long]::MaxValue) {
+        throw '最大并发子代理数必须是 1 到 9223372036854775806 之间的整数。'
+    }
+    $normalized.maxConcurrentSubagents = $maxConcurrentSubagents
     foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $approvedProcesses=& $get 'closeApprovedProcesses'
@@ -482,8 +490,8 @@ function Set-InitConsoleProtocol {
                 'This restriction applies only to independent-task APIs.'='上述限制只适用于创建独立任务的接口。'
                 'the parent should proactively identify opportunities for in-task parallelism'='主任务应主动识别任务内可并行的工作'
                 'two or more genuinely independent subtasks'='两个或更多确实独立的子任务'
-                'largest number of useful, non-overlapping subagents supported by the task, up to 6.'='充分使用任务可支持的子代理，最多 6 个。'
-                'The parent may use any available main model'='主任务可使用任何可用的主模型'
+                'largest number of useful, non-overlapping subagents supported by the task'='充分使用任务可支持的子代理'
+                'The parent keeps the current conversation model'='主任务沿用当前对话的模型'
                 'waiting for all required child results'='等待所有必要的子代理结果'
                 'performing final verification'='执行最终验证'
                 'Configured Codex workspace root: {0}:\Codex'='Codex 工作区根目录：{0}:\Codex'
@@ -673,17 +681,13 @@ exit 0
         ('if not defined PROXY_PORT set "PROXY_PORT=' + $defaultProxyPort + '"')
     $sourceText = $sourceText.Replace('set "PROXY_URL=http://127.0.0.1:%PROXY_PORT%"', 'if "%CODEX_GUI_PROXY_DISABLED%"=="1" (set "PROXY_URL=") else (set "PROXY_URL=%CODEX_GUI_PROXY_URL%")')
     $sourceText = $sourceText.Replace('set "PROXY_PORT=10808"', $proxySetup)
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"')
-    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + 'if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT=medium"')
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_MODEL_ID=gpt-6.1-sol"', 'set "DEFAULT_PARENT_MODEL_ID=%CODEX_GUI_PARENT_MODEL%"' + [Environment]::NewLine + ('if not defined DEFAULT_PARENT_MODEL_ID set "DEFAULT_PARENT_MODEL_ID={0}"' -f $script:DefaultOptions.parentModel))
+    $sourceText = $sourceText.Replace('set "DEFAULT_PARENT_REASONING_EFFORT=high"', 'set "DEFAULT_PARENT_REASONING_EFFORT=%CODEX_GUI_PARENT_EFFORT%"' + [Environment]::NewLine + ('if not defined DEFAULT_PARENT_REASONING_EFFORT set "DEFAULT_PARENT_REASONING_EFFORT={0}"' -f $script:DefaultOptions.parentEffort))
+    $sourceText = $sourceText.Replace('set "LUNA_MAX_THREADS=6"', 'if not defined LUNA_MAX_THREADS set "LUNA_MAX_THREADS=6"')
     $sourceText = $sourceText.Replace('set "LUNA_MANAGER_INSTALLED=1"', 'set "LUNA_MANAGER_INSTALLED=%CODEX_GUI_SUBAGENTS%"' + [Environment]::NewLine + 'if not defined LUNA_MANAGER_INSTALLED set "LUNA_MANAGER_INSTALLED=1"')
     $sourceText = $sourceText.Replace('    echo [desktop]', "    echo [memories]`r`n    echo generate_memories = %CODEX_GUI_MEMORIES%`r`n    echo use_memories = %CODEX_GUI_MEMORIES%`r`n    echo.`r`n    echo [desktop]")
     $sourceText = $sourceText.Replace('    echo [features]', "    echo [features]`r`n    echo memories = %CODEX_GUI_MEMORIES%")
-    $sourceText = $sourceText.Replace('        echo [agents]', "        echo [agents]`r`n        echo default_subagent_model = `"%CODEX_GUI_CHILD_MODEL%`"`r`n        echo default_subagent_reasoning_effort = `"%CODEX_GUI_CHILD_EFFORT%`"")
-    $sourceText = $sourceText.Replace('        echo max_depth = 1' + [Environment]::NewLine + '    )', '        echo max_depth = 1' + [Environment]::NewLine + '    )' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" (' + [Environment]::NewLine + '        echo [agents]' + [Environment]::NewLine + '        echo default_subagent_model = "%CODEX_GUI_CHILD_MODEL%"' + [Environment]::NewLine + '        echo default_subagent_reasoning_effort = "%CODEX_GUI_CHILD_EFFORT%"' + [Environment]::NewLine + '    )')
-    $sourceText = $sourceText.Replace('if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true', 'if "!LUNA_MANAGER_INSTALLED!"=="1" echo multi_agent = true' + [Environment]::NewLine + '    if "!LUNA_MANAGER_INSTALLED!"=="0" echo multi_agent = false')
-    # Global AGENTS is rebuilt from scratch during the base stage. Old markers
-    # must not force an unchecked feature to be enabled.
-    $sourceText = [regex]::Replace($sourceText,'(?m)^if exist "%AGENTS_FILE%" \(\r?\n(?=    findstr /x /l /c:"BEGIN CODEX LUNA PROMPT V1.3")','if /i "%CODEX_GUI_SUBAGENTS%"=="1" if exist "%AGENTS_FILE%" (' + [Environment]::NewLine)
+    $sourceText = $sourceText.Replace('    echo [agents]', "    echo [agents]`r`n    echo default_subagent_model = `"%CODEX_GUI_CHILD_MODEL%`"`r`n    echo default_subagent_reasoning_effort = `"%CODEX_GUI_CHILD_EFFORT%`"")
     $driveBlock = @'
 :SELECT_FOLDER_DRIVE
 set "FOLDER_MANAGEMENT_DRIVE=%CODEX_GUI_DRIVE%"
@@ -1062,6 +1066,7 @@ function Invoke-InitOperation {
             CODEX_GUI_PROXY_DISABLED=if ($ProxyPortValue -eq 0) { '1' } else { '0' }
             CODEX_GUI_FOLDER_MANAGEMENT=if ([bool]$resolvedOptions.folderManagement) { '1' } else { '0' }
             CODEX_GUI_SUBAGENTS=if ([bool]$resolvedOptions.subagents) { '1' } else { '0' }
+            LUNA_MAX_THREADS=[string]$resolvedOptions.maxConcurrentSubagents
             CODEX_GUI_MEMORIES=if ([bool]$resolvedOptions.memories) { 'true' } else { 'false' }
             CODEX_GUI_PROXY_HOST=[string]$resolvedOptions.proxyHost
             CODEX_GUI_NETWORK_OPTIONS=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((@{githubMirrorEnabled=[bool]$resolvedOptions.githubMirrorEnabled;customGithubMirror=[string]$resolvedOptions.customGithubMirror}|ConvertTo-Json -Compress)))

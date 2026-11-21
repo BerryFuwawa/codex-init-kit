@@ -57,7 +57,98 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
         Check("更新检查不执行下载或升级",()=>{var f=new Fixture();var c=f.Component();MakePackage(c.Current);f.Downloads.Online=true;Assert(!c.OfficialUpdateRequired(false)&&f.Downloads.FileCalls==0,"read-only version check");MakePackage(c.Current,"1.2.2");Assert(c.OfficialUpdateRequired(false)&&f.Downloads.FileCalls==0,"missing update decision");Assert(!c.DesktopUpdateAvailable()&&!f.Commands.Calls.Any(x=>x.Contains("--id")),"desktop check upgraded");f.Commands.Mode="restart";Assert(c.DesktopUpdateAvailable()&&!f.Commands.Calls.Any(x=>x.Contains("--id")),"update discovery");});
         Check("合并保留UTF8签名与原始备份",()=>{var f=new Fixture();var original=new byte[]{239,187,191}.Concat(Encoding.UTF8.GetBytes("# 中文配置\r\napproval_policy = \"never\"\r\n")).ToArray();NativeData.WriteBytes(f.P.Config,original);var o=NativeDesktopWorkflow.Options(Settings(),10808);o.Cua=false;var result=new NativeDesktopReconcile(f.P,f.Services,o).Run(false);Assert(result.state=="complete"&&File.ReadAllBytes(f.P.Config).Take(3).SequenceEqual(new byte[]{239,187,191}),"BOM lost");NativeSession.Load(result.session,f.P).Restore(f.Registry);Assert(File.ReadAllBytes(f.P.Config).SequenceEqual(original),"backup bytes changed");});
         Check("配置合并保留权限多行值与未知表",()=>{var f=new Fixture();var original="approval_policy = { granular = { sandbox_approval = true } }\ncustom = '''保留\n[features]\n不是表头'''\n[desktop]\nconversationDetailMode = 'all'\n[features]\nunknown = true\n[plugins.\"example@repo\"]\nenabled = true\n[[custom_items]]\nname = '甲'\n[[custom_items]]\nname = '乙'\n";NativeData.Write(f.P.Config,original);var r=new NativeDesktopReconcile(f.P,f.Services,NativeDesktopWorkflow.Options(Settings(),3067));var merged=r.Configuration();Assert(merged.Contains("approval_policy = { granular = { sandbox_approval = true } }")&&merged.Contains("custom = '''保留\n[features]\n不是表头'''")&&merged.Contains("conversationDetailMode = 'all'")&&merged.Contains("unknown = true")&&merged.Contains("[[custom_items]]\nname = '乙'"),"lost unmanaged config");NativeData.Write(f.P.Config,merged);Assert(r.Configuration()==merged,"merge not stable");});
-        Check("根级点键保留定义位置",()=>{var f=new Fixture();NativeData.Write(f.P.Config,"features.memories = true\nfeatures.context_management.experimental_mode = true\n");var merged=new NativeDesktopReconcile(f.P,f.Services,NativeDesktopWorkflow.Options(Settings(),10808)).Configuration();Assert(merged.Contains("features.multi_agent = false")&&!merged.Contains("[features]"),"dotted table redefined");NativeData.Write(f.P.Config,merged);Assert(new NativeDesktopReconcile(f.P,f.Services,NativeDesktopWorkflow.Options(Settings(),10808)).Configuration()==merged,"dotted merge unstable");});
+        Check("根级点键保留定义位置",()=>{
+            var f=new Fixture();
+            NativeData.Write(f.P.Config,"features.memories = true\nfeatures.context_management.experimental_mode = true\nfeatures.'multi_agent' = true\nagents.enabled = true\n");
+            var o=NativeDesktopWorkflow.Options(Settings(),10808);o.Subagents=false;
+            var reconcile=new NativeDesktopReconcile(f.P,f.Services,o);
+            var merged=reconcile.Configuration();
+            Assert(merged.Contains("features.context_management.experimental_mode = true")&&merged.Contains("agents.enabled = false")&&!merged.Contains("multi_agent")&&!merged.Contains("[features]")&&!merged.Contains("[agents]"),"dotted table redefined");
+            NativeData.Write(f.P.Config,merged);
+            Assert(reconcile.Configuration()==merged,"dotted merge unstable");
+        });
+        Check("关闭子代理同步旧配置中已启用的V2",()=>{
+            var cases=new[]{
+                new[]{"[features]\nmulti_agent = true\nmulti_agent_v2 = true # keep this note\n","multi_agent_v2 = false # keep this note"},
+                new[]{"[features]\nmulti_agent = true\n[features.multi_agent_v2]\nenabled = true\nother = 'keep'\n","[features.multi_agent_v2]\nenabled = false\nother = 'keep'"},
+                new[]{"features.multi_agent = true\nfeatures.multi_agent_v2.enabled = true\n","features.multi_agent_v2.enabled = false"},
+                new[]{"[features]\nmulti_agent = true\nmulti_agent_v2.enabled = true\n","multi_agent_v2.enabled = false"},
+                new[]{"[features]\nmulti_agent = true\nmulti_agent_v2 = { other = [\"enabled = true, [keep]\", { enabled = true }], 'enabled' = true }\n","multi_agent_v2 = { other = [\"enabled = true, [keep]\", { enabled = true }], 'enabled' = false }"},
+                new[]{"features.multi_agent = true\nfeatures.multi_agent_v2 = { other = [\r\n  \"keep\"\r\n], enabled = true }\r\n","features.multi_agent_v2 = { other = [\r\n  \"keep\"\r\n], enabled = false }\r\n"}
+            };
+            var f=new Fixture();
+            var o=NativeDesktopWorkflow.Options(Settings(),10808);
+            var reconcile=new NativeDesktopReconcile(f.P,f.Services,o);
+            foreach(var sample in cases){
+                NativeData.Write(f.P.Config,sample[0]);o.Subagents=true;
+                var enabled=reconcile.Configuration();
+                Assert(ManagedToml.V2Enabled(sample[0])&&ManagedToml.V2Enabled(enabled)&&!enabled.Contains("multi_agent ="),"V2 selection lost on enable");
+                o.Subagents=false;
+                var disabled=reconcile.Configuration();
+                Assert(disabled.Contains(sample[1])&&!disabled.Contains("multi_agent =")&&!ManagedToml.V2Enabled(disabled),"V2 selection not synced on disable");
+                NativeData.Write(f.P.Config,disabled);
+                Assert(reconcile.Configuration()==disabled,"V2 migration unstable");
+            }
+        });
+        Check("启用子代理时主动开启V2",()=>{
+            var f=new Fixture();
+            var o=NativeDesktopWorkflow.Options(Settings(),10808);
+            var reconcile=new NativeDesktopReconcile(f.P,f.Services,o);
+            var cases=new[]{
+                new[]{"[features]\nmulti_agent_v2 = false # keep this note\n","# keep this note"},
+                new[]{"[features.multi_agent_v2]\nother = 'keep'\n","other = 'keep'"},
+                new[]{"[features.multi_agent_v2]\n","[features.multi_agent_v2]"},
+                new[]{"[features]\nmulti_agent_v2 = { other = { enabled = true } }\n","other = { enabled = true }"},
+                new[]{"# fresh config\n","# fresh config"}
+            };
+            foreach(var sample in cases){
+                NativeData.Write(f.P.Config,sample[0]);
+                o.Subagents=false;
+                var disabled=reconcile.Configuration();
+                Assert(disabled.Contains(sample[0])&&!ManagedToml.V2Enabled(disabled),"disabling subagents modified an inactive V2 setting");
+                o.Subagents=true;
+                var enabled=reconcile.Configuration();
+                var lines=NativeData.Normalize(enabled);
+                Assert(lines.Contains(sample[1])&&ManagedToml.V2Enabled(enabled)&&lines.Contains("\n[agents]\nenabled = true\n"),"enabling subagents did not force V2 or discarded an unmanaged setting");
+                Assert(lines.Contains("\nmax_concurrent_threads_per_session = 6\n")&&!lines.Contains("multi_agent ="),"default concurrency or legacy switch changed");
+                NativeData.Write(f.P.Config,enabled);
+                Assert(reconcile.Configuration()==enabled,"V2 enable was not idempotent");
+            }
+        });
+        Check("迁移并发设置时保持V2实际子代理数",()=>{
+            var f=new Fixture();
+            var options=Settings();
+            options["subagents"]=true;
+            options["maxConcurrentSubagents"]=7L;
+            const string original="[agents]\nmax_threads = 2\nmax_concurrent_threads_per_session = 3\njob_max_runtime_seconds = 120\n[features.multi_agent_v2]\nenabled = false\nmax_concurrent_threads_per_session = 4\nexpose_spawn_agent_model_overrides = false\nother = 'keep'\n";
+            NativeData.Write(f.P.Config,original);
+            var inherited=CurrentModelSettings.Load(f.P.Home);
+            Assert(!inherited.Subagents&&inherited.MaxConcurrentSubagents==3,"inactive V2's thread total was not retained as a user preference");
+            var o=NativeDesktopWorkflow.Options(options,10808);
+            var reconcile=new NativeDesktopReconcile(f.P,f.Services,o);
+            var enabled=reconcile.Configuration();
+            Assert(enabled.Contains("\nmax_concurrent_threads_per_session = 7\n")&&enabled.Contains("\nmax_concurrent_threads_per_session = 8\n")&&ManagedToml.V2Enabled(enabled),"V2 counts the main thread while the general limit counts subagents");
+            Assert(!enabled.Contains("max_threads =")&&enabled.Contains("job_max_runtime_seconds = 120")&&enabled.Contains("other = 'keep'")&&enabled.Contains("expose_spawn_agent_model_overrides = true"),"V2 migration left an obsolete alias, removed unrelated settings, or left model overrides disabled");
+            NativeData.Write(f.P.Config,enabled);
+            Assert(CurrentModelSettings.Load(f.P.Home).MaxConcurrentSubagents==7&&reconcile.Configuration()==enabled,"selected limit did not round trip or V2 migration was not idempotent");
+            o.Subagents=false;
+            var disabled=reconcile.Configuration();
+            NativeData.Write(f.P.Config,disabled);
+            var reopened=CurrentModelSettings.Load(f.P.Home);
+            Assert(!reopened.Subagents&&reopened.MaxConcurrentSubagents==7&&disabled.Contains("\nmax_concurrent_threads_per_session = 8\n"),"disabling V2 lost the saved concurrent limit");
+        });
+        Check("无效并发数禁止桌面初始化写入",()=>{
+            var f=new Fixture();
+            var old=NativeData.Read(f.P.Config);
+            var options=Settings();
+            options["subagents"]=true;
+            foreach(var invalid in new object[]{"",0,-1,1.5,long.MaxValue}){
+                options["maxConcurrentSubagents"]=invalid;
+                bool rejected=false;
+                try{f.Run(options,false);}catch(ArgumentException){rejected=true;}
+                Assert(rejected&&!Directory.Exists(f.P.BackupRoot)&&NativeData.Read(f.P.Config)==old&&f.Trace.Count==0,"desktop initialized with an invalid concurrent limit");
+            }
+        });
         Check("重试进度保留已完成项目",()=>{var p=new InitializationProgress();var s=Settings();p.Reset(s,true);foreach(var stage in p.Stages){stage.State="complete";stage.Detail="已完成并保留";}p.Stages.Single(x=>x.Id=="guard").State="incomplete";s["retryStages"]="guard";p.Reset(s,true);Assert(p.Stages.Single(x=>x.Id=="base").State=="complete"&&p.Stages.Single(x=>x.Id=="base").Detail=="已完成并保留"&&p.Stages.Single(x=>x.Id=="guard").State=="pending","retry progress lost");});
         Check("配置内联表冲突在备份写入前停止",()=>{var f=new Fixture();NativeData.Write(f.P.Config,"features = { multi_agent = false }\n");bool stopped=false;try{new NativeDesktopReconcile(f.P,f.Services,NativeDesktopWorkflow.Options(Settings(),10808)).Run(false);}catch(InvalidDataException){stopped=true;}Assert(stopped&&!Directory.Exists(f.P.BackupRoot)&&NativeData.Read(f.P.Config)=="features = { multi_agent = false }\n","ambiguous overwrite");});
         Check("代理定向修改保留其他变量",()=>{var o=new NativeOptions{Proxy=true,ProxyHost="127.0.0.1",ProxyPort=3067};var original="# private settings\r\nCUSTOM_SETTING=保留\r\nHTTPS_PROXY=http://old:1234\r\n";var merged=NativeDesktopReconcile.EnvironmentText(original,o);Assert(merged.Contains("CUSTOM_SETTING=保留\r\n")&&merged.Contains("HTTPS_PROXY=http://127.0.0.1:3067"),"lost env");Assert(NativeDesktopReconcile.EnvironmentText(merged,o)==merged,"env rewrite");o.Proxy=false;var direct=NativeDesktopReconcile.EnvironmentText(merged,o);Assert(!direct.Contains("HTTPS_PROXY=")&&direct.Contains("CUSTOM_SETTING=保留"),"disable proxy");});

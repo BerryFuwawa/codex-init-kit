@@ -1,10 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
   <title>Codex Init Kit</title>
-  <desc>A blue C update loop around a terminal prompt, with a mint completion check.</desc>
-  <rect width="256" height="256" rx="52" fill="#151B27"/>
-  <path d="M171 61 C147 43 94 42 65 74 C35 108 39 160 72 188 C96 209 127 214 154 205" fill="none" stroke="#9EBCFF" stroke-width="20" stroke-linecap="round"/>
-  <path d="M183 45 L199 82 L159 77 Z" fill="#9EBCFF"/>
-  <path d="M94 99 L118 123 L94 147" fill="none" stroke="#EDF2FC" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M135 148 L154 148" stroke="#EDF2FC" stroke-width="13" stroke-linecap="round"/>
-  <path d="M166 179 L184 197 L216 162" fill="none" stroke="#70DFC0" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <desc>A winking terminal inside a soft blue update arrow, with a mint check badge.</desc>
+  <rect width="256" height="256" rx="62" fill="#202B3D"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M143 202 C96 212 48 180 46 135 C43 91 76 54 120 51 C147 49 171 59 187 78 M187 52 L189 74 Q190 82 182 81 L160 78" stroke="#ADCBF1" stroke-width="17"/>
+    <path d="M89 99 L106 113 Q111 117 106 121 L90 135 M147 114 L147 116" stroke="#F9F4E9" stroke-width="14"/>
+    <path d="M115 147 Q131 160 147 145" stroke="#F9F4E9" stroke-width="11"/>
+  </g>
+  <circle cx="185" cy="184" r="36" fill="#A5DFC8"/>
+  <path d="M168 183 L178 193 Q181 196 184 192 L203 172" fill="none" stroke="#284A48" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

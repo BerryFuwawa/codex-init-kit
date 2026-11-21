@@ -52,7 +52,7 @@ rem Parse this entire block before replacing the running CMD file.
 '@
 $wrapper=$wrapper.Replace('__LOADER__',$encodedLoader).Replace("`r`n","`n").Replace("`n","`r`n")
 $components=@(
-    @{Id='init'; Version='4.8.6'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
+    @{Id='init'; Version='4.8.7'; File='第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX.cmd'; Encoding='gbk'},
     @{Id='guard'; Version='5.2.4'; File='第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd'; Encoding='utf-8'}
 )
 $manifest=[ordered]@{schema_version=1; repository=$Repository; channel='stable'; components=[ordered]@{}}
@@ -89,7 +89,7 @@ if "%~1"=="" (
         }
         $match=[regex]::Match($s,'(?m)^powershell\.exe -NoLogo -NoProfile -EncodedCommand ([A-Za-z0-9+/=]+)')
         $menu=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($match.Groups[1].Value))
-        $menu=$menu.Replace('v4.7.0','v'+$component.Version).Replace('v4.8.0','v'+$component.Version)
+        $menu=[regex]::Replace($menu,'(初始化与维护 v)[0-9.]+',('${1}'+$component.Version))
         if(-not $menu.Contains('[5]')){$menu=$menu.Replace("Write-Host '  [0] 退出'", "Write-Host '  [5] 检查 GitHub 脚本更新    确认后下载、校验、备份并替换' -ForegroundColor Cyan`nWrite-Host '  [0] 退出'")}
         $s=$s.Replace($match.Groups[1].Value,[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($menu)))
         $s=$s.Replace("`r`n:END`r`n","`r`n"+$wrapper+"`r`n:END`r`n")

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -16,7 +17,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-public const string Version = "2.3.6";
+public const string Version = "2.3.7";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
@@ -24,10 +25,15 @@ public const string Version = "2.3.6";
     public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check","relay-enable","relay-disable","relay-sync"};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
-    const string DefaultParentModel = "gpt-6.1-sol";
+    internal const string DefaultParentModel = "gpt-6.2-sol";
     internal const string DefaultChildModel = "gpt-6.1-sol";
-    const string DefaultParentEffort = "medium";
+    internal const string DefaultParentEffort = "medium";
     internal const string DefaultChildEffort = "medium";
+    internal const long MaxSupportedConcurrentSubagents = Native.NativeOptions.MaxSupportedConcurrentSubagents;
+    internal static bool TryMaxConcurrentSubagents(string input,out long value) {
+        return long.TryParse((input??"").Trim(),NumberStyles.None,CultureInfo.InvariantCulture,out value)
+            && value>=1 && value<=MaxSupportedConcurrentSubagents;
+    }
     static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
     static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
     public static string Sid { get { return WindowsIdentity.GetCurrent().User.Value; } }
@@ -59,6 +65,7 @@ public const string Version = "2.3.6";
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
             {"remoteRelay", false}, {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"childAutoAssign",true}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
+            {"maxConcurrentSubagents", Native.NativeOptions.DefaultMaxConcurrentSubagents},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
         };
@@ -113,6 +120,14 @@ public const string Version = "2.3.6";
         }
         normalized["childAutoAssign"]=ReadOptionBoolean(source,"childAutoAssign",!source.ContainsKey("childModel")&&!source.ContainsKey("childEffort"));
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
+        object capacity;
+        if(source.TryGetValue("maxConcurrentSubagents",out capacity)) {
+            var input=Convert.ToString(capacity,CultureInfo.InvariantCulture);
+            long count;
+            if(!(bool)normalized["subagents"] && input=="0")count=0;
+            else if(!TryMaxConcurrentSubagents(input,out count))throw new ArgumentException("最大并发数必须是 1 到 "+MaxSupportedConcurrentSubagents+" 之间的整数。");
+            normalized["maxConcurrentSubagents"]=count;
+        }
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
         var cliMode=ReadOptionString(source,"cliMode","auto");

@@ -1,7 +1,7 @@
 using File=CodexKit.Native.NativeFile;
 using Directory=CodexKit.Native.NativeDirectory;
 using FileInfo=CodexKit.Native.NativeFileInfo;
-using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Text;using System.Threading;
+using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Globalization;using System.Text;using System.Threading;
 namespace CodexKit.Native {
 public sealed class NativeInitializer {
     readonly NativePaths paths;readonly NativeServices services;
@@ -9,7 +9,30 @@ public sealed class NativeInitializer {
     OfficialDesktop DesktopOptional(){try{return services.Desktop.Discover();}catch(FileNotFoundException){return null;}}
     public object Status(){paths.Validate();var app=DesktopOptional();return new{version=NativeData.Version,home=paths.Home,config=File.Exists(paths.Config),proxy=File.Exists(paths.Env)?NativeData.Read(paths.Env):null,agents=File.Exists(paths.Agents),rtk=new NativeRtk(paths,services).Find(),desktop=app==null?null:app.FullName,processes=services.Processes.List(paths,app),userCli=services.Registry.Get("CODEX_CLI_PATH"),userHost=services.Registry.Get("CODEX_CODE_MODE_HOST_PATH"),machineCli=services.Registry.GetMachine("CODEX_CLI_PATH"),machineHost=services.Registry.GetMachine("CODEX_CODE_MODE_HOST_PATH")};}
     public object Preflight(){paths.Validate();var app=DesktopOptional();return new{home=paths.Home,desktop=app==null?null:app.FullName,processes=services.Processes.List(paths,app)};}
-    public static string Config(NativePaths p,NativeOptions o){var lines=new List<string>{"# Codex initialization defaults","model = "+NativeData.Json.Serialize(o.ParentModel),"model_reasoning_effort = "+NativeData.Json.Serialize(o.ParentEffort),"","[desktop]","enabled-reasoning-efforts = [\"low\", \"medium\", \"high\", \"xhigh\", \"max\", \"ultra\"]"};if(o.Folder)lines.Add("projectlessWorkspaceRoot = "+NativeData.Json.Serialize(Path.Combine(p.Workspace,"Conversations")));lines.AddRange(new[]{"","[features]","context_management.experimental_mode = true","multi_agent = "+(o.Subagents?"true":"false")});if(o.Subagents)lines.AddRange(new[]{"","[features.multi_agent_v2]","enabled = false","","[agents]","enabled = true","max_concurrent_threads_per_session = 6","max_depth = 1"});if(o.DesktopProfile){int feature=lines.IndexOf("[features]");lines.Insert(feature+1,"memories = "+o.Memories.ToString().ToLowerInvariant());lines.AddRange(new[]{"","[memories]","generate_memories = "+o.Memories.ToString().ToLowerInvariant(),"use_memories = "+o.Memories.ToString().ToLowerInvariant()});if(!o.Subagents)lines.AddRange(new[]{"","[agents]"});int agents=lines.IndexOf("[agents]");if(!o.ChildAutoAssign)lines.InsertRange(agents+1,new[]{"default_subagent_model = "+NativeData.Json.Serialize(o.ChildModel),"default_subagent_reasoning_effort = "+NativeData.Json.Serialize(o.ChildEffort)});}return String.Join("\n",lines)+"\n";}
+    public static string Config(NativePaths p,NativeOptions o){
+        var lines=new List<string>{
+            "# Codex initialization defaults",
+            "model = "+NativeData.Json.Serialize(o.ParentModel),
+            "model_reasoning_effort = "+NativeData.Json.Serialize(o.ParentEffort),
+            "","[desktop]","enabled-reasoning-efforts = [\"low\", \"medium\", \"high\", \"xhigh\", \"max\", \"ultra\"]"
+        };
+        if(o.Folder)lines.Add("projectlessWorkspaceRoot = "+NativeData.Json.Serialize(Path.Combine(p.Workspace,"Conversations")));
+        lines.AddRange(new[]{"","[features]","context_management.experimental_mode = true"});
+        if(o.DesktopProfile)lines.Add("memories = "+o.Memories.ToString().ToLowerInvariant());
+        var concurrency=o.DesktopProfile?o.MaxConcurrentSubagents:NativeOptions.DefaultMaxConcurrentSubagents;
+        if(o.Subagents||concurrency==0){
+            lines.AddRange(new[]{"","[features.multi_agent_v2]","enabled = "+o.Subagents.ToString().ToLowerInvariant()});
+            if(concurrency==0)lines.Add("max_concurrent_threads_per_session = 1");
+        }
+        lines.AddRange(new[]{"","[agents]","enabled = "+o.Subagents.ToString().ToLowerInvariant()});
+        if((o.Subagents||o.DesktopProfile)&&concurrency>0)lines.Add("max_concurrent_threads_per_session = "+concurrency.ToString(CultureInfo.InvariantCulture));
+        if(o.Subagents)lines.Add("max_depth = 1");
+        if(o.DesktopProfile){
+            if(!o.ChildAutoAssign)lines.AddRange(new[]{"default_subagent_model = "+NativeData.Json.Serialize(o.ChildModel),"default_subagent_reasoning_effort = "+NativeData.Json.Serialize(o.ChildEffort)});
+            lines.AddRange(new[]{"","[memories]","generate_memories = "+o.Memories.ToString().ToLowerInvariant(),"use_memories = "+o.Memories.ToString().ToLowerInvariant()});
+        }
+        return String.Join("\n",lines)+"\n";
+    }
     public static string Rules(NativePaths p,NativeOptions o){if(o.DesktopProfile)return DesktopRules(p,o);var baseRules=NativeData.Normalize(NativeData.Resource("BaseRules.md")).Replace("持续到请求的结果真正完真正完成。","持续到请求的结果真正完成。").TrimEnd();var result="@"+p.RtkDoc+"\n\n"+baseRules+"\n";if(o.Folder){var folder=NativeData.Normalize(NativeData.Resource("FolderRules.md")).Trim();var original="<SELECTED_DRIVE>:\\Codex";if(!folder.Contains(original))throw new InvalidDataException("目录规则模板无法识别。");result+="\n"+folder.Replace(original,p.Workspace.TrimEnd('\\','/'))+"\n";}if(o.Subagents)result+="\n"+NativeData.Normalize(NativeData.Resource("SubagentRules.md")).Trim().Replace("model = gpt-6.1-sol","model = "+o.ChildModel).Replace("model_reasoning_effort = high","model_reasoning_effort = "+o.ChildEffort)+"\n";return result;}
     static string DesktopRules(NativePaths p,NativeOptions o){
         var rules=NativeData.Normalize(NativeData.Resource("BaseRules.md")).Replace("持续到请求的结果真正完真正完成。","持续到请求的结果真正完成。");if(!o.Subagents)rules=System.Text.RegularExpressions.Regex.Replace(rules,@"(?ms)^SUBAGENTS\n.*?(?=^<!-- END CODEX INIT WORK RULES -->)","");
@@ -18,11 +41,15 @@ public sealed class NativeInitializer {
         if(o.Folder)rules+="\n\n"+NativeData.Resource("Desktop.FolderRules.md").Trim().Replace("<SELECTED_DRIVE>:\\Codex",p.Workspace.TrimEnd('\\','/'));if(o.Subagents)rules+="\n\n"+DesktopSubagentRules(o);return NativeData.Normalize(rules)+"\n";
     }
     static string DesktopSubagentRules(NativeOptions options){
-        var rules=NativeData.Normalize(NativeData.Resource("Desktop.SubagentRules.md")).Trim();
+        var rules=NativeData.Normalize(NativeData.Resource("Desktop.SubagentRules.md")).Trim()
+            .Replace("{{MAX_CONCURRENT_SUBAGENTS}}",options.MaxConcurrentSubagents.ToString(CultureInfo.InvariantCulture));
         if(!options.ChildAutoAssign)return rules.Replace("model = gpt-6.1-sol","model = "+options.ChildModel).Replace("model_reasoning_effort = high","model_reasoning_effort = "+options.ChildEffort);
         var start=rules.IndexOf("## 子代理模型",StringComparison.Ordinal);
         var end=rules.IndexOf("## 委派深度",StringComparison.Ordinal);
-        return rules.Substring(0,start)+"## 自动指派\n\n主任务主动分派适合并行的独立工作，说明各自职责并整合结果。根据各子任务的复杂度、工具支持和可用模型，自行决定子模型与思考强度。允许继承父模型或使用运行环境默认档位。\n\n"+rules.Substring(end);
+        const string automatic = "## 自动指派\n\n"
+            + "每次委派前，参考当前工具列出的模型能力说明和支持的思考强度，按子任务需要选择模型与档位。调用 spawn_agent 时显式传入 model 和 reasoning_effort，即使选择与父模型相同，也写明这两个参数。\n\n"
+            + "如果工具要求使用独立上下文才能指定档位，传入 fork_turns=\"none\"，并向子代理交代任务目标、所需路径或材料，以及完成标准。使用其他委派工具时，填写它支持的对应参数。\n\n";
+        return rules.Substring(0,start)+automatic+rules.Substring(end);
     }
     public static string ProxyText(NativeOptions o){return o.Proxy?"HTTP_PROXY="+o.ProxyUrl+"\nHTTPS_PROXY="+o.ProxyUrl+"\nNO_PROXY=localhost,127.0.0.1,::1\n":"NO_PROXY=localhost,127.0.0.1,::1\n";}
     void EnsureNoRunning(OfficialDesktop app){if(services.Processes.List(paths,app).Count>0)throw new InvalidOperationException("修改前应用重新启动或仍在运行，已停止。");}

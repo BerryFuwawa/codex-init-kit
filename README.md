@@ -16,7 +16,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
   &nbsp; · &nbsp; <a href="https://github.com/BerryFuwawa/codex-init-kit/issues">问题反馈</a>
 </p>
 
-<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.6.md">v2.3.6</a></sub></p>
+<p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.7.md">v2.3.7</a></sub></p>
 
 <div align="center">
   <img src="assets/readme-banner.png" alt="Codex Init Kit 功能总览：子代理自动指派、代理与手机远控、Chrome 连接检查、桌面启动与 CLI 切换、备份与回滚" width="100%">
@@ -24,7 +24,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
 
-> **v2.3.6 · 子代理支持自动指派。** 开启多线程后，可让父模型按任务分工并选择档位，也可手动指定子模型与思考强度。下次打开会沿用上次保存的选择。[更新说明](docs/Release-2.3.6.md)
+> **v2.3.7 · 子代理并发数可调。** 自动指派和手动指定都可以设置同时工作的子代理数，默认 6 个。模型列表跟随本机 Codex，模型设置支持一键恢复默认。新版也换上了圆润的图标。[更新说明](docs/Release-2.3.7.md)
 
 > **你的对话和项目文件会保留。** 初始化先备份需要修改的配置，再合并所选功能管理的内容。原有权限、未知配置和未管理的自定义规则保留；只需要排查某个问题时，可运行单项检查或修复。
 
@@ -58,7 +58,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 | | |
 | --- | --- |
-| **模型与子代理**<br>沿用已有模型设置，或让父模型按任务分工并选择子模型与思考强度。 | **代理与手机远控**<br>保存 Karing、v2rayN 或自定义代理地址。开启远控转发后，新连接会使用当前保存的 IP 和端口。 |
+| **模型与子代理**<br>让父模型按任务分工、选择子模型和思考强度，也可手动指定。自定义并发数后，下次打开会沿用。 | **代理与手机远控**<br>保存 Karing、v2rayN 或自定义代理地址。开启远控转发后，新连接会使用当前保存的 IP 和端口。 |
 | **🧭 中文初始化向导**<br>集中设置工作目录、HTTP 代理、模型、记忆与可选功能。修改前展示确认摘要，运行时可查看进度和日志。 | **🌐 浏览器连接检查与修复**<br>校验并按需恢复官方运行时文件，也可复制真实浏览器连接测试指令。 |
 | **🧩 CUA 组件维护**<br>检查电脑操作组件，对照当前官方应用文件按需修复，帮助排查缺失、损坏或反复准备组件的问题。 | **🛠️ 桌面启动与 CLI 修复**<br>检查特定启动故障，选择桌面版原生 CLI 或官方独立 CLI；两种程序均来自 OpenAI。 |
 | **🗂️ 文件夹与工作规则**<br>按需创建工作目录，设置无项目任务目录；可写入防止过度防御、子代理等全局规则。 | **↩️ 备份与回滚**<br>查看初始化备份和保护器 CLI 的可回滚版本与时间，选择目标并确认后恢复。不同恢复操作各有范围。 |
@@ -84,38 +84,38 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 </details>
 
-## v2.3.6 界面预览
+## v2.3.7 界面预览
 
-在「初始化 → 模型设置」选择「自动指派」，右侧思考强度会显示「由父模型决定」。选具体模型后，思考强度即可手动调整。
+「初始化 → 模型设置」里，蓝色皇冠机器人代表默认模型与父模型，绿色嫩芽机器人代表子模型。开启多线程后，可在子模型右侧填写最大并发数。
 
-![子代理自动指派，思考强度由父模型决定](assets/screenshots/v2.3.6/model-settings.png)
+![模型设置中的自动指派、最大并发数和恢复默认按钮](assets/screenshots/v2.3.7/model-settings.png)
 
-![Codex Init Kit 概览与分类导航](assets/screenshots/v2.3.6/overview.png)
+![Codex Init Kit 概览与分类导航](assets/screenshots/v2.3.7/overview.png)
 
-![连接状态页的代理保存和模型线路检查](assets/screenshots/v2.3.6/connection-check.png)
+![连接状态页的代理保存和模型线路检查](assets/screenshots/v2.3.7/connection-check.png)
 
-![Codex 初始化的步骤与进度](assets/screenshots/v2.3.6/initialization-progress.png)
+![Codex 初始化的步骤与进度](assets/screenshots/v2.3.7/initialization-progress.png)
 
 底部检查条从左侧滑入、从右侧完全滑出，窗口拉宽后也会走完整条轨道。
 
-![底部检查条的完整滑动效果](assets/screenshots/v2.3.6/progress.gif)
+![底部检查条的完整滑动效果](assets/screenshots/v2.3.7/progress.gif)
 
-![浏览器组件检查与真实网页读取](assets/screenshots/v2.3.6/browser-connection.png)
+![浏览器组件检查与真实网页读取](assets/screenshots/v2.3.7/browser-connection.png)
 
 <details>
 <summary><strong>查看更多页面：维护恢复、更新和日志</strong></summary>
 
 **CLI 管理**：切换 CLI，分别更新两类组件，并管理启动保护。
 
-![Codex Init Kit 的 CLI 管理页面](assets/screenshots/v2.3.6/maintenance.png)
+![Codex Init Kit 的 CLI 管理页面](assets/screenshots/v2.3.7/maintenance.png)
 
 **更新与下载**：查看工具版本，配置 GitHub 下载加速和自定义镜像。
 
-![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/v2.3.6/updates.png)
+![Codex Init Kit 更新与 GitHub 镜像设置](assets/screenshots/v2.3.7/updates.png)
 
 **日志**：中文说明与原始输出可切换，按需复制和查看。
 
-![Codex Init Kit 中文日志页面](assets/screenshots/v2.3.6/logs.png)
+![Codex Init Kit 中文日志页面](assets/screenshots/v2.3.7/logs.png)
 
 </details>
 
@@ -141,7 +141,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 ### 初始化默认使用什么模型和 CLI？
 
-父模型沿用全局设置，未配置时使用 `gpt-6.1-sol / medium`。子代理没有已保存的档位时默认选「自动指派」，已有手动档位会保留。CLI 默认沿用检测到的桌面原生或官方独立 CLI。[查看模型和 CLI 选项](docs/Settings.md)
+工具沿用已保存的模型、思考强度和并发数。首次使用时，父模型默认选 GPT 6.2 Sol，思考强度为中（Medium）。开启子代理后默认自动指派，最多同时工作 6 个子代理。在「模型设置」右下角可恢复这组默认值。CLI 默认沿用检测到的桌面原生或官方独立 CLI。[查看模型和 CLI 选项](docs/Settings.md)
 
 ### 下载很慢或更新失败怎么办？
 
