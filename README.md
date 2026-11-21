@@ -19,7 +19,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 <p align="center"><sub>Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · 当前版本 <a href="docs/Release-2.3.6.md">v2.3.6</a></sub></p>
 
 <div align="center">
-  <img src="assets/readme-banner.png" alt="Codex Init Kit 中文桌面工具" width="100%">
+  <img src="assets/readme-banner.png" alt="Codex Init Kit 功能总览：子代理自动指派、代理与手机远控、Chrome 连接检查、桌面启动与 CLI 切换、备份与回滚" width="100%">
 </div>
 
 本项目使用 [MIT 许可](LICENSE)，初始化、维护和更新流程的源码均可在本仓库审阅。火绒安全实验室已于 2026-11-13 确认此前检测为误报，病毒库更新后可排除，并将优化相关 PowerShell 系统加固提示。[查看检测说明](docs/Release-2.2.13.md#验证与已知问题)
@@ -58,6 +58,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 | | |
 | --- | --- |
+| **模型与子代理**<br>沿用已有模型设置，或让父模型按任务分工并选择子模型与思考强度。 | **代理与手机远控**<br>保存 Karing、v2rayN 或自定义代理地址。开启远控转发后，新连接会使用当前保存的 IP 和端口。 |
 | **🧭 中文初始化向导**<br>集中设置工作目录、HTTP 代理、模型、记忆与可选功能。修改前展示确认摘要，运行时可查看进度和日志。 | **🌐 浏览器连接检查与修复**<br>校验并按需恢复官方运行时文件，也可复制真实浏览器连接测试指令。 |
 | **🧩 CUA 组件维护**<br>检查电脑操作组件，对照当前官方应用文件按需修复，帮助排查缺失、损坏或反复准备组件的问题。 | **🛠️ 桌面启动与 CLI 修复**<br>检查特定启动故障，选择桌面版原生 CLI 或官方独立 CLI；两种程序均来自 OpenAI。 |
 | **🗂️ 文件夹与工作规则**<br>按需创建工作目录，设置无项目任务目录；可写入防止过度防御、子代理等全局规则。 | **↩️ 备份与回滚**<br>查看初始化备份和保护器 CLI 的可回滚版本与时间，选择目标并确认后恢复。不同恢复操作各有范围。 |
