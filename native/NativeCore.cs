@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.5";
+    public const string Version="2.3.6";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -47,7 +47,7 @@ public sealed class NativePaths {
 }
 public sealed class NativeOptions {
     public bool Confirm,AllowClose,Folder=true,Subagents=true,Cua=true,Proxy=true;
-    public bool DesktopProfile,AntiOverDefense=true,WorkJournal=true,CommandLineFirst=true,Memories=true;
+    public bool ChildAutoAssign,DesktopProfile,AntiOverDefense=true,WorkJournal=true,CommandLineFirst=true,Memories=true;
     public string ProxyHost="127.0.0.1",ParentModel="gpt-6.1-sol",ChildModel="gpt-6.1-sol",ParentEffort="high",ChildEffort="high";
     public int ProxyPort=10808;
     public string[] ApprovedProcesses;

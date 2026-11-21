@@ -14,7 +14,7 @@ public static class CurrentModelSettingsTests {
         var home=Path.Combine(root,"model-settings");Directory.CreateDirectory(home);
         var config=Path.Combine(home,"config.toml");var agents=Path.Combine(home,"AGENTS.md");
         var empty=CurrentModelSettings.Load(home);
-        Assert(empty.ParentModel=="gpt-6.1-sol"&&empty.ParentEffort=="medium"&&empty.ChildModel=="gpt-6.1-sol"&&empty.ChildEffort=="medium","Missing model settings did not use defaults");
+        Assert(empty.AutoAssign&&!empty.Subagents&&empty.ParentModel=="gpt-6.1-sol"&&empty.ParentEffort=="medium"&&empty.ChildModel=="gpt-6.1-sol"&&empty.ChildEffort=="medium","Missing model settings did not use defaults");
         Write(config,"model = 'gpt-6-astra' # parent\nmodel_reasoning_effort = \"max\"\n[agents]\ndefault_subagent_model = \"gpt-6-luna\"\ndefault_subagent_reasoning_effort = 'high'\n[profiles.other]\nmodel = \"wrong\"\n");
         Write(agents,"unrelated model = no\nBEGIN CODEX LUNA PROMPT V1.3\nmodel = gpt-5.5\nmodel_reasoning_effort = low\nEND CODEX LUNA PROMPT V1.3\n");
         var current=CurrentModelSettings.Load(home);
@@ -63,7 +63,28 @@ public static class CurrentModelSettingsTests {
                 var generated=Native.NativeInitializer.Config(new Native.NativePaths{Workspace=root},NativeDesktopWorkflow.Options(selected,selectedPort));
                 Assert(ManagedToml.SavedValue(generated,"model")=="gpt-6.2-sol"&&ManagedToml.SavedValue(generated,"model_reasoning_effort")=="ultra","Parent selection did not reach the generated configuration");
                 Assert(ManagedToml.SavedValue(generated,"agents","default_subagent_model")=="gpt-6.2-astra"&&ManagedToml.SavedValue(generated,"agents","default_subagent_reasoning_effort")=="xhigh","Child selection did not reach the generated configuration");
+                Write(config,generated);
+                var manual=CurrentModelSettings.Load(home);
+                Assert(manual.Subagents&&!manual.AutoAssign&&manual.ChildModel=="gpt-6.2-astra"&&manual.ChildEffort=="xhigh","Saved manual selection did not round trip");
+                Write(config,before);
+                combo("childModel").SelectedItem="自动指派";
+                Assert(!childEffort.IsEnabled&&Equals(childEffort.SelectedItem,"由父模型决定"),"Automatic effort must be locked");
+                selected=(Dictionary<string,object>)type.GetMethod("Options",flags).Invoke(window,null);
+                var auto=NativeDesktopWorkflow.Options(selected,selectedPort);
+                var paths=new Native.NativePaths{Workspace=root,Home=home};
+                var desired=Native.NativeInitializer.Config(paths,auto);
+                var merged=ManagedToml.Merge(generated,desired,generated);
+                var manualRules=Native.NativeInitializer.Rules(paths,NativeDesktopWorkflow.Options(new Dictionary<string,object>{{"subagents",true},{"childModel","gpt-6.2-astra"},{"childEffort","xhigh"}},selectedPort));
+                var rules=NativeDesktopReconcile.RulesText(manualRules,Native.NativeInitializer.Rules(paths,auto),paths);
+                Assert(auto.ChildAutoAssign&&auto.Subagents&&!merged.Contains("default_subagent_")&&rules.Contains("## 自动指派")&&!rules.Contains("model_reasoning_effort ="),"Automatic assignment retained fixed model or effort");
                 Assert(File.ReadAllText(config)==before,"Changing the model controls saved settings before confirmation");
+                Write(config,merged);Write(agents,rules);
+                var reopened=new MainWindow(false);
+                try{
+                    Assert(((CheckBox)type.GetField("subagents",flags).GetValue(reopened)).IsChecked==true&&Equals(((ComboBox)type.GetField("childModel",flags).GetValue(reopened)).SelectedItem,"自动指派")&&!((ComboBox)type.GetField("childEffort",flags).GetValue(reopened)).IsEnabled,"Automatic assignment did not survive reopening");
+                }finally{reopened.Close();}
+                auto.Subagents=false;Write(config,Native.NativeInitializer.Config(paths,auto));Write(agents,Native.NativeInitializer.Rules(paths,auto));
+                var off=CurrentModelSettings.Load(home);Assert(!off.Subagents&&off.AutoAssign,"Disabled automatic mode did not persist");
             } finally {window.Close();}
         } finally {Environment.SetEnvironmentVariable("CODEX_HOME",previous,EnvironmentVariableTarget.Process);}
     }

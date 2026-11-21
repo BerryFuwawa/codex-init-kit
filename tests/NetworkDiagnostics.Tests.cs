@@ -47,8 +47,6 @@ internal static class NetworkDiagnosticsTests {
         image.CopyPixels(new Int32Rect(0,height/2,width,1),row,width*4,0);
         int first=-1,last=-1;
         for(int x=0;x<width;x++)if(row[x*4+2]>105){if(first<0)first=x;last=x;}
-        Require(first>=0 && last-first>=width*.08 && last-first<=width*.12,
-            "Bright segment missing or clipped: "+first+".."+last+" of "+width);
         return new[]{first,last,width};
     }
     static void VerifyProgressTravel(MainWindow window,string directory){
@@ -60,29 +58,42 @@ internal static class NetworkDiagnosticsTests {
             window.Width=run=="wide"?1480:1000;
             window.UpdateLayout();Pump(35);
             bar.IsIndeterminate=true;
-            bool left=false,right=false,dragging=false;
+            bool blank=false,entered=false,crossed=false,leaving=false,exited=false,repeated=false,dragging=false;
             double previous=0;int initialWidth=0;
             var timer=System.Diagnostics.Stopwatch.StartNew();
-            while(timer.ElapsedMilliseconds<2500 && !right){
+            while(timer.ElapsedMilliseconds<4200 && !repeated){
                 Pump(20);
                 var p=ProgressPixels(bar);
                 double start=(double)p[0]/p[2];
                 frames.Add(String.Join(",",run,window.Width,p[2],p[0],p[1]));
                 if(initialWidth==0)initialWidth=p[2];
-                if(!left){left=start<.025; if(!left)continue;}
+                if(p[0]<0){
+                    Require(!entered||leaving,"Bright segment disappeared before sliding off the right edge");
+                    blank=true;
+                    if(leaving)exited=true;
+                    continue;
+                }
+                double fraction=(double)(p[1]-p[0]+1)/p[2];
+                bool partialLeft=p[0]<4 && fraction<.085;
+                if(exited){Require(partialLeft,"Next sweep did not emerge from the left");repeated=true;continue;}
+                if(!entered){entered=blank&&partialLeft;if(!entered)continue;}
                 Require(start+.025>=previous,"Animation restarted before reaching the current right edge");
                 previous=start;
+                if(start>.15 && start<.85){
+                    Require(fraction>.08 && fraction<.12,"Bright segment width changed inside track");
+                    crossed=true;
+                }
                 if(run=="resize"){
                     if(!dragging && start>.18 && start<.65)dragging=true;
                     if(dragging && window.Width<1479){
                         window.Width=Math.Min(1480,window.Width+120);window.UpdateLayout();continue;
                     }
                 }
-                right=p[1]>=p[2]-4;
-                if(right && run=="resize")Require(dragging && p[2]>=initialWidth+450,
+                leaving=crossed && p[1]>=p[2]-4 && fraction<.085;
+                if(leaving && run=="resize")Require(dragging && p[2]>=initialWidth+450,
                     "Window did not widen during this sweep");
             }
-            Require(left && right,"Progress did not traverse the track: "+run);
+            Require(repeated,"Progress did not enter, cross, exit and repeat: "+run);
         }
         bar.IsIndeterminate=false;
         File.WriteAllLines(Path.Combine(directory,"progress-travel.csv"),frames);

@@ -16,7 +16,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-public const string Version = "2.3.5";
+public const string Version = "2.3.6";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
@@ -25,9 +25,9 @@ public const string Version = "2.3.5";
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     const string DefaultParentModel = "gpt-6.1-sol";
-    const string DefaultChildModel = "gpt-6.1-sol";
+    internal const string DefaultChildModel = "gpt-6.1-sol";
     const string DefaultParentEffort = "medium";
-    const string DefaultChildEffort = "medium";
+    internal const string DefaultChildEffort = "medium";
     static readonly Regex ModelIdPattern = new Regex("^[A-Za-z0-9][A-Za-z0-9._/:+-]{0,127}$", RegexOptions.CultureInvariant);
     static readonly Regex EffortPattern = new Regex("^[A-Za-z][A-Za-z0-9_-]{0,31}$", RegexOptions.CultureInvariant);
     public static string Sid { get { return WindowsIdentity.GetCurrent().User.Value; } }
@@ -57,7 +57,7 @@ public const string Version = "2.3.5";
 
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
-            {"remoteRelay", false}, {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"remoteRelay", false}, {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"childAutoAssign",true}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
             {"proxyHost", DefaultProxyHost}, {"cliMode","auto"}
@@ -111,6 +111,7 @@ public const string Version = "2.3.5";
             if(customMirror!=null&&!(customMirror is string))throw new ArgumentException("自定义 GitHub 镜像需为文本。");
             normalized["customGithubMirror"]=(bool)normalized["githubMirrorEnabled"]?GitHubNetworkOptions.NormalizePrefix(customMirror as string):"";
         }
+        normalized["childAutoAssign"]=ReadOptionBoolean(source,"childAutoAssign",!source.ContainsKey("childModel")&&!source.ContainsKey("childEffort"));
         normalized["subagents"]=ReadOptionBoolean(source,"subagents",false);
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);

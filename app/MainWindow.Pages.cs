@@ -45,7 +45,14 @@ public partial class MainWindow {
             }
             section.Children.Add(new Border{BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1,0,0,0),Margin=new Thickness(11,0,0,0),Child=children});nav.Children.Add(section);
         }
-        var foot=new StackPanel{Margin=new Thickness(17,10,10,13)};foot.Children.Add(T("v"+OperationRecord.BuildVersion,11,MutedBrush));foot.Children.Add(Link("GitHub ↗",()=>Open("https://github.com/"+Core.Repository)));foot.Children.Add(Link("关于与许可",ShowLicenses));Grid.SetRow(foot,2);rail.Children.Add(foot);
+        var foot=new StackPanel{Margin=new Thickness(12,8,12,12)};
+        foot.Children.Add(new Border{Height=1,Background=MorandiTheme.Border,Margin=new Thickness(5,0,5,9)});
+        var version=T("v"+OperationRecord.BuildVersion,11,MutedBrush);
+        version.Margin=new Thickness(5,0,0,2);foot.Children.Add(version);
+        var links=new StackPanel{Orientation=Orientation.Horizontal};
+        links.Children.Add(Link("GitHub ↗",()=>Open("https://github.com/"+Core.Repository)));
+        links.Children.Add(Link("关于与许可",ShowLicenses));
+        foot.Children.Add(links);Grid.SetRow(foot,2);rail.Children.Add(foot);
         var main=new Grid{Margin=new Thickness(19,15,19,12)};main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition());main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});main.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});Grid.SetColumn(main,1);layout.Children.Add(main);
         var titles=new StackPanel();heading.FontSize=24;heading.FontWeight=FontWeights.SemiBold;var headingRow=new DockPanel();pageHeadingIcon=new System.Windows.Shapes.Path{Data=UiIcons.For("概览",true),Stroke=Accent,StrokeThickness=1.6,Width=22,Height=22,Stretch=Stretch.Uniform,Margin=new Thickness(0,0,10,0),VerticalAlignment=VerticalAlignment.Center};headingRow.Children.Add(pageHeadingIcon);headingRow.Children.Add(heading);titles.Children.Add(headingRow);subtitle.Foreground=MutedBrush;subtitle.FontSize=12;subtitle.TextWrapping=TextWrapping.Wrap;subtitle.Margin=new Thickness(0,4,0,12);titles.Children.Add(subtitle);main.Children.Add(titles);
         Grid.SetRow(pageNavigation,1);main.Children.Add(pageNavigation);

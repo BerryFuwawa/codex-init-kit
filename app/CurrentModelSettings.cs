@@ -8,6 +8,8 @@ namespace CodexKit {
 public sealed class CurrentModelSettings {
     public string ParentModel="gpt-6.1-sol", ParentEffort="medium", ChildModel="gpt-6.1-sol", ChildEffort="medium";
 
+    public bool Subagents, AutoAssign;
+
     public static string CodexHome() {
         return Native.NativePaths.CodexHome();
     }
@@ -23,8 +25,8 @@ public sealed class CurrentModelSettings {
             if(config&&trimmed.StartsWith("[")){var header=Regex.Match(trimmed,@"^\[([^\[\]]+)\]\s*(?:#.*)?$");section=header.Success?header.Groups[1].Value.Trim():"(other)";continue;}
             var assignment=Regex.Match(line,@"^\s*([A-Za-z0-9_.-]+)\s*=\s*(.*?)\s*$");if(!assignment.Success)continue;
             var key=assignment.Groups[1].Value;
-            if(config){if(section=="agents")key="agents."+key;else if(section!="")continue;}
-            if(key!="model"&&key!="model_reasoning_effort"&&key!="agents.default_subagent_model"&&key!="agents.default_subagent_reasoning_effort")continue;
+            if(config){if(section=="agents"||section=="features")key=section+"."+key;else if(section!="")continue;}
+            if(key!="features.multi_agent"&&key!="model"&&key!="model_reasoning_effort"&&key!="agents.default_subagent_model"&&key!="agents.default_subagent_reasoning_effort")continue;
             var value=Regex.Match(assignment.Groups[2].Value,@"^(?:""([^""\r\n]*)""|'([^'\r\n]*)'|([A-Za-z0-9._/:+\-]+))\s*(?:#.*)?$");
             if(!value.Success)throw new InvalidDataException("模型设置格式无法识别："+key);
             result[key]=value.Groups[1].Success?value.Groups[1].Value:value.Groups[2].Success?value.Groups[2].Value:value.Groups[3].Value;
@@ -38,6 +40,8 @@ public sealed class CurrentModelSettings {
         var block=Regex.Match(agents,@"(?ms)^[ \t]*BEGIN CODEX LUNA PROMPT V[^\r\n]*\r?\n.*?^[ \t]*END CODEX LUNA PROMPT V[^\r\n]*\r?$");
         var managed=Values(block.Success?block.Value:"",false);
         var result=new CurrentModelSettings();
+        result.Subagents=Get(config,"features.multi_agent",block.Success?"true":"false")=="true";
+        result.AutoAssign=!config.ContainsKey("agents.default_subagent_model")&&!config.ContainsKey("agents.default_subagent_reasoning_effort")&&!managed.ContainsKey("model")&&!managed.ContainsKey("model_reasoning_effort");
         result.ParentModel=Get(config,"model",result.ParentModel);result.ParentEffort=Get(config,"model_reasoning_effort",result.ParentEffort);
         result.ChildModel=Get(config,"agents.default_subagent_model",Get(managed,"model",result.ChildModel));
         result.ChildEffort=Get(config,"agents.default_subagent_reasoning_effort",Get(managed,"model_reasoning_effort",result.ChildEffort));

@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.5",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.5/CodexInitKit.exe",
-    "sha256":  "0ba48d8b928ecba4e5427f1625e79c3fef358f75b8f81713e0185908037e8e03",
-    "notes":  "初始化前会显示等待提示，完成后可以直接启动 Codex。首页切换 CLI 的按钮移到了右侧，按下按钮时反馈更清楚。修复了点击取消后偶尔弹出错误提示的问题。"
+    "version":  "2.3.6",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.6/CodexInitKit.exe",
+    "sha256":  "de25920b2dc0a876bf59cb6c3b4cbbd0ba2d6662da49182e914b86b4f381ade3",
+    "notes":  "子代理支持自动指派，并记住上次的设置。父模型与子模型各有图标，侧栏底部的链接更简洁。加载条在窗口拉宽后也能完整滑入、滑出。"
 }
