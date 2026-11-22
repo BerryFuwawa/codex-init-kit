@@ -96,9 +96,7 @@ Codex Init Kit 是社区开发的 OpenAI Codex 初始化工具，提供简体中
 
 ![Codex 初始化的步骤与进度](assets/screenshots/v2.3.7/initialization-progress.png)
 
-底部检查条从左侧滑入、从右侧完全滑出，窗口拉宽后也会走完整条轨道。
-
-![底部检查条的完整滑动效果](assets/screenshots/v2.3.7/progress.gif)
+![检查进度提示](assets/screenshots/v2.3.7/progress.gif)
 
 ![浏览器组件检查与真实网页读取](assets/screenshots/v2.3.7/browser-connection.png)
 
