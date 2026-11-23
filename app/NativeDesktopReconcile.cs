@@ -5,7 +5,7 @@ namespace CodexKit {
 // 保留原文，仅修改初始化工具负责的键；无法定位的写法在备份和修改前报告。
 internal static class ManagedToml {
     sealed class Entry {internal int First,Last;internal string[] Path,Table;internal string Value;}
-    sealed class Document {internal List<string> Lines;internal List<Entry> Entries=new List<Entry>();internal Dictionary<string,int> Ends=new Dictionary<string,int>();}
+    sealed class Document {internal List<string> Lines;internal List<Entry> Entries=new List<Entry>();internal Dictionary<string,int> Ends=new Dictionary<string,int>();internal Dictionary<int,string[]> Headers=new Dictionary<int,string[]>();}
     sealed class ValueLocation {internal Entry Entry;internal int Offset;}
     static readonly string[] AgentsEnabledPath={"agents","enabled"};
     static readonly string[] LegacyMultiAgentPath={"features","multi_agent"};
@@ -29,7 +29,7 @@ internal static class ManagedToml {
             var line=doc.Lines[i].TrimEnd('\r','\n');var trimmed=line.Trim();if(trimmed.Length==0||trimmed.StartsWith("#"))continue;
             if(trimmed.StartsWith("[")){
                 doc.Ends[tableId]=i;bool array=trimmed.StartsWith("[[");var header=array?trimmed.Substring(1,trimmed.LastIndexOf(']')-1):trimmed;
-                table=ConfigCompatibility.TableParts(header);if(table==null)throw new InvalidDataException("配置表头无法识别，第 "+(i+1)+" 行；原文件未修改。");tableId=Id(table)+(array?"\u001f[]":"");doc.Ends[tableId]=doc.Lines.Count;continue;
+                table=ConfigCompatibility.TableParts(header);if(table==null)throw new InvalidDataException("配置表头无法识别，第 "+(i+1)+" 行；原文件未修改。");tableId=Id(table)+(array?"\u001f[]":"");doc.Ends[tableId]=doc.Lines.Count;doc.Headers.Add(i,table);continue;
             }
             int eq=ConfigCompatibility.EqualSign(line);var key=eq<0?null:ConfigCompatibility.KeyParts(line.Substring(0,eq));if(key==null)throw new InvalidDataException("配置键无法识别，第 "+(i+1)+" 行；原文件未修改。");
             int first=i;var value=new StringBuilder(line.Substring(eq+1));multi='\0';depth=0;
@@ -82,6 +82,77 @@ internal static class ManagedToml {
     }
     static Group Scalar(ValueLocation location,Regex pattern){
         return location==null?null:pattern.Match(location.Entry.Value,location.Offset).Groups["value"];
+    }
+    internal static bool ContainsMcpServer(string text,string name){
+        var doc=Read(text);
+        var path=new[]{"mcp_servers",name};
+        string id=Id(path);
+        return doc.Ends.Keys.Any(key=>key==id||key.StartsWith(id+"\u001f",StringComparison.Ordinal))
+            ||doc.Entries.Any(entry=>entry.Path.Take(path.Length).SequenceEqual(path))
+            ||FindValue(doc,path)!=null||FindValue(doc,new[]{"mcp_servers",name,"command"})!=null
+            ||FindValue(doc,new[]{"mcp_servers",name,"url"})!=null;
+    }
+    internal static string ReadTableString(string text,params string[] path){
+        var location=FindValue(Read(text),path);
+        if(location==null)return null;
+        var match=Regex.Match(location.Entry.Value.Substring(location.Offset),@"^\s*(?<value>""(?:\\.|[^""\\])*""|'[^']*')");
+        if(!match.Success)return null;
+        string value=match.Groups["value"].Value;
+        return value[0]=='"'?NativeData.Json.Deserialize<string>(value):value.Substring(1,value.Length-2);
+    }
+    internal static string RemoveMcpServer(string current,string name){
+        var doc=Read(current);
+        var path=new[]{"mcp_servers",name};
+        var removed=new HashSet<int>(doc.Headers.Where(pair=>pair.Value.Take(path.Length).SequenceEqual(path)).Select(pair=>pair.Key));
+        foreach(var entry in doc.Entries.Where(item=>item.Path.Take(path.Length).SequenceEqual(path)))
+            for(int i=entry.First;i<=entry.Last;i++)removed.Add(i);
+        var parent=doc.Entries.FirstOrDefault(entry=>entry.Path.SequenceEqual(new[]{"mcp_servers"}));
+        if(parent!=null)RemoveInlineMcpMember(doc,parent,name);
+        return String.Concat(doc.Lines.Where((line,index)=>!removed.Contains(index)));
+    }
+    static void RemoveInlineMcpMember(Document doc,Entry entry,string name){
+        var line=String.Concat(doc.Lines.Skip(entry.First).Take(entry.Last-entry.First+1));
+        int brace=ConfigCompatibility.EqualSign(line)+1;
+        while(brace<line.Length&&Char.IsWhiteSpace(line[brace]))brace++;
+        if(brace==line.Length||line[brace]!='{')return;
+        int depth=1,start=brace+1;
+        string[] key=null;
+        bool changed=false;
+        var keep=new List<string>();
+        foreach(Match token in InlineTokens.Matches(line,brace+1)){
+            string value=token.Value;
+            if(value=="="&&depth==1)key=ConfigCompatibility.KeyParts(line.Substring(start,token.Index-start));
+            if(value=="{"||value=="[")depth++;
+            if(value=="}"||value=="]")depth--;
+            if(depth==0||(depth==1&&value==",")){
+                if(key!=null&&key.Length>0&&key[0]==name)changed=true;
+                else keep.Add(line.Substring(start,token.Index-start));
+                if(depth==0){
+                    if(!changed)return;
+                    doc.Lines[entry.First]=line.Substring(0,brace+1)+String.Join(",",keep)+line.Substring(token.Index);
+                    for(int i=entry.First+1;i<=entry.Last;i++)doc.Lines[i]="";
+                    return;
+                }
+                start=token.Index+1;
+                key=null;
+            }
+        }
+    }
+    internal static string AddMcpServer(string current,string name,Dictionary<string,string> fields){
+        var doc=Read(current);
+        var parent=FindValue(doc,new[]{"mcp_servers"});
+        if(parent==null){
+            var table="[mcp_servers."+name+"]\n"+String.Join("\n",fields.Select(field=>field.Key+" = "+field.Value))+"\n";
+            return Merge(current,table,table);
+        }
+        int brace=parent.Offset;
+        while(brace<parent.Entry.Value.Length&&Char.IsWhiteSpace(parent.Entry.Value[brace]))brace++;
+        if(brace==parent.Entry.Value.Length||parent.Entry.Value[brace]!='{')
+            throw new InvalidDataException("mcp_servers 配置无法作为表读取，原文件保留。");
+        bool empty=parent.Entry.Value.Substring(brace+1).TrimStart().StartsWith("}");
+        var entry=" "+name+" = { "+String.Join(", ",fields.Select(field=>field.Key+" = "+field.Value))+" }";
+        EditValue(doc,parent.Entry,brace+1,0,entry+(empty?" ":","));
+        return String.Concat(doc.Lines);
     }
     static long ReadPositiveInteger(ValueLocation location,string[] path){
         var error="子代理并发设置必须为正整数："+String.Join(".",path);

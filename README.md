@@ -4,7 +4,7 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.7 更新说明](docs/Release-2.3.7.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.10 更新说明](docs/Release-2.3.10.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 
@@ -39,6 +39,15 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.7 更新说
 
 ![默认模型、子代理自动指派与最大并发数](assets/screenshots/v2.3.7/model-settings.png)
 
+## 按需添加浏览器工具
+
+- **Playwright CLI** 适合让 Codex 点击、填表和读取网页。可直接使用已安装的 Chrome 或 Edge，也可以安装扩展来操作现有标签页。专用 Firefox 在你确认后才下载。
+- **Chrome DevTools MCP** 适合查看 Chrome 网页报错、网络请求和加载性能。
+
+两项都可以在「初始化 → 功能选择」中单独勾选。已安装的工具会自动识别，支持单独卸载。[浏览器工具说明](docs/Settings.md#浏览器工具)
+
+![Playwright CLI 和 Chrome DevTools MCP 的安装与管理](assets/screenshots/v2.3.10/browser-tools.png)
+
 ## 备份与回滚
 
 初始化会先备份需要改动的配置与全局规则，再按你的选择合并。**已有对话、项目文件和记忆文件会保留。** 如需回滚，先在「备份与回滚」核对备份时间。恢复配置会覆盖该文件在备份之后的编辑。[备份与回滚](docs/NativeInitializationReconcile.md#备份与回滚)
@@ -57,6 +66,8 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.7 更新说
 ![检查进度提示](assets/screenshots/v2.3.7/progress.gif)
 
 ![浏览器组件检查与网页读取验收](assets/screenshots/v2.3.7/browser-connection.png)
+
+![设置 Playwright 浏览器时可选 Edge、Chrome 或 Firefox](assets/screenshots/v2.3.10/playwright-browser-choice.png)
 
 ![桌面原生 CLI 与官方独立 CLI](assets/screenshots/v2.3.7/maintenance.png)
 

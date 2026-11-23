@@ -13,7 +13,7 @@ using System.Web.Script.Serialization;
 namespace CodexKit.Native {
 public static class NativeRuntime { public static void Configure(){AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);} }
 public static class NativeData {
-    public const string Version="2.3.7";
+    public const string Version="2.3.10";
     public static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
     public static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=32*1024*1024};
     public static string Resource(string name){using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream("Native."+name)){if(s==null)throw new FileNotFoundException("缺少内嵌资源："+name);using(var r=new StreamReader(s,Utf8,true))return r.ReadToEnd();}}
@@ -32,6 +32,7 @@ public sealed class NativePaths {
     public string Agents{get{return Path.Combine(Home,"AGENTS.md");}}
     public string RtkDoc{get{return Path.Combine(Home,"RTK.md");}}
     public string Hooks{get{return Path.Combine(Home,"hooks.json");}}
+    public string PlaywrightSkill{get{return Path.Combine(Home,"skills","init-kit-playwright-cli","SKILL.md");}}
     public string Rtk{get{return Path.Combine(UserTools,"rtk.exe");}}
     public string RtkConfig{get{return Path.Combine(RoamingData,"rtk","config.toml");}}
     public string LegacyCli{get{return Path.Combine(LocalData,"OpenAI","Codex","cli");}}

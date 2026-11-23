@@ -9,6 +9,12 @@ public partial class MainWindow {
     void UpdateBusyControls(){
         bool locked=busy&&activeOperation=="initialize";
         foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,githubMirrors})control.IsEnabled=!locked;
+        playwrightCli.IsEnabled=chromeDevToolsMcp.IsEnabled=!locked;
+        foreach(var button in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)
+            .Where(button=>button.Name=="RemovePlaywrightCli"||button.Name=="RemoveChromeDevToolsMcp"))
+            button.IsEnabled=CanRemoveBrowserTool(button.Name);
+        foreach(var button in InitializationFlowTests.Descendants<Button>((DependencyObject)Content).Where(button=>button.Name=="SetUpPlaywrightBrowsers"))
+            button.IsEnabled=!busy;
         proxyPortPreset.IsEnabled=port.IsEnabled=proxyHost.IsEnabled=!locked&&proxyEnabled.IsChecked==true;
         remoteRelay.IsEnabled=!busy && proxyEnabled.IsChecked==true && (relayStatus.Installed || relayStatus.CanEnable);
         childModel.IsEnabled=!locked&&subagents.IsChecked==true;
@@ -20,7 +26,7 @@ public partial class MainWindow {
     }
     void ApplyCompactLayout(){var root=Content as FrameworkElement;bool compact=root!=null&&root.ActualHeight>0&&root.ActualHeight<500;subtitle.Visibility=compact?Visibility.Collapsed:Visibility.Visible;heading.FontSize=compact?20:24;if(page=="初始化"&&wizard==0&&pageNavigation.Children.Count>0)pageNavigation.Children[0].Visibility=compact?Visibility.Collapsed:Visibility.Visible;}
     void WizardActions(params UIElement[] controls){Row(wizardActions,controls);wizardActions.Visibility=Visibility.Visible;}
-    static bool LocalOperation(string op){return new[]{"relay-disable","doctor","model-network-check","browser-check","browser-repair","status","rollback-selected","rollback-delete-all","init-rollback","config-check","config-cleanup","cua-check","cua-repair","desktop-core-check","desktop-core-repair","guard-uninstall"}.Contains(op);}
+    static bool LocalOperation(string op){return NativeBrowserTools.IsRemoval(op)||new[]{"relay-disable","doctor","model-network-check","browser-check","browser-repair","status","rollback-selected","rollback-delete-all","init-rollback","config-check","config-cleanup","cua-check","cua-repair","desktop-core-check","desktop-core-repair","guard-uninstall"}.Contains(op);}
     void RememberReading(){if(viewedLogRecord!=null){viewedLogRecord.Reading=logViewport.Capture();viewedLogRecord.ShowRaw=showRawLog;}}
     OperationRecord VisibleRecord(){return page=="初始化"&&wizard==2?initializationRecord:page=="日志"?(selectedLogRecord??activeRecord):activeRecord;}
     void BeginRecord(string id,string title,string path,bool initialization){RememberReading();activeRecord=OperationRecord.Create(id,title,path);operationRecords[path]=activeRecord;selectedLogRecord=null;if(initialization)initializationRecord=activeRecord;viewedLogRecord=null;showRawLog=false;PersistRecord(activeRecord);}

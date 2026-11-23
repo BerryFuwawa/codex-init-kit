@@ -28,6 +28,26 @@
       </AdornerDecorator>
     </Grid>
   </ControlTemplate>
+  <Style x:Key="KitFeatureHint" TargetType="ToolTip">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="HasDropShadow" Value="False"/>
+    <Setter Property="Placement" Value="Bottom"/>
+    <Setter Property="VerticalOffset" Value="2"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Grid Margin="8,0,10,12">
+            <Border Background="#283747" BorderBrush="#506378" BorderThickness="1" CornerRadius="10">
+              <Border.Effect>
+                <DropShadowEffect Color="#000000" BlurRadius="12" ShadowDepth="3" Direction="270" Opacity="0.45"/>
+              </Border.Effect>
+            </Border>
+            <ContentPresenter Margin="12,9"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
   <Style x:Key="KitScrollThumb" TargetType="Thumb">
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border x:Name="Grip" Background="#3B4B5D" CornerRadius="4" Margin="2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="#AFBED0"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="#9DAFC4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
@@ -59,7 +79,7 @@
     <Setter Property="Foreground" Value="#ECEEF0"/><Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Margin" Value="0,6,0,6"/><Setter Property="Padding" Value="0"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border x:Name="Box" Width="20" Height="20" CornerRadius="7" Background="#1C2937" BorderBrush="#AFBED0" BorderThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Left">
           <Path x:Name="Tick" Data="M3.4,8.4 L6.7,11.4 Q7.6,12.2 8.4,11.2 L13.6,5.1" Stroke="#172535" StrokeThickness="2.25" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed"/>
         </Border>

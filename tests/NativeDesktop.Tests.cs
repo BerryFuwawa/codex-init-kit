@@ -162,6 +162,52 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
         Check("CLI模式相同不更改路径或关闭",()=>{var f=new Fixture();var c=f.Component();MakePackage(c.Current);f.AddDesktop(42,500);var before=Core.Json.Serialize(f.Registry.V);c.SelectCli("official-standalone");Assert(Core.Json.Serialize(f.Registry.V)==before&&!File.Exists(c.StateFile)&&f.Process.Requested==0,"unchanged CLI touched");});
         Check("启动保护相同不重复替换和注册",()=>{var f=new Fixture();var c=f.Component();MakePackage(c.Current);c.Protection();var installed=Path.Combine(c.GuardRoot,"CodexInitKit.Guard.exe");var before=System.IO.File.GetLastWriteTimeUtc(NativePath.Io(installed));c.Protection();Assert(f.GuardRegistrations==1&&System.IO.File.GetLastWriteTimeUtc(NativePath.Io(installed))==before,"guard repeated");});
         Check("准备完成不冒充真实连接验收",()=>{var f=new Fixture();Assert(f.Run(Settings(),false)==0,"workflow");var result=Core.Json.Serialize(f.Result());Assert(result.Contains("真实连接待验收")&&!result.Contains("启动准备"),"missing acceptance boundary");});
+        Check("浏览器工具默认跳过，单项失败可独立重试",()=>{
+            var f=new Fixture();var options=Settings();
+            Assert(f.Run(options,false)==0&&!f.Trace.Contains("playwright")&&!f.Trace.Contains("chrome-devtools"),"default browser tools");
+            options["playwrightCli"]=true;options["chromeDevToolsMcp"]=true;
+            f.Trace.Clear();f.Fail="playwright";
+            Assert(f.Run(options,false)==2&&f.Trace.Contains("playwright")&&f.Trace.Contains("chrome-devtools"),"browser tool failure stopped the other");
+            f.Trace.Clear();f.Fail="";options["retryStages"]="playwright";
+            Assert(f.Run(options,false)==0&&f.Trace.SequenceEqual(new[]{"capture","playwright"}),"unrelated stage ran on retry");
+        });
+        Check("浏览器工具识别已安装并独立卸载",()=>{
+            var paths=BrowserToolsFiles(Path.Combine(root,"browser-tools-detection"));
+            var tools=new NativeBrowserTools(paths,new NativeServices(),null);
+            Assert(tools.PlaywrightInstallation()==BrowserToolInstallation.Managed&&tools.ChromeInstallation()==BrowserToolInstallation.Managed,"previous install not detected");
+            tools.UninstallPlaywright();
+            Assert(tools.PlaywrightInstallation()==BrowserToolInstallation.None&&tools.ChromeInstallation()==BrowserToolInstallation.Managed,"Playwright removal affected MCP");
+            Assert(!File.Exists(paths.PlaywrightSkill)&&!Directory.Exists(Path.Combine(paths.Home,"browser-tools","playwright-browsers")),"Playwright files left in active location");
+            tools.UninstallChromeDevTools();
+            Assert(tools.ChromeInstallation()==BrowserToolInstallation.None&&NativeData.Read(paths.Config).Contains("# keep\r\n[mcp_servers.other]"),"MCP removal changed another service");
+            Assert(System.IO.Directory.GetFiles(Path.Combine(paths.BackupRoot,"BrowserTools"),"*",SearchOption.AllDirectories).Length==2,"uninstall backups missing");
+            Assert(!Core.NeedsAdmin(NativeBrowserTools.RemovePlaywrightOperation)&&!Core.NeedsAdmin(NativeBrowserTools.RemoveChromeDevToolsOperation),"optional uninstall required elevation");
+        });
+        Check("Playwright 安装不下载 Firefox，独立下载步骤仅运行一次",()=>{
+            var paths=BrowserToolsFiles(Path.Combine(root,"playwright-firefox-optional"),false);
+            File.Delete(paths.PlaywrightSkill);
+            var commands=new CommandsFake{P=paths};
+            var tools=new NativeBrowserTools(paths,new NativeServices{Commands=commands},null);
+            int changes=0;
+            tools.InstallPlaywright(()=>changes++);
+            Assert(changes==1&&commands.Calls.Count==1&&commands.Calls[0].EndsWith("--version"),"Playwright installation attempted a browser download");
+            Assert(tools.PlaywrightInstallation()==BrowserToolInstallation.Managed&&!tools.PlaywrightFirefoxDownloaded(),"missing Firefox blocked installed status");
+            tools.PreparePlaywrightFirefox();
+            Assert(commands.Calls.Count==2&&commands.Calls[1].EndsWith("install-browser firefox")&&tools.PlaywrightFirefoxReady(),"Firefox did not prepare the private browser and shortcut preference");
+            tools.PreparePlaywrightFirefox();
+            Assert(commands.Calls.Count==2&&!Core.NeedsAdmin(NativeBrowserTools.InstallFirefoxOperation),"Firefox was redownloaded or requested elevation");
+        });
+        Check("Chrome DevTools 卸载保留其他内联及自定义 MCP 配置",()=>{
+            const string inline="mcp_servers = { chrome-devtools.command = 'external', other = {command = 'other'}, chrome-devtools.args = ['mcp'] } # keep\r\n";
+            var paths=new NativePaths{Home=Path.Combine(root,"browser-tools-external"),Documents=Path.Combine(root,"browser-tools-external-docs")};
+            NativeData.WriteBytes(paths.Config,new byte[]{239,187,191}.Concat(Encoding.UTF8.GetBytes(inline)).ToArray());
+            var tools=new NativeBrowserTools(paths,new NativeServices(),null);
+            Assert(tools.ChromeInstallation()==BrowserToolInstallation.External,"outside Chrome registration not detected");
+            tools.UninstallChromeDevTools();
+            var after=NativeData.Read(paths.Config);
+            Assert(!after.Contains("chrome-devtools")&&after.Contains("other = {command = 'other'}")&&after.EndsWith("# keep\r\n"),"inline removal overreached");
+            Assert(File.ReadAllBytes(paths.Config).Take(3).SequenceEqual(new byte[]{239,187,191}),"config encoding changed");
+        });
         Check("单文件内置原生入口",()=>{foreach(var op in new[]{"initialize","initialize-preflight","status","proxy","cua-check","cua-repair"})Assert(NativeDesktopWorkflow.Handles(op)&&!Core.NeedsAdmin(op),"native routing "+op);Assert(NativeDesktopWorkflow.Handles("initialize")&&!NativeDesktopWorkflow.Handles("guard-uninstall"),"legacy boundary");foreach(var name in new[]{"Desktop.RtkRules.md","Desktop.AntiOverDefense.md","Desktop.WorkJournal.md","Desktop.CommandLineFirst.md","Desktop.FolderRules.md","Desktop.SubagentRules.md"})Assert(NativeData.Resource(name).Length>20,"embedded "+name);});
         Check("桌面选项默认值与模型保留",()=>{var options=NativeDesktopWorkflow.Options(null,10808);Assert(options.DesktopProfile&&!options.Subagents&&options.Memories&&options.AntiOverDefense&&options.WorkJournal&&options.CommandLineFirst&&options.ParentEffort=="medium"&&options.ChildEffort=="medium","default mapping");var custom=Settings();custom["parentModel"]="custom-parent";custom["childModel"]="custom-child";custom["parentEffort"]="max";custom["childEffort"]="high";options=NativeDesktopWorkflow.Options(custom,3067);Assert(options.ParentModel=="custom-parent"&&options.ChildModel=="custom-child"&&options.ProxyPort==3067&&options.ParentEffort=="max","inherited models");});
         foreach(bool memory in new[]{false,true})foreach(bool sub in new[]{false,true}){bool a=memory,b=sub;Check("记忆配置_"+a+"_子代理_"+b,()=>{var f=new Fixture();var options=NativeDesktopWorkflow.Options(Settings(),0);options.Memories=a;options.Subagents=b;var config=NativeInitializer.Config(f.P,options);Assert(config.Contains("memories = "+a.ToString().ToLowerInvariant())&&config.Contains("generate_memories = "+a.ToString().ToLowerInvariant())&&config.Contains("use_memories = "+a.ToString().ToLowerInvariant()),"memory config");Assert(!config.Contains("default_subagent_"),"Auto assignment pinned child defaults");});}
@@ -278,6 +324,10 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
     sealed class CommandsFake:INativeCommands {
         internal List<string> Calls=new List<string>();internal NativePaths P;internal bool FailRtk;internal string Mode="",TaskFile;
         public NativeCommandResult Run(string file,string[] args,Dictionary<string,string> env,int timeout){Calls.Add(Path.GetFileName(file)+" "+String.Join(" ",args));
+            if(file.EndsWith("node.exe",StringComparison.OrdinalIgnoreCase)&&args[0].EndsWith("playwright-launcher.cjs",StringComparison.OrdinalIgnoreCase)){
+                if(args.Skip(1).SequenceEqual(new[]{"install-browser","firefox"}))WriteFirefoxFixture(env["PLAYWRIGHT_BROWSERS_PATH"]);
+                return new NativeCommandResult{Output="0.1.25"};
+            }
             if(file.EndsWith("tar.exe",StringComparison.OrdinalIgnoreCase)){if(args[0]=="-tzf")return new NativeCommandResult{Output="codex-package.json\nbin/codex.exe\n"};MakePackage(args[3]);return new NativeCommandResult{Output=""};}
             if(file.EndsWith("schtasks.exe",StringComparison.OrdinalIgnoreCase)){if(args[0]=="/Create"){TaskFile=args[4];return new NativeCommandResult{Output="完成"};}return new NativeCommandResult{Output=File.ReadAllText(TaskFile)};}
             if(file.EndsWith("winget.exe",StringComparison.OrdinalIgnoreCase)&&!args.Contains("--id")&&Mode=="restart")return new NativeCommandResult{Output="Codex 9PLM9XGG6VKS 26.1.0.0 26.2.0.0 msstore"};
@@ -301,10 +351,33 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
         public System.Net.IPEndPoint RelayTarget;
         public void EnableRelay(System.Net.IPEndPoint target){RelayTarget=target;Step("relay");}
         public void DesktopUpdate(){Step("desktop");}public void OfficialCli(bool onlyIfMissing){Step(onlyIfMissing?"official-missing":"official");}public void Protection(){Step("guard");}public void Browser(){Step("browser");}
+        public string Playwright(Action beforeWrite){Step("playwright");return "Playwright CLI 就绪";}
+        public string ChromeDevTools(Action beforeWrite){Step("chrome-devtools");return "Chrome DevTools MCP 就绪";}
         public void SelectCli(string mode){Step("select:"+mode);Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=mode!="desktop-native",Kind="String",Value=mode});}
         public void VerifyCli(string mode){Step("verify:"+mode);Verified++;if(VerifyFailure==Verified)throw new IOException("模拟最终状态变化");}
     }
     public sealed class TaskSecurityFake {public string Stored="D:(A;;FA;;;SY)(A;;FA;;;BA)";public int Writes,Reads;public bool IgnoreWrite;public void SetSecurityDescriptor(string sddl,int flags){Assert(flags==0,"set flags");Writes++;if(!IgnoreWrite)Stored=sddl;}public string GetSecurityDescriptor(int flags){Assert(flags==4,"query flags");Reads++;return Stored;}}
+    internal static NativePaths BrowserToolsFiles(string folder,bool firefox=true){
+        var paths=new NativePaths{Home=Path.Combine(folder,"home"),Documents=Path.Combine(folder,"docs")};
+        var tools=Path.Combine(paths.Home,"browser-tools");
+        var node=Path.Combine(tools,"node-v24.22.3-win-x64","node.exe");
+        foreach(var file in new[]{node,Path.Combine(Path.GetDirectoryName(node),@"node_modules\npm\bin\npm-cli.js"),
+            Path.Combine(tools,@"cli-0.1.25\node_modules\@playwright\cli\playwright-cli.js"),
+            Path.Combine(tools,@"chrome-devtools-mcp-1.13.0\node_modules\chrome-devtools-mcp\out\Default\gen\src\bin\chrome-devtools-mcp.js"),
+            Path.Combine(tools,"playwright-launcher.cjs")})
+            NativeData.Write(file,"fixture");
+        if(firefox)WriteFirefoxFixture(Path.Combine(tools,"playwright-browsers"));
+        NativeData.Write(paths.PlaywrightSkill,"<!-- Managed by Codex Init Kit -->");
+        NativeData.Write(paths.Config,"[mcp_servers.chrome-devtools]\r\ncommand = "+NativeData.Json.Serialize(node)+"\r\n"+
+            "[mcp_servers.chrome-devtools.env]\r\nNAME = 'value'\r\n# keep\r\n[mcp_servers.other]\r\ncommand = 'other'\r\n");
+        return paths;
+    }
+    static void WriteFirefoxFixture(string cache){
+        var folder=Path.Combine(cache,"firefox-1");
+        NativeData.Write(Path.Combine(folder,"INSTALLATION_COMPLETE"),"fixture");
+        NativeData.Write(Path.Combine(folder,"firefox","firefox.exe"),"fixture");
+        NativeData.Write(Path.Combine(folder,"firefox","playwright.cfg"),"// fixture");
+    }
     static void HeadlessAuthorizationCancellation(){if(System.Windows.Application.Current==null)new System.Windows.Application{ShutdownMode=System.Windows.ShutdownMode.OnExplicitShutdown};var window=new MainWindow(true);var flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;var type=typeof(MainWindow);int starts=0,restored=0;bool presented=false;window.BringInitializationWindowForward=()=>restored++;window.WindowState=System.Windows.WindowState.Minimized;window.StartOperation=(op,id,drive,port,guard,options)=>{starts++;throw new Win32Exception(1223);};window.PresentInitializationDialog=dialog=>{presented=true;Assert(dialog.Title=="已取消初始化"&&window.WindowState==System.Windows.WindowState.Normal,"cancel result hidden");};try{var task=(System.Threading.Tasks.Task)type.GetMethod("Run",flags).Invoke(window,new object[]{"initialize","初始化",false,null,null});task.GetAwaiter().GetResult();Assert(starts==1&&presented&&restored==2&&!(bool)type.GetField("busy",flags).GetValue(window),"cancel continued or lost window");}finally{window.Close();}}
     static void MakePackage(string root,string version="1.2.3"){NativeData.Write(Path.Combine(root,"codex-package.json"),"{\"version\":\""+version+"\"}");foreach(var relative in new[]{"bin/codex.exe","bin/codex-code-mode-host.exe","codex-path/rg.exe","codex-resources/codex-command-runner.exe","codex-resources/codex-windows-sandbox-setup.exe"})NativeData.Write(Path.Combine(root,relative.Replace('/',Path.DirectorySeparatorChar)),relative=="bin/codex.exe"?"fixture-version:"+version:"fixture");}
 }

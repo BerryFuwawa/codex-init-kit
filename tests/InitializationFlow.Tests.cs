@@ -79,7 +79,7 @@ public static class InitializationFlowTests {
                 var buttons=Descendants<Button>(panel).ToArray();
                 bool success=expectedTitle=="已完成初始化";
                 var button=success?buttons.Single(b=>Equals(b.Content,"关闭")):buttons.Single();
-                Assert(success?buttons.Length==2&&buttons.Any(b=>Equals(b.Content,"启动Codex")):Equals(button.Content,"确认"),"Unexpected result actions");
+                Assert(success?buttons.Length==2&&buttons.Any(b=>Equals(b.Content,"启动 Codex")):Equals(button.Content,"确认"),"Unexpected result actions");
                 Assert(title.Text==expectedTitle&&dialog.Title==expectedTitle&&title.IsVisible&&title.ActualHeight>0,"Result dialog title was not visible");
                 var ink=body.Foreground as SolidColorBrush;var background=((((Border)dialog.Content).Background is SolidColorBrush)?((Border)dialog.Content).Background:MorandiTheme.Dark) as SolidColorBrush;
                 Assert(body.Text.Contains(expectedBody)&&body.IsVisible&&body.ActualHeight>0&&body.ActualWidth>0&&ink!=null&&ink.Color.A>0&&background!=null&&ink.Color!=background.Color,"Result details for "+expectedTitle+" were empty or hidden: expected="+expectedBody+", text="+body.Text+", visible="+body.IsVisible+", height="+body.ActualHeight);
@@ -188,17 +188,35 @@ public static class InitializationFlowTests {
     }
     static void VerifyInitializationGroups() {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
+        var browserFixture=Path.Combine(Path.GetTempPath(),"InitKit-browser-options-"+Guid.NewGuid().ToString("N"));
         try {
             Set(window,"configurationTab",1);Navigate(window,"初始化");window.UpdateLayout();
             var content=(StackPanel)Field(window,"content");var features=(StackPanel)((Border)content.Children[1]).Child;
             var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
             foreach(var title in new[]{"工作与规则","记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
             var choices=Descendants<CheckBox>(features).ToArray();
-            Assert(choices.Length==11&&choices.Distinct().Count()==11&&choices.Last()==Field(window,"subagents"),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.Length==13&&choices.Distinct().Count()==13&&choices.Skip(10).Cast<object>().SequenceEqual(new[]{Field(window,"subagents"),Field(window,"playwrightCli"),Field(window,"chromeDevToolsMcp")}),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.All(choice=>choice.ToolTip is ToolTip)&&choices.Skip(11).All(choice=>choice.IsChecked==false),"Feature tooltips or browser-tool defaults are missing");
+            ((CheckBox)Field(window,"playwrightCli")).IsChecked=true;
             var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
-            Assert(journal.IsChecked==false&&(bool)((Dictionary<string,object>)Call(window,"Options"))["memories"],"Grouping or navigation reset feature choices");
+            var options=(Dictionary<string,object>)Call(window,"Options");
+            Assert(journal.IsChecked==false&&(bool)options["memories"]&&(bool)options["playwrightCli"]&&!(bool)options["chromeDevToolsMcp"],"Grouping or navigation reset feature choices");
             foreach(var width in new[]{1000.0,1120.0}){window.Width=width;window.UpdateLayout();Assert(choices.All(c=>c.ActualWidth>0&&c.ActualHeight>0),"Grouped feature control was hidden at supported window width");}
-        }finally{window.Close();}
+            var tools=new NativeBrowserTools(NativeDesktopTests.BrowserToolsFiles(browserFixture),new CodexKit.Native.NativeServices(),null);
+            window.InspectBrowserTools=()=>tools;
+            Navigate(window,"初始化");window.UpdateLayout();
+            features=(StackPanel)((Border)content.Children[1]).Child;
+            Assert(Descendants<TextBlock>(features).Count(text=>text.Text=="已安装")==2,"Installed states not shown");
+            Assert(Descendants<Button>(features).Count(button=>Equals(button.Content,"卸载")&&button.IsEnabled)==2,"Missing installed tool removal controls");
+            Assert(!Descendants<CheckBox>(features).Any(check=>Equals(check.Content,"Playwright CLI")||Equals(check.Content,"Chrome DevTools MCP")),"Installed options kept their checkboxes");
+            options=(Dictionary<string,object>)Call(window,"Options");
+            Assert(!(bool)options["playwrightCli"]&&!(bool)options["chromeDevToolsMcp"],"Already installed tools remained selected");
+            tools.UninstallPlaywright();
+            Navigate(window,"初始化");window.UpdateLayout();
+            features=(StackPanel)((Border)content.Children[1]).Child;
+            Assert(Descendants<CheckBox>(features).Any(check=>Equals(check.Content,"Playwright CLI")&&check.IsChecked==false)
+                &&Descendants<Button>(features).Count(button=>Equals(button.Content,"卸载"))==1,"Removed tool checkbox was not restored");
+        }finally{window.Close();if(Directory.Exists(browserFixture))Directory.Delete(browserFixture,true);}
     }
     static void VerifyPreflight(bool running,bool accept,bool fail) {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
@@ -313,7 +331,7 @@ public static class InitializationFlowTests {
                 Exception failure=null;
                 dialog.Loaded+=(s,e)=>dialog.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,new Action(()=>{
                     try{
-                        var launch=Descendants<Button>(dialog).Single(b=>Equals(b.Content,"启动Codex"));
+                        var launch=Descendants<Button>(dialog).Single(b=>Equals(b.Content,"启动 Codex"));
                         Click(launch);
                         Assert(dialog.IsVisible&&launch.IsEnabled&&Descendants<TextBlock>(dialog).Any(t=>t.Text.Contains("可以重试")),"Launch failure did not permit retry");
                         Click(launch);

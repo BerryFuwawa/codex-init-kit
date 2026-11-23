@@ -32,6 +32,13 @@ public static class Program {
         if(args.Length==2 && args[0]=="--verify-desktop") return Verify(args[1],true);
         if(args.Length==2 && args[0]=="--status-json") return Status(args[1]);
         if(args.Length==2 && args[0]=="--render-preview") {var previewApp=new Application();var previewWindow=new MainWindow(true);previewWindow.RenderPages(Path.GetFullPath(args[1]));previewWindow.Close();return 0;}
+        if(args.Length==2 && args[0]=="--render-browser-tools-preview") {
+            var previewApp=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
+            var previewWindow=new MainWindow(true);
+            previewWindow.RenderBrowserToolsPreview(Path.GetFullPath(args[1]));
+            previewWindow.Close();
+            return 0;
+        }
         if(args.Length==2 && args[0]=="--check-update-json") {
             try { File.WriteAllText(Path.GetFullPath(args[1]),Core.Json.Serialize(Core.CheckUpdate(10808)),new UTF8Encoding(false));return 0; }
             catch(Exception ex) {File.WriteAllText(Path.GetFullPath(args[1]),Core.Json.Serialize(new {error=ex.Message}),new UTF8Encoding(false));return 1;}
@@ -41,11 +48,16 @@ public static class Program {
             try { Core.Extract(dir); foreach(var n in new[]{"init.cmd","guard.cmd","cua.cmd","Backend.ps1"}) if(new FileInfo(Path.Combine(dir,n)).Length<100) return 2; if(Core.Operations.Distinct().Count()!=Core.Operations.Length) return 3; return 0; }
             finally { if(Directory.Exists(dir)) Directory.Delete(dir,true); }
         }
-        if(args.Length>0 && args[0]!="--preview")return 64;
+#if BROWSER_TOOLS_PREVIEW
+        if(args.Length==0)args=new[]{"--preview-browser-tools"};
+#endif
+        bool browserToolsPreview=args.Length==1&&args[0]=="--preview-browser-tools";
+        if(args.Length>0 && args[0]!="--preview"&&!browserToolsPreview)return 64;
         if(args.Length==0)Core.CleanupCompletedUpdates(Core.Exe);
         var app=new Application();
         app.DispatcherUnhandledException+=(s,e)=>{var message=DesktopLocalization.ExceptionText(e.Exception);try{var path=Path.Combine(Core.Logs,"ui-"+Guid.NewGuid().ToString("N")+".log");File.WriteAllText(path,e.Exception.ToString(),new UTF8Encoding(false));DesktopLocalization.SaveChineseLog(path,message);}catch{}MessageBox.Show(message,"Codex Init Kit",MessageBoxButton.OK,MessageBoxImage.Error); e.Handled=true;};
-        var window=new MainWindow(args.Contains("--preview"));
+        var window=new MainWindow(browserToolsPreview||args.Contains("--preview"));
+        if(browserToolsPreview)window.OpenBrowserToolsPreview();
         return app.Run(window);
     }
     static int Status(string reportPath) {

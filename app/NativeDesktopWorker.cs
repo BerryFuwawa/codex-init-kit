@@ -13,12 +13,29 @@ internal static class NativeDesktopWorker {
         try{
             if(operation=="initialize-preflight"){log("@@INIT_PREFLIGHT@@"+Core.Json.Serialize(NativeDesktopWorkflow.Preflight(p,services,options,settings)));return 0;}
             if(operation=="status"){log("@@STATUS@@"+Core.Json.Serialize(NativeDesktopState.Status(p,services,components)));return 0;}
-            if(operation=="initialize"){
-                using(var mutex=new Mutex(false,"Local\\CodexInitNative-"+Core.Sid)){bool owned=false;try{try{owned=mutex.WaitOne(0);}catch(AbandonedMutexException){owned=true;}if(!owned)throw new IOException("另一个初始化操作正在运行，请等待完成。");return new NativeDesktopWorkflow(p,services,settings,components,log).Run(options,guard,()=>{
-                    RemoteRelayService.SyncSavedProxy(p.Home,log);
-                    if(!Core.RemoteRelaySelected(settings) && Core.Value(settings,"retryStages","").Length==0)
-                        RelayPreference.Save(Core.Root,false,RemoteRelayService.OwnedInstallation);
-                });}finally{if(owned)mutex.ReleaseMutex();}}
+            if(operation=="initialize"||NativeBrowserTools.IsRemoval(operation)||operation==NativeBrowserTools.InstallFirefoxOperation){
+                using(var mutex=new Mutex(false,"Local\\CodexInitNative-"+Core.Sid)){
+                    bool owned=false;
+                    try{
+                        try{owned=mutex.WaitOne(0);}catch(AbandonedMutexException){owned=true;}
+                        if(!owned)throw new IOException("已有初始化或卸载任务正在执行，请等待完成。");
+                        if(operation==NativeBrowserTools.InstallFirefoxOperation){
+                            new NativeBrowserTools(p,services,options.ProxyUrl).PreparePlaywrightFirefox();
+                            return 0;
+                        }
+                        if(NativeBrowserTools.IsRemoval(operation)){
+                            var tools=new NativeBrowserTools(p,services,null);
+                            if(operation==NativeBrowserTools.RemovePlaywrightOperation)tools.UninstallPlaywright();
+                            else tools.UninstallChromeDevTools();
+                            return 0;
+                        }
+                        return new NativeDesktopWorkflow(p,services,settings,components,log).Run(options,guard,()=>{
+                            RemoteRelayService.SyncSavedProxy(p.Home,log);
+                            if(!Core.RemoteRelaySelected(settings) && Core.Value(settings,"retryStages","").Length==0)
+                                RelayPreference.Save(Core.Root,false,RemoteRelayService.OwnedInstallation);
+                        });
+                    }finally{if(owned)mutex.ReleaseMutex();}
+                }
             }
             if(operation=="init-rollback"){var result=new NativeInitializer(p,services).Run("rollback",options,null);foreach(var item in result.steps)log(item.message);return result.state=="complete"?AfterProxyWrite(p.Home,log):1;}
             if(operation=="rollback-selected"){var id=Core.Value(settings,"rollbackId","");var entry=NativeDesktopState.Entries(p,services).SingleOrDefault(x=>(string)x["id"]==id);if(entry==null||!(bool)entry["available"])throw new IOException("回滚列表已变化或该版本不完整，请刷新后重新选择。");if((string)entry["kind"]=="cli"){components.CachedCli((string)entry["path"]);return 0;}var result=new NativeInitializer(p,services).Run("rollback",options,(string)entry["path"]);foreach(var item in result.steps)log(item.message);return result.state=="complete"?AfterProxyWrite(p.Home,log):1;}

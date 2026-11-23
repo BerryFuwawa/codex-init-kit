@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.7",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.7/CodexInitKit.exe",
-    "sha256":  "37a53630899421e7554ac6d6657b9840438297efdd7260f327dda27eb5752f3a",
-    "notes":  "模型列表跟随本机 Codex，支持恢复默认设置。子代理并发数默认 6，可调整并记住。全套图标换成圆润样式。"
+    "version":  "2.3.10",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.10/CodexInitKit.exe",
+    "sha256":  "de16ebf02fdabf6d2cc516a20bca6cb7e555070fac25596da2fecec07c7872a9",
+    "notes":  "按需安装 Playwright CLI 和 Chrome DevTools MCP。已安装的工具自动识别，可单独卸载。Firefox 在确认后才下载。"
 }

@@ -15,6 +15,8 @@ internal sealed class ConfigurationEffect {
         case "desktop":e.name="桌面应用组件";e.activation="下一次打开桌面后使用新组件；是否等待系统重启，以商店和组件检查结果为准。";e.impact="更新替换前需确认退出桌面，会中断所有正在进行的对话。";break;
         case "official":e.name="官方独立 CLI 组件";e.activation="下一次以该入口创建 CLI 进程时采用；单独更新组件不改变所选 CLI 模式。";e.impact="已有进程不热替换；已保留旧入口，当前实例版本未验证。";break;
         case "cua":e.name="电脑操作组件（CUA）";e.activation="新建电脑操作组件进程时读取；是否复用旧组件待验证，真实操作另行验收。";e.impact="替换使用中的组件前需要确认退出，不能仅凭文件完整性宣称当前连接恢复。";break;
+        case "playwright":e.name="Playwright CLI";e.activation="新会话可通过 Playwright CLI 技能使用该工具。";e.impact="独立浏览器可直接使用。使用已有 Edge 或 Chrome 标签页需要在浏览器内确认连接。";break;
+        case "chrome-devtools":e.name="Chrome DevTools MCP";e.activation="新会话加载 Chrome DevTools MCP。";e.impact="首次调用浏览器工具时按需启动独立 Chrome。";break;
         case "rtk":e.name="RTK";e.activation="下一次 RTK 命令读取组件及统计设置；新增 PATH 由取得新环境的进程采用。";e.impact="现有终端环境不会自动更新；不重写现有钩子。";break;
         case "folders":e.name="工作目录";e.activation="新建目录立即可用；工作区默认路径随 config.toml 的读取范围生效。";e.impact="只补齐缺失目录，不移动现有文件或会话。";break;
         default:throw new ArgumentException("未知配置变更："+id);

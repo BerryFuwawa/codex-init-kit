@@ -1,5 +1,5 @@
 ﻿[CmdletBinding()]
-param([string]$OutputDirectory)
+param([string]$OutputDirectory,[switch]$BrowserToolsPreview)
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 if (-not $OutputDirectory) { $OutputDirectory=Join-Path $root 'build\desktop' }
@@ -12,6 +12,7 @@ $init=Join-Path $scriptRoot '第1步-Codex初始化管理-V4.7.0-GPT5.6-LUNA-MAX
 $guard=Join-Path $scriptRoot '第2步-Codex启动保护与更新管理器-V5.1.2-GPT5.6-LUNA-MAX.cmd'
 $out=Join-Path $OutputDirectory 'CodexInitKit.exe'
 $argsList=@('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output',"/out:$out",('/win32manifest:'+(Join-Path $root 'app\app.manifest')))
+if($BrowserToolsPreview){$argsList+='/define:BROWSER_TOOLS_PREVIEW'}
 $argsList+=('/win32icon:'+(Join-Path $root 'assets\app.ico'))
 $argsList+=('/resource:'+(Join-Path $root 'LICENSE')+',Payload.Project.LICENSE')
 $argsList+=('/resource:'+(Join-Path $root 'assets\logo.png')+',Brand.logo.png')

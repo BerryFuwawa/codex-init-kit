@@ -17,6 +17,11 @@ public sealed class NativeSession {
     }
     public static readonly string[] LegacyNames={"codex-latest.exe","codex-code-mode-host.exe","codex-windows-sandbox-setup.exe","codex-command-runner.exe"};
     void Save(string target,string relative){NativeData.NoLinks(target);var entry=new SavedFile{Target=Path.GetFullPath(target),Backup=relative,Existed=File.Exists(target)};if(Directory.Exists(target))throw new IOException("预期文件被目录占用："+target);if(entry.Existed){var dest=Path.Combine(root,"Backups",relative);Directory.CreateDirectory(Path.GetDirectoryName(dest));File.Copy(target,dest,false);}files.Add(entry);}
+    internal void Include(string target,string relative){
+        if(files.Any(file=>String.Equals(file.Target,target,StringComparison.OrdinalIgnoreCase)))return;
+        Save(target,relative);
+        NativeData.Write(Path.Combine(root,"session.json"),NativeData.Json.Serialize(this));
+    }
     void Persist(NativePaths p){
         NativeData.Write(Path.Combine(root,"session.json"),NativeData.Json.Serialize(this));
         var lines=new List<string>{"RESTORE_CONFIG="+(files.Any(x=>x.Target.Equals(p.Config,StringComparison.OrdinalIgnoreCase))?"1":"0"),"RESTORE_ENV=1","RESTORE_AGENTS="+(files.Any(x=>x.Target.Equals(p.Agents,StringComparison.OrdinalIgnoreCase))?"1":"0"),"RESTORE_RTK="+(files.Any(x=>x.Target.Equals(p.RtkDoc,StringComparison.OrdinalIgnoreCase))?"1":"0"),"RESTORE_RTK_EXE="+(files.Any(x=>x.Target.Equals(p.Rtk,StringComparison.OrdinalIgnoreCase))?"1":"0"),"RESTORE_CLI="+(registry.ContainsKey("CODEX_CLI_PATH")?"1":"0"),"RESTORE_USER_PATH="+(registry.ContainsKey("Path")?"1":"0"),"RESTORE_RUNTIME="+(registry.ContainsKey("CODEX_CLI_PATH")?"1":"0"),"RESTORE_RTK_CONFIG="+(files.Any(x=>x.Target.Equals(p.RtkConfig,StringComparison.OrdinalIgnoreCase))?"1":"0"),"RESTORE_HOOKS="+(files.Any(x=>x.Target.Equals(p.Hooks,StringComparison.OrdinalIgnoreCase))?"1":"0")};

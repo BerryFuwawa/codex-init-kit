@@ -17,12 +17,12 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-public const string Version = "2.3.7";
+public const string Version = "2.3.10";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}
     public static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check","relay-enable","relay-disable","relay-sync"};
+    public static readonly string[] Operations = {"status","initialize-preflight","initialize","proxy","init-rollback","rollback-selected","rollback-delete-all","cua-check","cua-repair","guard-install","guard-update","guard-native","guard-current","guard-rollback","guard-uninstall","doctor","config-check","config-cleanup","browser-check","browser-repair","desktop-update","official-cli-update","desktop-core-check","desktop-core-repair","model-network-check","relay-enable","relay-disable","relay-sync",NativeBrowserTools.RemovePlaywrightOperation,NativeBrowserTools.RemoveChromeDevToolsOperation,NativeBrowserTools.InstallFirefoxOperation};
     public static string Exe { get { return Assembly.GetExecutingAssembly().Location; } }
     public const string DefaultProxyHost = "127.0.0.1";
     internal const string DefaultParentModel = "gpt-6.2-sol";
@@ -64,6 +64,7 @@ public const string Version = "2.3.7";
     static Dictionary<string,object> DefaultOptions() {
         return new Dictionary<string,object>(StringComparer.OrdinalIgnoreCase) {
             {"remoteRelay", false}, {"folderManagement", true}, {"antiOverDefense", true}, {"workJournal",true}, {"commandLineFirst",true}, {"allowCloseRunningApp",false}, {"memories",true}, {"githubMirrorEnabled",true}, {"customGithubMirror",""}, {"subagents", false}, {"childAutoAssign",true}, {"cuaRepair", true}, {"desktopInstallLocation",""},{"modelCliPath",""},{"browserRepair", true}, {"officialCliUpdate", true}, {"desktopUpdate", true},
+            {"playwrightCli",false},{"chromeDevToolsMcp",false},
             {"parentModel", DefaultParentModel}, {"childModel", DefaultChildModel},
             {"maxConcurrentSubagents", Native.NativeOptions.DefaultMaxConcurrentSubagents},
             {"parentEffort", DefaultParentEffort}, {"childEffort", DefaultChildEffort},
@@ -130,6 +131,7 @@ public const string Version = "2.3.7";
         }
         normalized["cuaRepair"]=ReadOptionBoolean(source,"cuaRepair",true);
         foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate"})normalized[key]=ReadOptionBoolean(source,key,true);
+        foreach(var key in new[]{"playwrightCli","chromeDevToolsMcp"})normalized[key]=ReadOptionBoolean(source,key,false);
         var cliMode=ReadOptionString(source,"cliMode","auto");
         if(cliMode!="auto"&&cliMode!="desktop-native"&&cliMode!="official-standalone")throw new ArgumentException("请选择有效的 CLI 模式。");
         normalized["cliMode"]=cliMode;
@@ -163,6 +165,9 @@ public const string Version = "2.3.7";
     }
     internal static bool RemoteRelaySelected(Dictionary<string,object> options) {
         return ReadOptionBoolean(options,"remoteRelay",false);
+    }
+    internal static bool BrowserToolSelected(Dictionary<string,object> options,string key) {
+        return ReadOptionBoolean(options,key,false);
     }
     internal static bool WorkerNeedsAdmin(string operation,bool guard,Dictionary<string,object> options){
         if(operation!="initialize")return NeedsAdmin(operation)||operation=="guard-install";

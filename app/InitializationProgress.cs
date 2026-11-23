@@ -25,6 +25,8 @@ internal sealed class InitializationProgress {
         if(protection)Stages.Add(new InitializationStage("guard","安装启动保护"));
         Stages.Add(new InitializationStage("cli","应用所选 CLI"));
         if(Convert.ToBoolean(options["browserRepair"]))Stages.Add(new InitializationStage("browser","浏览器组件检查"));
+        if(Core.BrowserToolSelected(options,"playwrightCli"))Stages.Add(new InitializationStage(NativeBrowserTools.PlaywrightStage,"准备 Playwright CLI"));
+        if(Core.BrowserToolSelected(options,"chromeDevToolsMcp"))Stages.Add(new InitializationStage(NativeBrowserTools.ChromeDevToolsStage,"配置 Chrome DevTools MCP"));
         var retry=Core.Value(options,"retryStages","");if(retry.Length>0)foreach(var stage in Stages.Where(x=>x.Id!="preflight"&&!retry.Split(',').Contains(x.Id))){InitializationStage old;if(previous.TryGetValue(stage.Id,out old)){stage.State=old.State;stage.Detail=old.Detail;}else{stage.State="skipped";stage.Detail="本次仅重试所选项目，此项未执行。";}}
     }
     internal void Apply(Dictionary<string,object> record){

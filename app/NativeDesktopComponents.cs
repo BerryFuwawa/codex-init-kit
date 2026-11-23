@@ -139,5 +139,17 @@ internal sealed class NativeDesktopComponents:IDesktopInitializationSteps {
     internal void AutoMaintain(){var app=services.Desktop.Discover();if(services.Processes.List(paths,app).Count>0){log("应用正在运行，登录维护已跳过。不会中断任务。");return;}if(!File.Exists(StateFile)||!Convert.ToBoolean(State().ContainsKey("NativeGuard")?State()["NativeGuard"]:false))return;try{NativeCli(app);log("桌面原生组件完整，保留当前用户选择。");}catch{Package(Current);if(DetectCli()=="desktop-native")SelectCli("official-standalone");}}
     public void EnableRelay(System.Net.IPEndPoint target){RemoteRelayService.Configure(target,false);}
     public void Browser(){var browser=new NativeDesktopBrowser(paths,services,log);try{browser.Repair();}finally{if(browser.Changed){var effect=ConfigurationEffect.Create("cua","浏览器电脑操作组件已恢复为官方原始文件。");changes.Add(effect);}}}
+    public string Playwright(Action beforeWrite){
+        var tool=new NativeBrowserTools(paths,services,NativeDesktopWorkflow.Options(settings,port).ProxyUrl);
+        var result=tool.InstallPlaywright(beforeWrite);
+        if(tool.IntegrationChanged)ConfigurationEffect.Record(changes,"playwright","已添加 Playwright CLI 技能。");
+        return result;
+    }
+    public string ChromeDevTools(Action beforeWrite){
+        var tool=new NativeBrowserTools(paths,services,NativeDesktopWorkflow.Options(settings,port).ProxyUrl);
+        var result=tool.InstallChromeDevTools(beforeWrite);
+        if(tool.IntegrationChanged)ConfigurationEffect.Record(changes,"chrome-devtools","已注册 Chrome DevTools MCP。");
+        return result;
+    }
 }
 }
