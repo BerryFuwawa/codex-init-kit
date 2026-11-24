@@ -36,6 +36,7 @@ $argsList+="/resource:$(Join-Path $root 'tests\RuntimeDiscovery.Tests.ps1'),Payl
 $argsList+="/resource:$(Join-Path $root 'app\AntiOverDefense.md'),Payload.AntiOverDefense.md"
 $argsList+="/resource:$(Join-Path $root 'app\WorkJournal.md'),Payload.WorkJournal.md"
 $argsList+="/resource:$(Join-Path $root 'app\CommandLineFirst.md'),Payload.CommandLineFirst.md"
+$argsList+="/resource:$(Join-Path $root 'app\OpenSourceReference.md'),Payload.OpenSourceReference.md"
 foreach($name in @('RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
     $argsList+="/resource:$(Join-Path $root ('app\'+$name)),Payload.$name"
 }
@@ -58,7 +59,7 @@ $argsList+=(Join-Path $root 'tests\NetworkDiagnostics.Tests.cs')
 $argsList+=(Join-Path $root 'tests\RemoteControlRelay.Tests.cs')
 $argsList+=@(Get-ChildItem -LiteralPath (Join-Path $root 'native') -Filter '*.cs' | ForEach-Object FullName)
 foreach($data in Get-ChildItem -LiteralPath (Join-Path $root 'native\Data') -File){$argsList+=('/resource:'+$data.FullName+',Native.'+$data.Name)}
-foreach($name in @('RtkRules.md','AntiOverDefense.md','WorkJournal.md','CommandLineFirst.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){$argsList+=('/resource:'+(Join-Path $root ('app\'+$name))+',Native.Desktop.'+$name)}
+foreach($name in @('RtkRules.md','AntiOverDefense.md','WorkJournal.md','CommandLineFirst.md','OpenSourceReference.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){$argsList+=('/resource:'+(Join-Path $root ('app\'+$name))+',Native.Desktop.'+$name)}
 & $compiler @argsList
 if($LASTEXITCODE -ne 0) { throw "Compile failed: $LASTEXITCODE" }
 Write-Output $out

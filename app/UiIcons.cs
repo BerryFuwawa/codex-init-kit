@@ -11,6 +11,8 @@ internal static class UiIcons {
     const string Terminal="M6.7,4.6 H17.3 Q21,4.6 21,8.4 V15.6 Q21,19.4 17.3,19.4 H6.7 Q3,19.4 3,15.6 V8.4 Q3,4.6 6.7,4.6 Z M7.1,8.9 L9.6,11.2 Q10.1,11.7 9.6,12.2 L7.1,14.5 M13,14.5 H16.7";
     const string History="M3.7,9.3 A8.4,8.4 0 1 1 4.2,16.2 M3,5.6 V9.4 Q3,10.5 4.1,10.5 H7.9 M12.1,7.7 V11.8 Q12.1,12.3 12.6,12.6 L15.4,14.5";
     const string Download="M12,3.1 V14.2 M7.6,10.8 L11.3,14.7 Q12,15.4 12.7,14.7 L16.4,10.8 M3.5,15.3 V17.4 Q3.5,20.6 6.7,20.6 H17.3 Q20.5,20.6 20.5,17.4 V15.3";
+    const string Journal="M7,3.3 H17.5 Q20.4,3.3 20.4,6.3 V17.8 Q20.4,20.7 17.5,20.7 H7 Q4,20.7 4,17.8 V6.3 Q4,3.3 7,3.3 Z M8.2,3.6 V20.4 M12.4,3.6 V10.2 L14.8,8.6 L17.2,10.2 V3.6";
+    const string CodeWindow="M6.2,4.3 H17.8 Q21.1,4.3 21.1,7.6 V16.5 Q21.1,19.8 17.8,19.8 H6.2 Q2.9,19.8 2.9,16.5 V7.6 Q2.9,4.3 6.2,4.3 Z M3.5,8.3 H20.5 M9.8,11.5 L7.3,14 L9.8,16.5 M14.2,11.5 L16.7,14 L14.2,16.5";
     const string Note="M8.3,3.1 H14.1 Q15.1,3.1 15.9,3.9 L18.9,6.9 Q19.8,7.8 19.8,9 V17.7 Q19.8,20.9 16.6,20.9 H8.3 Q4.8,20.9 4.8,17.5 V6.5 Q4.8,3.1 8.3,3.1 Z M14,3.8 V6.6 Q14,8.6 15.9,8.6 H18.9 M8.6,12 H15.7 M8.6,15.8 H13.9";
     const string Close="M5.6,5.6 L18.4,18.4 M18.4,5.6 L5.6,18.4";
     const string Back="M19.5,12 H5 M11.3,5.7 L5.6,11.3 Q4.9,12 5.6,12.7 L11.3,18.3";
@@ -55,6 +57,8 @@ internal static class UiIcons {
             case "概览":return Home;
             case "初始化":return Play;
             case "提示":return Hint;
+            case "工作习惯":return Journal;
+            case "开发习惯":return CodeWindow;
             case "连接与修复":case "连接状态":return Link;
             case "CLI 管理":return Terminal;
             case "备份与回滚":return History;

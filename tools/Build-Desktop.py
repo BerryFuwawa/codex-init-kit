@@ -31,7 +31,7 @@ for name in ("RtkRules.md", "FolderRules.md", "SubagentRules.md", "HERO-Anti-Ove
     resources["Payload." + name] = repo / "app" / name
 sources = list((repo / "app").glob("*.cs")) + list((repo / "native").glob("*.cs"))
 for data in (repo / "native/Data").iterdir(): resources["Native." + data.name] = data
-for name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]: resources["Native.Desktop." + name] = repo / "app" / name
+for name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","OpenSourceReference.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]: resources["Native.Desktop." + name] = repo / "app" / name
 sources += [repo / path for path in re.findall(r"\$argsList\+=\(Join-Path \$root '(tests\\[^']+\.cs)'\)", build)]
 resources["Payload.Project.LICENSE"] = repo / "LICENSE"
 args = ["/nologo", "/target:winexe", "/platform:x64", "/optimize+", "/utf8output",

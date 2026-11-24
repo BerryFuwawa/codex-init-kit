@@ -186,6 +186,25 @@ public static class InitializationFlowTests {
             foreach(var nested in Descendants<T>(child))yield return nested;
         }
     }
+    static void VerifyWorkRulePreferences() {
+        string subkey=@"Software\CodexInitKit\Tests\"+Guid.NewGuid().ToString("N");
+        string path=@"HKEY_CURRENT_USER\"+subkey;
+        var keys=new[]{"folderManagement","antiOverDefense","workJournal","commandLineFirst","memories","openSourceReference"};
+        try {
+            for(int pass=0;pass<3;pass++){
+                var window=new MainWindow(true);
+                try {
+                    Call(window,"BindWorkRulePreferences",path);
+                    var options=(Dictionary<string,object>)Call(window,"Options");
+                    for(int i=0;i<keys.Length;i++){
+                        bool expected=pass==0||(pass==1?i%2==0:i%2!=0);
+                        Assert((bool)options[keys[i]]==expected,"Reopening lost "+keys[i]);
+                        if(pass<2)((CheckBox)Field(window,keys[i])).IsChecked=pass==0?i%2==0:i%2!=0;
+                    }
+                }finally{window.Close();}
+            }
+        }finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(subkey,false);}
+    }
     static void VerifyInitializationGroups() {
         var window=new MainWindow(true){Left=-20000,Top=-20000,Opacity=0,ShowInTaskbar=false};window.Show();
         var browserFixture=Path.Combine(Path.GetTempPath(),"InitKit-browser-options-"+Guid.NewGuid().ToString("N"));
@@ -193,10 +212,16 @@ public static class InitializationFlowTests {
             Set(window,"configurationTab",1);Navigate(window,"初始化");window.UpdateLayout();
             var content=(StackPanel)Field(window,"content");var features=(StackPanel)((Border)content.Children[1]).Child;
             var labels=Descendants<TextBlock>(features).Select(t=>t.Text).ToArray();
-            foreach(var title in new[]{"工作与规则","记忆","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
+            Assert(!labels.Contains("记忆"),"Memory still occupies a separate card");
+            foreach(var title in new[]{"工作习惯","开发习惯","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
             var choices=Descendants<CheckBox>(features).ToArray();
-            Assert(choices.Length==13&&choices.Distinct().Count()==13&&choices.Skip(10).Cast<object>().SequenceEqual(new[]{Field(window,"subagents"),Field(window,"playwrightCli"),Field(window,"chromeDevToolsMcp")}),"Feature grouping duplicated, lost or misplaced a checkbox");
-            Assert(choices.All(choice=>choice.ToolTip is ToolTip)&&choices.Skip(11).All(choice=>choice.IsChecked==false),"Feature tooltips or browser-tool defaults are missing");
+            var workChoices=new[]{"文件夹管理功能","按需笔记与文档管理","启用 Codex 记忆","防止过度防御","优先使用命令行","开发时参考开源案例"};
+            Assert(choices.Take(6).Select(c=>Convert.ToString(c.Content)).SequenceEqual(workChoices),"Work rule order or grouping changed");
+            Assert(choices.Take(3).All(c=>c.Parent==choices[0].Parent)&&choices.Skip(3).Take(3).All(c=>c.Parent==choices[3].Parent)&&choices[0].Parent!=choices[3].Parent,"Work and development habits must use separate cards");
+            Assert(choices.Take(6).All(c=>c.IsChecked==true),"New habit selections must default on");
+            Assert(UiIcons.For("工作习惯")!=null&&UiIcons.For("开发习惯")!=null&&UiIcons.For("工作习惯")!=UiIcons.For("开发习惯"),"Habit icons must be distinct");
+            Assert(choices.Length==14&&choices.Distinct().Count()==14&&choices.Skip(11).Cast<object>().SequenceEqual(new[]{Field(window,"subagents"),Field(window,"playwrightCli"),Field(window,"chromeDevToolsMcp")}),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.All(choice=>choice.ToolTip is ToolTip)&&choices.Skip(12).All(choice=>choice.IsChecked==false),"Feature tooltips or browser-tool defaults are missing");
             ((CheckBox)Field(window,"playwrightCli")).IsChecked=true;
             var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
             var options=(Dictionary<string,object>)Call(window,"Options");
@@ -354,7 +379,7 @@ public static class InitializationFlowTests {
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
-        VerifyInitializationGroups();VerifyOverviewRecoveryButton();VerifyButtonShadows();
+        VerifyInitializationGroups();VerifyWorkRulePreferences();VerifyOverviewRecoveryButton();VerifyButtonShadows();
     }
 }
 }

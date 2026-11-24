@@ -8,7 +8,7 @@ public partial class MainWindow {
     LogViewport githubViewport;
     void UpdateBusyControls(){
         bool locked=busy&&activeOperation=="initialize";
-        foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,githubMirrors})control.IsEnabled=!locked;
+        foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,openSourceReference,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,githubMirrors})control.IsEnabled=!locked;
         playwrightCli.IsEnabled=chromeDevToolsMcp.IsEnabled=!locked;
         foreach(var button in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)
             .Where(button=>button.Name=="RemovePlaywrightCli"||button.Name=="RemoveChromeDevToolsMcp"))

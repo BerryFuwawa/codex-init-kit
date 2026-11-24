@@ -142,7 +142,7 @@ enabled = true
     [IO.File]::Copy($journalSource,(Join-Path $payload 'WorkJournal.md'))
     $commandLineSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project 'app\CommandLineFirst.md'}else{Join-Path $sourceRoot 'CommandLineFirst.md'}
     [IO.File]::Copy($commandLineSource,(Join-Path $payload 'CommandLineFirst.md'))
-    foreach($resource in @('ConfigCompatibility.cs','RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
+    foreach($resource in @('ConfigCompatibility.cs','OpenSourceReference.md','RtkRules.md','FolderRules.md','SubagentRules.md','HERO-Anti-OverDefense.LICENSE.txt')){
         $resourceSource=if([string]::IsNullOrWhiteSpace($testPayloadRoot)){Join-Path $project ('app\'+$resource)}else{Join-Path $sourceRoot $resource}
         [IO.File]::Copy($resourceSource,(Join-Path $payload $resource))
     }
@@ -425,6 +425,7 @@ exit /b 0
     Assert ($enabledRules.Contains($journalText.TrimEnd()) -and ([regex]::Matches($enabledRules,'<!-- BEGIN CODEX WORK JOURNAL RULES -->').Count -eq 1)) 'Enabled work journal rules were missing or duplicated.'
     $commandLineText=[IO.File]::ReadAllText((Join-Path $payload 'CommandLineFirst.md'),[Text.Encoding]::UTF8).Replace("`r`n","`n")
     Assert ($enabledRules.Contains($commandLineText.TrimEnd())) 'Command-line preference rules were missing.'
+    Assert ($enabledRules.Contains('<!-- BEGIN CODEX OPEN SOURCE REFERENCE RULES -->')) 'Open source guidance missing from adapter.'
     Assert ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($enabledRules)).Length -gt 8191) 'The all-rules fixture no longer exercises oversized batch input.'
     $licenseText=[IO.File]::ReadAllText((Join-Path $payload 'HERO-Anti-OverDefense.LICENSE.txt'))
     Assert ($licenseText.Contains('cc79bd03a407eaabe5a0237274d3cdee25f79156') -and $licenseText.Contains('Copyright (c) 2026 Ruofeng Yang') -and $licenseText.Contains('THE SOFTWARE IS PROVIDED "AS IS"') -and -not $enabledRules.Contains('MIT License') -and -not $enabledRules.Contains('https://github.com/wanshuiyin/')) 'HERO attribution was not separated from AGENTS.'
@@ -452,8 +453,9 @@ exit /b 0
     $journalDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{workJournal=$false;subagents=$false}
     $journalDisabledRules=Read-AdapterWorkRules $journalDisabledAdapter
     Assert (-not $journalDisabledRules.Contains('<!-- BEGIN CODEX WORK JOURNAL RULES -->') -and $journalDisabledRules.Contains($commandLineText.TrimEnd())) 'Unchecked work journal affected selected rules.'
-    $commandLineDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{commandLineFirst=$false;subagents=$false}
+    $commandLineDisabledAdapter=New-InitAdapter (Join-Path $payload 'init.cmd') $payload 'D' 0 @{commandLineFirst=$false;openSourceReference=$false;subagents=$false}
     $commandLineDisabledRules=Read-AdapterWorkRules $commandLineDisabledAdapter
+    Assert (-not $commandLineDisabledRules.Contains('<!-- BEGIN CODEX OPEN SOURCE REFERENCE RULES -->')) 'Disabled open source guidance still present.'
     Assert (-not $commandLineDisabledRules.Contains('<!-- BEGIN CODEX COMMAND LINE FIRST RULES -->') -and $commandLineDisabledRules.Contains($journalText.TrimEnd())) 'Unchecked command-line preference affected selected rules.'
     $rtkText=[IO.File]::ReadAllText((Join-Path $payload 'RtkRules.md')).Replace("`r`n","`n").TrimEnd()
     Assert ($commandLineDisabledRules.StartsWith($rtkText)) 'RTK ceased to be independent of the command-line preference.'

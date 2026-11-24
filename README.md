@@ -4,7 +4,7 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.10 更新说明](docs/Release-2.3.10.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.11 更新说明](docs/Release-2.3.11.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 
@@ -16,7 +16,7 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.10 更新�
 
 只想处理某个故障，可以直接打开「连接与修复」或「CLI 管理」。如果只需要配置代理，可以在向导里取消「开启远控转发」。[查看完整初始化选项](docs/Settings.md)
 
-向导还可以设置无项目任务存放目录，并按需启用记忆、防止过度防御、按需笔记和优先使用命令行等功能。[可选功能](docs/Settings.md#可选功能) · [防止过度防御](docs/AntiOverDefense.md)
+「工作习惯」可设置工作目录、按需笔记和 Codex 记忆。「开发习惯」新增默认勾选的「开发时参考开源案例」，让 Codex 在设计新功能时参考 GitHub 上的类似做法，再决定复用或自行实现。六个选项分别记住上次的选择。[可选功能](docs/Settings.md#可选功能) · [防止过度防御](docs/AntiOverDefense.md)
 
 ## 解决常见问题
 
@@ -46,7 +46,7 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.10 更新�
 
 两项都可以在「初始化 → 功能选择」中单独勾选。已安装的工具会自动识别，支持单独卸载。[浏览器工具说明](docs/Settings.md#浏览器工具)
 
-![Playwright CLI 和 Chrome DevTools MCP 的安装与管理](assets/screenshots/v2.3.10/browser-tools.png)
+![工作习惯、开发习惯和可选浏览器工具](assets/screenshots/v2.3.11/feature-selection.png)
 
 ## 备份与回滚
 

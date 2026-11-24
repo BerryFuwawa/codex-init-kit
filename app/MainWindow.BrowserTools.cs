@@ -33,6 +33,7 @@ public partial class MainWindow {
         SetFeatureHint(antiOverDefense,"为 Codex 写入工作规则，避免为实际用不到的情况增加复杂度。");
         SetFeatureHint(workJournal,"让 Codex 按需用 Markdown 记录重要决定、进度和排查结果。");
         SetFeatureHint(commandLineFirst,"有可靠命令行工具时，让 Codex 优先直接执行和核验。");
+        SetFeatureHint(openSourceReference,"开发新功能时，Codex 会参考 GitHub 上的类似做法，再决定使用现成工具、借鉴思路或自行实现。");
         SetFeatureHint(memories,"允许 Codex 生成和使用本地记忆。关闭时保留已有记忆文件。");
         SetFeatureHint(guard,"检查和修复 Codex CLI 的启动入口，并安装登录时的维护任务。");
         SetFeatureHint(cuaRepair,"检查电脑操作组件，并在组件缺失或损坏时修复。");

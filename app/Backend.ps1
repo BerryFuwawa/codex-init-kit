@@ -30,6 +30,7 @@ $script:DefaultOptions = [ordered]@{
     antiOverDefense = $true
     workJournal = $true
     commandLineFirst = $true
+    openSourceReference = $true
     allowCloseRunningApp = $false
     memories = $true
     githubMirrorEnabled = $true
@@ -140,7 +141,7 @@ function Convert-BackendOptions {
         throw '最大并发子代理数必须是 1 到 9223372036854775806 之间的整数。'
     }
     $normalized.maxConcurrentSubagents = $maxConcurrentSubagents
-    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
+    foreach ($name in @('browserRepair','officialCliUpdate','desktopUpdate','antiOverDefense','workJournal','commandLineFirst','openSourceReference','memories')) { $normalized[$name] = Convert-BackendOptionBoolean (& $get $name) $name $true }
     $normalized.allowCloseRunningApp=Convert-BackendOptionBoolean (& $get 'allowCloseRunningApp') 'allowCloseRunningApp' $false
     $approvedProcesses=& $get 'closeApprovedProcesses'
     if($null -ne $approvedProcesses){
@@ -641,6 +642,7 @@ function New-InitAdapter {
         antiOverDefense = 'AntiOverDefense.md'
         workJournal = 'WorkJournal.md'
         commandLineFirst = 'CommandLineFirst.md'
+        openSourceReference = 'OpenSourceReference.md'
     }
     foreach ($name in $optionalRules.Keys) {
         if ($resolvedOptions[$name]) {

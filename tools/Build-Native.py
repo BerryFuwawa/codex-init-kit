@@ -14,7 +14,7 @@ for reference in ['System.dll','System.Core.dll','System.Web.Extensions.dll','Sy
     params.append('/reference:'+str(framework/reference))
 for resource in sorted((root/'native/Data').iterdir()):
     params.append('/resource:'+str(resource)+',Native.'+resource.name)
-for resource_name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]:
+for resource_name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","OpenSourceReference.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]:
     params.append('/resource:'+str(root/'app'/resource_name)+',Native.Desktop.'+resource_name)
 if args.tests:
     params.append(str(root/'tests/ProcessTermination.Tests.cs'))

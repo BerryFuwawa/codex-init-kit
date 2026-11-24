@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.10",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.10/CodexInitKit.exe",
-    "sha256":  "de16ebf02fdabf6d2cc516a20bca6cb7e555070fac25596da2fecec07c7872a9",
-    "notes":  "按需安装 Playwright CLI 和 Chrome DevTools MCP。已安装的工具自动识别，可单独卸载。Firefox 在确认后才下载。"
+    "version":  "2.3.11",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.11/CodexInitKit.exe",
+    "sha256":  "82de417cbbae003845fbbeefcbe10c24e0f426e35589523aba5b062874844e0d",
+    "notes":  "新增「开发时参考开源案例」。工作习惯与开发习惯分开显示，各自记住上次选择。"
 }
