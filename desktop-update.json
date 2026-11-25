@@ -1,8 +1,8 @@
 {
     "schema_version":  1,
     "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.11",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.11/CodexInitKit.exe",
-    "sha256":  "82de417cbbae003845fbbeefcbe10c24e0f426e35589523aba5b062874844e0d",
-    "notes":  "新增「开发时参考开源案例」。工作习惯与开发习惯分开显示，各自记住上次选择。"
+    "version":  "2.3.12",
+    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.12/CodexInitKit.exe",
+    "sha256":  "2b694aeb85d8d3951d1182337da6e9c05d55606000f42eb3212610b788255419",
+    "notes":  "父模型和子模型优先显示桌面版型号，工具补充的型号标为「内置」。"
 }

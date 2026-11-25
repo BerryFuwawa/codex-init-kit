@@ -8,7 +8,7 @@ namespace CodexKit {
 public sealed class CurrentModelSettings {
     public string ParentModel=Core.DefaultParentModel, ParentEffort=Core.DefaultParentEffort, ChildModel=Core.DefaultChildModel, ChildEffort=Core.DefaultChildEffort;
 
-    public bool Subagents, AutoAssign;
+    public bool Subagents, AutoAssign, HasSavedParent;
     public long MaxConcurrentSubagents=Native.NativeOptions.DefaultMaxConcurrentSubagents;
 
     public static string CodexHome() {
@@ -42,6 +42,7 @@ public sealed class CurrentModelSettings {
         var block=Regex.Match(agents,@"(?ms)^[ \t]*BEGIN CODEX LUNA PROMPT V[^\r\n]*\r?\n.*?^[ \t]*END CODEX LUNA PROMPT V[^\r\n]*\r?$");
         var managed=Values(block.Success?block.Value:"",false);
         var result=new CurrentModelSettings();
+        result.HasSavedParent=config.ContainsKey("model");
         var savedSwitch=Get(config,"agents.enabled",Get(config,"features.multi_agent",block.Success?"true":"false"));
         bool v2Enabled;
         ManagedToml.ReadSubagentSettings(configText,out v2Enabled,out result.MaxConcurrentSubagents);

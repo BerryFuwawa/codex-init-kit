@@ -41,6 +41,9 @@ public static class CurrentModelSettingsTests {
         Assert(catalog.Check(current.ChildModel,current.ChildEffort).Contains("尚未验证"),"An inherited unknown model was lost or falsely verified");
         catalog.IncludeCurrent("gpt-6-luna","ultra");Assert(catalog.Check("gpt-6-luna","ultra").Contains("尚未验证"),"An inherited unknown effort was lost or falsely verified");
         catalog.IncludeCurrent("gpt-5.5","max");Assert(!catalog.Models.ContainsKey("gpt-5.5"),"A retired preset returned through saved settings");
+        var hiddenOnly=ModelCatalog.Parse("{\"models\":[{\"slug\":\"gpt-6.2-astra\",\"visibility\":\"hide\"}]}");
+        Assert(!hiddenOnly.Models.ContainsKey("gpt-6.2-astra")&&hiddenOnly.DisplayName("gpt-6.2-sol")=="GPT 6.2 Sol（内置）","An all-hidden cache lost exclusions during fallback");
+        Assert(catalog.DisplayName(current.ChildModel)==current.ChildModel,"Saved custom model incorrectly marked as built in");
         Write(config,"model = \"bad model\"\n");bool rejected=false;try{CurrentModelSettings.Load(home);}catch(InvalidDataException){rejected=true;}
         Assert(rejected,"Invalid current model silently became a default");
     }
@@ -154,7 +157,7 @@ public static class CurrentModelSettingsTests {
                 parentEffort.SelectedItem="max";
                 combo("childModel").SelectedItem="gpt-6.2-sol";
                 childEffort.SelectedItem="ultra";
-                ((CheckBox)type.GetField("antiOverDefense",flags).GetValue(window)).IsChecked=false;
+                ((CheckBox)type.GetField("cuaRepair",flags).GetValue(window)).IsChecked=false;
                 var beforeReset=(Dictionary<string,object>)optionsMethod.Invoke(window,null);
                 limit.Text="2.5";
                 reset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -202,11 +205,34 @@ public static class CurrentModelSettingsTests {
                 try{
                     var flags=BindingFlags.Instance|BindingFlags.NonPublic;
                     Func<string,ComboBox> box=name=>(ComboBox)filtered.GetType().GetField(name,flags).GetValue(filtered);
-                    Assert(box("parentModel").Items.Cast<string>().SequenceEqual(new[]{"gpt-6.2-astra"})&&box("childModel").Items.Cast<string>().SequenceEqual(new[]{"自动指派","gpt-6.2-astra"}),"Unavailable models returned through the preset or saved configuration");
+                    var ids=box("parentModel").Items.Cast<string>().ToArray();
+                    Assert(ids[0]=="gpt-6.2-astra"&&ids.Contains("gpt-6.2-sol")&&!ids.Contains("gpt-6-luna")&&!ids.Contains("gpt-5.5")&&ids.Distinct().Count()==ids.Length,"Desktop models must precede missing presets and exclude hidden or retired models");
+                    Assert(box("childModel").Items.Cast<string>().SequenceEqual(new[]{"自动指派"}.Concat(ids)),"Child picker differs from parent picker");
+                    var render=typeof(MainWindow).GetMethod("RenderedChoice",BindingFlags.Static|BindingFlags.NonPublic);
+                    foreach(var name in new[]{"parentModel","childModel"}){
+                        Assert(Equals(render.Invoke(null,new object[]{box(name),"gpt-6.2-astra"}),"GPT 6.2 Astra"),"Desktop model marked as built in");
+                        Assert(Equals(render.Invoke(null,new object[]{box(name),"gpt-6.2-sol"}),"GPT 6.2 Sol（内置）"),"Missing preset source label");
+                    }
+                    box("parentModel").SelectedItem="gpt-6.2-astra";
+                    Assert(box("parentEffort").Items.Cast<string>().SequenceEqual(new[]{"low"}),"Built-in reasoning levels overrode local metadata");
+                    box("parentModel").SelectedItem=box("childModel").SelectedItem="gpt-6.2-sol";
+                    ((CheckBox)filtered.GetType().GetField("subagents",flags).GetValue(filtered)).IsChecked=true;
+                    var selected=(Dictionary<string,object>)filtered.GetType().GetMethod("Options",flags).Invoke(filtered,null);
+                    var port=(int)filtered.GetType().GetMethod("Port",flags).Invoke(filtered,null);
+                    var generated=Native.NativeInitializer.Config(new Native.NativePaths{Home=home,Workspace=root},NativeDesktopWorkflow.Options(selected,port));
+                    Assert(ManagedToml.SavedValue(generated,"model")=="gpt-6.2-sol"&&ManagedToml.SavedValue(generated,"agents","default_subagent_model")=="gpt-6.2-sol","Built-in source label leaked into configuration");
                     filtered.GetType().GetMethod("ResetModelSettings",flags).Invoke(filtered,null);
                     Assert(Equals(box("parentModel").SelectedItem,"gpt-6.2-astra")&&Equals(box("parentEffort").SelectedItem,"low")&&Equals(box("childModel").SelectedItem,"自动指派"),"Reset selected an unavailable model or effort");
                     Assert(File.ReadAllText(config).Contains("gpt-5.5"),"Filtering changed saved settings before initialization");
+                    Write(config,generated);
                 }finally{filtered.Close();}
+                var saved=new MainWindow(false);
+                try{
+                    foreach(var name in new[]{"parentModel","childModel"}){
+                        var box=(ComboBox)typeof(MainWindow).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(saved);
+                        Assert(Equals(box.SelectedItem,"gpt-6.2-sol"),"Reopening replaced an explicitly selected built-in model");
+                    }
+                }finally{saved.Close();}
             }finally{File.Delete(cache);}
         } finally {Environment.SetEnvironmentVariable("CODEX_HOME",previous,EnvironmentVariableTarget.Process);}
     }

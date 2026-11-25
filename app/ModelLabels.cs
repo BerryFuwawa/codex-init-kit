@@ -5,6 +5,8 @@ using System.Windows.Data;
 
 namespace CodexKit {
 public sealed class ModelLabels : IValueConverter {
+    readonly ModelCatalog catalog;
+    public ModelLabels(ModelCatalog catalog){this.catalog=catalog;}
     static readonly Regex GptModel = new Regex(@"^gpt-[0-9][a-z0-9.]*(?:-[a-z0-9]+)*\z", RegexOptions.CultureInvariant);
 
     public static string Display(string value) {
@@ -16,7 +18,7 @@ public sealed class ModelLabels : IValueConverter {
         return String.Join(" ", parts);
     }
 
-    public object Convert(object value,Type targetType,object parameter,CultureInfo culture){return Display(System.Convert.ToString(value));}
+    public object Convert(object value,Type targetType,object parameter,CultureInfo culture){return catalog.DisplayName(System.Convert.ToString(value));}
     public object ConvertBack(object value,Type targetType,object parameter,CultureInfo culture){throw new NotSupportedException();}
 }
 }

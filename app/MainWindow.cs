@@ -85,7 +85,7 @@ public partial class MainWindow : Window {
         var defaults=Options();if(Convert.ToString(defaults["parentModel"])!="gpt-6.2-sol"||Convert.ToString(defaults["parentEffort"])!="medium"||!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Default parent model must be directly editable while subagents stay disabled");
         if(!parentModel.IsEnabled||!parentEffort.IsEnabled||childModel.IsEnabled||childEffort.IsEnabled)throw new InvalidOperationException("Disabled subagents allowed child selection");
         subagents.IsChecked=true;if(!childModel.IsEnabled||childEffort.IsEnabled||!AutoAssign)throw new InvalidOperationException("Default automatic assignment unavailable");parentModel.SelectedItem="gpt-6-astra";childModel.SelectedItem="gpt-6-luna";parentEffort.SelectedItem="ultra";childEffort.SelectedItem="high";settings=Options();if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childEffort"])!="high"||parentModel.IsEditable||childModel.IsEditable||!InitSummary().Contains("GPT 6 Luna / 高（High）"))throw new InvalidOperationException("Preset model selection failed");
-        var presetModels=modelCatalog.Models.Keys;
+        var presetModels=modelCatalog.ModelIds;
         if(!parentModel.Items.Cast<string>().SequenceEqual(presetModels)||!childModel.Items.Cast<string>().SequenceEqual(new[]{AutoAssignLabel}.Concat(presetModels))||childEffort.Items.Contains("ultra"))throw new InvalidOperationException("Preset dropdown choices were lost");
         childModel.SelectedItem="gpt-5.6-luna";if(!childEffort.Items.Cast<string>().SequenceEqual(new[]{"low","medium","high","xhigh","max"}))throw new InvalidOperationException("Effort choices did not follow model selection");
         childEffort.ItemsSource=new[]{"ultra"};childEffort.SelectedItem="ultra";rejected=false;try{Options();}catch{rejected=true;}if(!rejected)throw new InvalidOperationException("Unsupported UI effort accepted");RefreshEfforts(childEffort,"gpt-5.6-luna","high");
@@ -119,7 +119,7 @@ public partial class MainWindow : Window {
         if(!mirrorNotes.Any(note=>note.Text=="顺序：官方 → 自定义 → 内置 10 个镜像")||
            !mirrorNotes.Any(note=>note.FontSize==12&&note.Text=="内置站点："+GitHubTransfer.BuiltInMirrorNames)||
            GitHubTransfer.BuiltInMirrorNames.Split('、').Length!=10)throw new InvalidDataException("GitHub mirror order or built-in site note is missing");
-        if(RenderedChoice(parentModel,"gpt-6.2-sol")!="GPT 6.2 Sol"||RenderedChoice(childModel,"gpt-6.2-astra")!="GPT 6.2 Astra"||RenderedChoice(childModel,"vendor/custom-id")!="vendor/custom-id")
+        if(RenderedChoice(parentModel,"gpt-6.2-sol")!="GPT 6.2 Sol（内置）"||RenderedChoice(childModel,"gpt-6.2-astra")!="GPT 6.2 Astra（内置）"||RenderedChoice(childModel,"vendor/custom-id")!="vendor/custom-id")
             throw new InvalidDataException("Incorrect model display name");
         if(RenderedChoice(parentEffort,"medium")!="中（Medium）"||RenderedChoice(childEffort,"xhigh")!="很高（Xhigh）"||Convert.ToString(Options()["parentEffort"])!="medium"||!InitSummary().Contains("GPT 6.2 Sol / 中（Medium）"))
             throw new InvalidDataException("Incorrect effort display name or stored value");
@@ -130,14 +130,14 @@ public partial class MainWindow : Window {
         wizard=1;Navigate("初始化");UpdateLayout(); wizard=2;Navigate("初始化");UpdateLayout();Navigate("日志");UpdateLayout();
         update=new Dictionary<string,object>{{"version",Core.Version}};ApplyUpdateState();if(updateNotice.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Update notice shown for current version");
         var current=new Version(Core.Version);update["version"]=new Version(current.Major,current.Minor,current.Build+1).ToString();ApplyUpdateState();Navigate("概览");UpdateLayout();if(updateNotice.Visibility!=Visibility.Visible||!updateStatus.Text.StartsWith("检测到更新"))throw new InvalidOperationException("Update notice missing");update=null;ApplyUpdateState();
-        ApplyCurrentModelSettings(new CurrentModelSettings{ParentModel="gpt-6-astra",ParentEffort="max",ChildModel="gpt-6-luna",ChildEffort="high"});settings=Options();
+        ApplyCurrentModelSettings(new CurrentModelSettings{HasSavedParent=true,ParentModel="gpt-6-astra",ParentEffort="max",ChildModel="gpt-6-luna",ChildEffort="high"});settings=Options();
         if((bool)settings["subagents"]||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high"||!InitSummary().Contains("保留模型设置 GPT 6 Luna / 高（High）"))throw new InvalidDataException("Disabled subagents lost inherited model preferences");
         subagents.IsChecked=true;settings=Options();
         if(Convert.ToString(settings["parentModel"])!="gpt-6-astra"||Convert.ToString(settings["parentEffort"])!="max"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high")throw new InvalidDataException("Current model selections were not applied");
         parentModel.SelectedItem="gpt-6.1-terra";parentEffort.SelectedItem="ultra";subagents.IsChecked=false;subagents.IsChecked=true;Navigate("概览");Navigate("初始化");CheckModels();settings=Options();
         if(Convert.ToString(settings["parentModel"])!="gpt-6.1-terra"||Convert.ToString(settings["parentEffort"])!="ultra"||Convert.ToString(settings["childModel"])!="gpt-6-luna"||Convert.ToString(settings["childEffort"])!="high")throw new InvalidDataException("Navigation or model check changed a user selection");
-        if(!modelCheck.Text.Contains("配置核对通过：GPT 6.1 Terra / 极高（Ultra）")||!modelCheck.Text.Contains("配置核对通过：GPT 6 Luna / 高（High）"))throw new InvalidDataException("Model check labels were not formatted");
-        ApplyCurrentModelSettings(new CurrentModelSettings{ParentModel="future/model",ParentEffort="high",ChildModel="gpt-6-luna",ChildEffort="max"});CheckModels();settings=Options();
+        if(!modelCheck.Text.Contains("配置核对通过：GPT 6.1 Terra（内置） / 极高（Ultra）")||!modelCheck.Text.Contains("配置核对通过：GPT 6 Luna（内置） / 高（High）"))throw new InvalidDataException("Model check labels were not formatted");
+        ApplyCurrentModelSettings(new CurrentModelSettings{HasSavedParent=true,ParentModel="future/model",ParentEffort="high",ChildModel="gpt-6-luna",ChildEffort="max"});CheckModels();settings=Options();
         if(Convert.ToString(settings["parentModel"])!="future/model"||Convert.ToString(settings["childEffort"])!="max"||!modelCheck.Text.Contains("尚未验证"))throw new InvalidDataException("An inherited model or effort was not retained");
     }
     public void RenderPages(string directory){
@@ -213,7 +213,7 @@ public partial class MainWindow : Window {
         maxConcurrentSubagentsError.FontSize=12;
         maxConcurrentSubagentsError.TextWrapping=TextWrapping.Wrap;
         parentEffort.ItemTemplate=childEffort.ItemTemplate=LabelTemplate(new EffortLabels());
-        parentModel.ItemTemplate=childModel.ItemTemplate=LabelTemplate(new ModelLabels());
+        parentModel.ItemTemplate=childModel.ItemTemplate=LabelTemplate(new ModelLabels(modelCatalog));
         parentEffort.ItemsSource=ModelCatalog.CommonEfforts;parentEffort.SelectedItem=Core.DefaultParentEffort;childEffort.ItemsSource=ModelCatalog.CommonEfforts;childEffort.SelectedItem="medium";
         parentModel.Text=Core.DefaultParentModel;childModel.Text=AutoAssignLabel;
         foreach(var input in new[]{parentModel,childModel}){input.Style=(Style)Resources["KitCombo"];input.IsEditable=false;input.IsTextSearchEnabled=true;input.FontSize=14;input.ToolTip="可选择当前模型列表中的模型或已配置的自定义模型。";}
@@ -358,26 +358,31 @@ public partial class MainWindow : Window {
     static readonly string MaxConcurrentSubagentsError=MaxConcurrentSubagentsLabel+"须为 1 到 "+Core.MaxSupportedConcurrentSubagents.ToString(CultureInfo.InvariantCulture)+" 的整数。";
     bool AutoAssign { get { return Equals(childModel.SelectedItem,AutoAssignLabel); } }
     void ApplyCurrentModelSettings(CurrentModelSettings current){
-        modelCatalog.IncludeCurrent(current.ParentModel,current.ParentEffort);
+        if(current.HasSavedParent)modelCatalog.IncludeCurrent(current.ParentModel,current.ParentEffort);
         if(!current.AutoAssign)modelCatalog.IncludeCurrent(current.ChildModel,current.ChildEffort);
         RefreshModelChoices();
-        bool keepParent=modelCatalog.Models.ContainsKey(current.ParentModel);
+        bool keepParent=current.HasSavedParent&&modelCatalog.Models.ContainsKey(current.ParentModel);
         parentModel.SelectedItem=keepParent?current.ParentModel:DefaultAvailableParent();
         lastMaxConcurrentSubagents=current.MaxConcurrentSubagents;
         maxConcurrentSubagentsInput.Text=lastMaxConcurrentSubagents.ToString(CultureInfo.InvariantCulture);
         subagents.IsChecked=current.Subagents;
         childModel.SelectedItem=current.AutoAssign||!modelCatalog.Models.ContainsKey(current.ChildModel)?AutoAssignLabel:current.ChildModel;
-        SelectParentEffort(keepParent?current.ParentEffort:Core.DefaultParentEffort);
+        SelectParentEffort(!current.HasSavedParent||keepParent?current.ParentEffort:Core.DefaultParentEffort);
         if(!AutoAssign){
             RefreshEfforts(childEffort,current.ChildModel,"medium");
             childEffort.SelectedItem=current.ChildEffort;
         }
     }
-    string DefaultAvailableParent(){return modelCatalog.Models.ContainsKey(Core.DefaultParentModel)?Core.DefaultParentModel:modelCatalog.Models.Keys.First();}
+    string DefaultAvailableParent(){
+        var local=modelCatalog.ModelIds.Where(id=>modelCatalog.Models[id].Source==ModelSource.Desktop&&modelCatalog.Models[id].Efforts.Length>0);
+        if(local.Contains(Core.DefaultParentModel))return Core.DefaultParentModel;
+        return local.FirstOrDefault()??(modelCatalog.Models.ContainsKey(Core.DefaultParentModel)?Core.DefaultParentModel:modelCatalog.ModelIds.FirstOrDefault(id=>modelCatalog.Models[id].Efforts.Length>0));
+    }
     void SelectParentEffort(string preferred){
         var model=(string)parentModel.SelectedItem;
         RefreshEfforts(parentEffort,model,preferred);
-        var entry=modelCatalog.Models[model];
+        CatalogModel entry;
+        if(model==null||!modelCatalog.Models.TryGetValue(model,out entry)||entry.Efforts.Length==0)return;
         parentEffort.SelectedItem=entry.Efforts.Contains(preferred)?preferred:entry.Efforts.Contains(entry.DefaultEffort)?entry.DefaultEffort:entry.Efforts[0];
     }
     void ResetModelSettings(){
@@ -437,7 +442,7 @@ public partial class MainWindow : Window {
     }
     void RefreshModelChoices(){
         foreach(var combo in new[]{parentModel,childModel}){
-            var values=combo==parentModel?modelCatalog.Models.Keys.ToArray():new[]{AutoAssignLabel}.Concat(modelCatalog.Models.Keys).ToArray();
+            var values=combo==parentModel?modelCatalog.ModelIds.ToArray():new[]{AutoAssignLabel}.Concat(modelCatalog.ModelIds).ToArray();
             var current=Convert.ToString(combo.SelectedItem);
             if(current.Length==0)current=combo==parentModel?Core.DefaultParentModel:AutoAssignLabel;
             combo.ItemsSource=values;

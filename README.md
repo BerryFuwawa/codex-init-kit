@@ -4,7 +4,7 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.11 更新说明](docs/Release-2.3.11.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.12 更新说明](docs/Release-2.3.12.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 
@@ -33,11 +33,11 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.11 更新�
 
 ## 配置模型和子代理
 
-- 在「初始化 → 模型设置」选择默认模型与思考强度。候选模型优先读取本机 Codex 的模型列表。
+- 在「初始化 → 模型设置」选择默认模型与思考强度。父模型和子模型都优先显示桌面版列出的型号。工具补充的型号标为「内置」，例如 GPT 6.2 Astra（内置）。同名型号沿用桌面版的思考强度，实际可用性取决于账号和客户端。[查看下拉框示例](assets/screenshots/v2.3.12/model-dropdown.png)
 - 「子代理多线程」首次使用时默认关闭。在「功能选择」开启后，默认由 Codex 自动分工、选择模型和思考强度，也可手动指定。「最大并发数」默认为 **6**，可修改并保存。
 - 点击「恢复默认模型设置」，可恢复父模型 GPT 6.2 Sol／中、子代理自动指派和并发上限 6。若本机列表缺少默认模型，会选择首个可用型号。确认并执行初始化后保存。[模型与档位说明](docs/Settings.md#模型)
 
-![默认模型、子代理自动指派与最大并发数](assets/screenshots/v2.3.7/model-settings.png)
+![旧版模型列表示例：父模型来自桌面版，子模型由工具补充并标为「内置」](assets/screenshots/v2.3.12/model-settings.png)
 
 ## 按需添加浏览器工具
 
