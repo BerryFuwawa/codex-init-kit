@@ -113,6 +113,14 @@
         <Border x:Name="Choice" Background="#2B3A4C" BorderBrush="#AFBED0" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
           <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
+        <Grid x:Name="GuidanceCue" IsHitTestVisible="False" Opacity="0">
+          <Border BorderBrush="#F2CB83" BorderThickness="2.5" CornerRadius="8"/>
+          <Canvas Width="0" Height="0" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Path Canvas.Left="8" Canvas.Top="-13" Width="34" Height="26" Stretch="Uniform"
+                  Data="M3,12 L12,3 Q13,2 14,3 V8 H29 Q31,8 31,10 V14 Q31,16 29,16 H14 V21 Q13,22 12,21 L3,12 Z"
+                  Fill="#F2CB83" Stroke="#172535" StrokeThickness="1.5" StrokeLineJoin="Round"/>
+          </Canvas>
+        </Grid>
       </Grid>
       <ControlTemplate.Triggers>
         <Trigger Property="IsChecked" Value="True"><Setter TargetName="Choice" Property="Background" Value="#9DAFC4"/><Setter TargetName="Choice" Property="BorderBrush" Value="#9DAFC4"/><Setter Property="Foreground" Value="#172535"/></Trigger>

@@ -84,14 +84,60 @@ public partial class MainWindow {
     void Overview(){
         subtitle.Text="查看当前配置与组件状态";
         var hero=Card("让 Codex 准备就绪","配置、修复与日常维护");
-        var actions=new Grid();actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        var actions=new Grid();
+        actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        actions.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
+        actions.ColumnDefinitions.Add(new ColumnDefinition());
+        actions.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
+        actions.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
         var start=Button("开始初始化",()=>{if(activeOperation!="initialize"&&wizard==2)ResetCliChoice();wizard=activeOperation=="initialize"?2:0;Navigate("初始化");},true);actions.Children.Add(start);
         var refresh=Button("刷新状态",async()=>await Run("status","读取当前状态",false),false);Grid.SetColumn(refresh,1);actions.Children.Add(refresh);
+        var guide=Button("遇到了未知错误？查看官方独立 CLI",GuideOfficialCli,false);
+        guide.Name="OfficialCliGuide";
+        guide.Tag=UiIcons.For("切换");
+        guide.Background=MorandiTheme.Danger;
+        guide.FontSize=11;
+        guide.Padding=new Thickness(10,6,10,6);
+        guide.Margin=new Thickness(0,4,0,4);
+        guide.HorizontalAlignment=HorizontalAlignment.Right;
+        guide.VerticalAlignment=VerticalAlignment.Center;
+        guide.ToolTip="前往初始化中的 CLI 选择。";
+        Grid.SetColumn(guide,2);
+        actions.Children.Add(guide);
+        actions.SizeChanged+=(s,e)=>{
+            if(!e.WidthChanged)return;
+            guide.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+            bool separateRow=e.NewSize.Width<start.DesiredSize.Width+refresh.DesiredSize.Width+guide.DesiredSize.Width;
+            Grid.SetRow(guide,separateRow?1:0);
+            Grid.SetColumn(guide,separateRow?0:2);
+            Grid.SetColumnSpan(guide,separateRow?3:1);
+        };
         hero.Children.Add(actions);
         hero.Children.Add(new TextBlock{Name="DataPreservationNotice",Text="本工具不会初始化数据与对话",FontSize=12,HorizontalAlignment=HorizontalAlignment.Left,TextWrapping=TextWrapping.NoWrap,Foreground=MutedBrush,Margin=new Thickness(0,8,0,0),ToolTip="初始化会备份并重建配置，保留现有对话记录和项目文件。"});
         var current=Card("当前环境",preview?"设计预览 · 以下为示例，不代表真实检测":status==null?"正在读取状态…":"配置与文件检查 · 当前运行实例未核验");
         var mode=Core.Value(status,"runtimeMode","");Pair(current,"已保存 CLI",status==null?"未检测":RuntimeMode(mode));Pair(current,"保存的 CLI 路径",Core.Value(status,"currentCliPath","").Length==0&&mode=="DesktopNative"?"由桌面应用自动选择":Core.Value(status,"currentCliPath","未检测"));Pair(current,"已保存模型",ModelLabels.Display(SavedValue("configModel"))+" · "+EffortLabels.Display(SavedValue("configEffort")));Pair(current,"无项目任务目录",SavedValue("configWorkspace"));Pair(current,"已保存代理",SavedValue("configProxy"));var draft=new StackPanel();AddDraftSummary(draft);current.Children.Add(new Expander{Header="查看待应用设置",Content=draft});
         var quick=Card("常用操作","");Row(quick,Button("检查浏览器连接  →",()=>{repairTab=1;Navigate("连接与修复");},false),Button("查看备份与回滚  →",()=>Navigate("备份与回滚"),false));
+    }
+    void GuideOfficialCli(){
+        if(busy&&activeOperation=="initialize")return;
+        wizard=0;
+        GoToConfigurationStep(FeaturesStep);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{
+            if(page!="初始化"||wizard!=0||configurationTab!=FeaturesStep||!cliStandalone.IsVisible)return;
+            cliStandalone.BringIntoView(new Rect(-8,-28,cliStandalone.ActualWidth+52,cliStandalone.ActualHeight+64));
+            pageScroll.UpdateLayout();
+            var cue=(Grid)cliStandalone.Template.FindName("GuidanceCue",cliStandalone);
+            var duration=TimeSpan.FromSeconds(5);
+            var pulse=new DoubleAnimationUsingKeyFrames{Duration=duration,FillBehavior=FillBehavior.Stop};
+            pulse.KeyFrames.Add(new DiscreteDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            if(Motion.Enabled(preview)){
+                pulse.Duration=TimeSpan.FromSeconds(1);
+                pulse.RepeatBehavior=new RepeatBehavior(duration);
+                pulse.KeyFrames.Add(new LinearDoubleKeyFrame(.15,KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))));
+                pulse.KeyFrames.Add(new LinearDoubleKeyFrame(1,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1))));
+            }
+            cue.BeginAnimation(OpacityProperty,pulse);
+        }));
     }
     string ProxyDisplay(){try{return ProxySummary();}catch(InvalidOperationException){return "端口尚未填写或无效，请在初始化中设置";}}
     void Wizard(){
