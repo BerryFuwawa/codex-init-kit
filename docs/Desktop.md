@@ -6,7 +6,7 @@
 
 原生 WPF 中文桌面工具，集中管理 Codex 初始化、浏览器连接、组件修复、CLI 和备份。默认窗口约 1000 × 740，最小 800 × 540；小屏幕可滚动查看，支持 Windows 缩放。
 
-本文对应桌面版 v2.3.14。[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [更新说明](Release-2.3.14.md)
+本文对应桌面版 v2.3.15。[下载桌面版](https://github.com/BerryFuwawa/codex-init-kit/releases/latest) · [更新说明](Release-2.3.15.md)
 
 ## 遇到问题，先选哪项？
 

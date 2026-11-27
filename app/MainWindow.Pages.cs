@@ -59,7 +59,12 @@ public partial class MainWindow {
         pageScroll.Content=content;pageScroll.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;pageScroll.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;Grid.SetRow(pageScroll,2);main.Children.Add(pageScroll);
         wizardActions.Margin=new Thickness(0,8,0,0);Grid.SetRow(wizardActions,3);main.Children.Add(wizardActions);
         var bottom=new StackPanel{Margin=new Thickness(0,9,0,0)};var line=new Grid();line.ColumnDefinitions.Add(new ColumnDefinition());line.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
-        banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");var statusLine=new DockPanel();operationActivity.Visibility=Visibility.Collapsed;statusLine.Children.Add(operationActivity);statusLine.Children.Add(banner);line.Children.Add(statusLine);
+        banner.Text="准备就绪";banner.FontSize=11;banner.Foreground=MutedBrush;banner.TextWrapping=TextWrapping.Wrap;banner.Margin=new Thickness(0,0,8,0);banner.Cursor=System.Windows.Input.Cursors.Hand;banner.ToolTip="查看执行日志";banner.MouseLeftButtonUp+=(s,e)=>Navigate("日志");
+        var statusLine=new DockPanel{VerticalAlignment=VerticalAlignment.Center};
+        operationActivity.VerticalAlignment=VerticalAlignment.Center;
+        operationActivity.Visibility=Visibility.Collapsed;
+        banner.VerticalAlignment=VerticalAlignment.Center;
+        statusLine.Children.Add(operationActivity);statusLine.Children.Add(banner);line.Children.Add(statusLine);
         var updates=new StackPanel{HorizontalAlignment=HorizontalAlignment.Right};updateNotice=Button("检测到更新，点击更新",async()=>await InstallUpdate(),false);updateNotice.Visibility=Visibility.Collapsed;updateNotice.Margin=new Thickness(0);updateNotice.Padding=new Thickness(8,3,8,3);updates.Children.Add(updateNotice);updateStatus.FontSize=11;updateStatus.Foreground=MutedBrush;updateStatus.Text="自动检查更新";updates.Children.Add(updateStatus);Grid.SetColumn(updates,1);line.Children.Add(updates);bottom.Children.Add(line);
         progress.Style=(Style)Resources["KitProgress"];progress.Height=3;progress.Maximum=100;progress.Margin=new Thickness(0,7,0,0);bottom.Children.Add(progress);Grid.SetRow(bottom,4);main.Children.Add(bottom);
     }
@@ -203,14 +208,16 @@ public partial class MainWindow {
         var accept=Button(confirmation?"确认并继续":"知道了",()=>Motion.Close(dialog,true,preview),true);accept.IsDefault=!confirmation;actions.Children.Add(accept);return dialog;
     }
     Window CreatePreflightDialog(){
-        const string title="正在准备初始化";
+        return CreateWaitDialog("正在准备初始化","正在检查 Codex 是否运行，以及本次选择的设置。检查完成后会自动继续。");
+    }
+    Window CreateWaitDialog(string title,string message){
         var dialog=DialogWindow(title,450);
         var panel=new StackPanel{Margin=new Thickness(24)};
         var header=new DockPanel();
         header.Children.Add(new ActivityIndicator{State="running",Width=30,Height=30,Margin=new Thickness(0,0,12,0)});
         var heading=T(title,20,TextBrush);heading.FontWeight=FontWeights.SemiBold;heading.VerticalAlignment=VerticalAlignment.Center;heading.Margin=new Thickness(0);
         header.Children.Add(heading);panel.Children.Add(header);
-        var note=T("正在检查 Codex 是否运行，以及本次选择的设置。检查完成后会自动继续。",14,MutedBrush);
+        var note=T(message,14,MutedBrush);
         note.Margin=new Thickness(0,14,0,0);panel.Children.Add(note);
         dialog.Content=Surface(panel);return dialog;
     }

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.14",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.14/CodexInitKit.exe",
-  "sha256": "a29c03e9a41c7ffbfa086479e4c31061bbdac57780c553a3c078da0216e3b7f3",
-  "notes": "多轮排查和分阶段任务会主动记录进度与下一步，方便换对话后继续。"
+  "version": "2.3.15",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.15/CodexInitKit.exe",
+  "sha256": "4d0195084fa8bcb900c1a271b27227d3943c64518fae4d79c63f468651309f55",
+  "notes": "启动时新增「读取中请等待」动画提示，修正底栏加载图标与文字的对齐。"
 }

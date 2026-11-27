@@ -243,7 +243,7 @@ public partial class MainWindow : Window {
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
         if(initializationDesignPreview){banner.Text="界面预览 · 不会执行初始化";updateStatus.Text="";GoToConfigurationStep(FeaturesStep);}
         else Navigate("概览");
-        Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
+        Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(RunOperation("status","读取当前状态",false,null,null,true),CheckUpdates(true));};
     }
     static Brush B(string hex) { return MorandiTheme.Legacy(hex); }
     void LoadCurrentProxyPort() {
@@ -524,20 +524,17 @@ public partial class MainWindow : Window {
         }
     }
     async Task<Dictionary<string,object>> CheckInitializationWithWait(Dictionary<string,object> options){
-        var dialog=IsVisible?CreatePreflightDialog():null;
+        var check=InitializationPreflight==null?ReadInitializationPreflight(options):InitializationPreflight();
+        if(IsVisible && !check.IsCompleted)await ShowWaitWhile(CreatePreflightDialog(),check);
+        return await check;
+    }
+    async Task ShowWaitWhile(Window dialog,Task work){
         bool finished=false;
-        try{
-            if(dialog!=null){
-                dialog.Closing+=(s,e)=>{e.Cancel=!finished;};
-                dialog.Show();
-                IsEnabled=false;
-            }
-            return InitializationPreflight==null?await ReadInitializationPreflight(options):await InitializationPreflight();
-        }finally{
-            if(dialog!=null){
-                finished=true;IsEnabled=true;dialog.Close();
-            }
-        }
+        dialog.Closing+=(s,e)=>{e.Cancel=!finished;};
+        dialog.Show();
+        IsEnabled=false;
+        try{await work;}
+        finally{finished=true;IsEnabled=true;dialog.Close();}
     }
     bool allowInitializationCloseDeferral;
     Window CreateAppCloseDialog(int count) {
@@ -749,7 +746,13 @@ public partial class MainWindow : Window {
             default:return "安装或修复当前用户的启动保护与登录自动维护任务。";
         }
     }
-    async Task Run(string op,string title,bool confirm,Dictionary<string,object> extraOptions=null,string confirmationText=null) {
+    async Task WaitForWorkerExit(Process process){
+        while(!process.HasExited){await Task.Delay(300);ReadLog();UpdateStageView();}
+    }
+    Task Run(string op,string title,bool confirm,Dictionary<string,object> extraOptions=null,string confirmationText=null){
+        return RunOperation(op,title,confirm,extraOptions,confirmationText,false);
+    }
+    async Task RunOperation(string op,string title,bool confirm,Dictionary<string,object> extraOptions,string confirmationText,bool startupRead) {
         if(browserToolsPreview){banner.Text="浏览器工具预览 · 可在初始化中体验新流程";return;}
         if(busy){banner.Text="请等待当前操作完成。";return;}
         var refreshStatus=false;var initialize=op=="initialize";var showInitializationResult=false;var initCancelled=false;var initBrowserRepair=false;var initExitCode=1;var initError="";
@@ -775,7 +778,10 @@ public partial class MainWindow : Window {
             if(op=="model-network-check")modelNetworkReport=null;
             var id=Guid.NewGuid().ToString("N"); lastLog=OperationLogPath(id);BeginRecord(id,title,lastLog,initialize);rawLogText="";rawDiagnosticText="";chineseLogText="";localizedLines.Clear();showRawLog=false;logInputComplete=false;renderedComplete=false;logViewport.Reset();
             using(var process=StartOperation(op,id,disk,proxy,op=="initialize"&&initGuard,options)) {
-                while(!process.HasExited) { await Task.Delay(300); ReadLog();UpdateStageView(); }
+                var wait=WaitForWorkerExit(process);
+                if(startupRead && IsVisible && !wait.IsCompleted)
+                    await ShowWaitWhile(CreateWaitDialog("读取中请等待","正在读取当前配置和组件状态。"),wait);
+                else await wait;
                 logInputComplete=true;ReadLog();FinishRecord(process.ExitCode==0?"complete":process.ExitCode==2?"partial":"failed",initialize?initializationSummary:chineseLogText); progress.IsIndeterminate=false;
                 if(configOperation){if(compatibilityAdvice.Length==0)compatibilityAdvice=chineseLogText;banner.Text=process.ExitCode==0?"配置检查完成 · 文件结果已显示；会话参数警告需单独验证":"配置处理未全部完成 · 请查看结果和日志";progress.Value=100;repairTab=4;Navigate("连接与修复");}
                 else if(coreOperation){if(desktopCoreAdvice.Length==0)desktopCoreAdvice=chineseLogText;banner.Text=process.ExitCode==0?"桌面启动组件检查完成 · 请查看结果":"桌面启动检查或修复未完成 · 请查看原因";progress.Value=100;repairTab=3;Navigate("连接与修复");if(process.ExitCode!=0&&!preview)MessageBox.Show(this,desktopCoreAdvice,title,MessageBoxButton.OK,MessageBoxImage.Warning);}
