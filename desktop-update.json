@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.16",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.16/CodexInitKit.exe",
-  "sha256": "dfc71f2b741dac67739e76b45497353087f713266982a1fbe0e7437c1df0b83f",
-  "notes": "新增任务归属提醒和 Windows 凭据备份入口。"
+  "version": "2.3.17",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.17/CodexInitKit.exe",
+  "sha256": "eb347a4f406ce0b9df10a68325d339776de5a7b4c96e5f711ab333f5e35d5a07",
+  "notes": "新增 Windows 凭据还原入口，为备份和还原按钮换上专用图标。"
 }

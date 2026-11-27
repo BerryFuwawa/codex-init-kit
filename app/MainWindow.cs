@@ -581,7 +581,7 @@ public partial class MainWindow : Window {
         await BeginInitialization();
     }
     void BackupPage(){
-        subtitle.Text="查看、回滚 Codex 备份，或打开 Windows 凭据备份。";
+        subtitle.Text="查看、回滚 Codex 备份，或备份和还原 Windows 凭据。";
         var r=Card("恢复与回滚","可以恢复初始化配置。使用官方独立 CLI 时，也可恢复该 CLI 的历史版本。");
         rollbackList=new ListBox{ItemContainerStyle=(Style)Resources["KitRollbackItem"],Background=B("#101620"),Foreground=TextBrush,BorderThickness=new Thickness(0),MaxHeight=280,MinHeight=70,HorizontalContentAlignment=HorizontalAlignment.Stretch,Padding=new Thickness(6),Margin=new Thickness(0,2,0,10)};
         ScrollViewer.SetHorizontalScrollBarVisibility(rollbackList,ScrollBarVisibility.Disabled);
@@ -601,12 +601,14 @@ public partial class MainWindow : Window {
         rollbackList.SelectionChanged+=(s,e)=>{selectedRollbackId=Core.Value(SelectedRollbackEntry(),"id","");UpdateRollbackActions();};
         UpdateRollbackActions();
         Row(r,rollbackButton,rollbackFolderButton,Button("刷新备份列表",async()=>{if(!busy){await RefreshStatusQuietly();Navigate("备份与回滚");}},false),rollbackDeleteButton);
-        var credentials=Card("Windows 凭据","打开 Windows 备份向导，由你选择备份位置。");
-        Row(credentials,Button("Windows 凭据备份",OpenWindowsCredentialBackup,false));
+        var credentials=Card("Windows 凭据","使用 Windows 向导选择备份位置或要还原的备份文件。");
+        Row(credentials,
+            Button("Windows 凭据备份",()=>OpenWindowsCredentialWizard("B"),false),
+            Button("还原 Windows 凭据备份",()=>OpenWindowsCredentialWizard("R"),false));
     }
-    void OpenWindowsCredentialBackup(){
+    void OpenWindowsCredentialWizard(string mode){
         try{
-            var startInfo=new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"credwiz.exe"),"B"){UseShellExecute=true};
+            var startInfo=new ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"credwiz.exe"),mode){UseShellExecute=true};
             using(Process.Start(startInfo)){}
         }catch(Exception ex){Error(ex);}
     }

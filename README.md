@@ -4,7 +4,7 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.16 更新说明](docs/Release-2.3.16.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.17 更新说明](docs/Release-2.3.17.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 

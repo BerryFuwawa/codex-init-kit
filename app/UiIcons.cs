@@ -37,6 +37,10 @@ internal static class UiIcons {
     const string Hint="M6.2,17.2 A8.3,8.3 0 1 1 10.4,20 L6.1,21.1 Q5.2,21.3 5.4,20.4 Z M12,10.9 V15.7 M12,7.5 V7.8";
     const string External="M12.5,4 H18.7 Q20,4 20,5.3 V11.5 M19.4,4.6 L10.1,13.9 M9.3,6 H7.1 Q3.8,6 3.8,9.3 V16.8 Q3.8,20.1 7.1,20.1 H14.6 Q17.9,20.1 17.9,16.8 V14.7";
 
+    const string CredentialTray=" M8,13.5 H5.5 Q3.5,13.5 3.5,15.5 V18.5 Q3.5,20.5 5.5,20.5 H18.5 Q20.5,20.5 20.5,18.5 V15.5 Q20.5,13.5 18.5,13.5 H16";
+    const string CredentialBackup="M12,14.8 V3.5 M7.5,7.7 L11.3,3.9 Q12,3.2 12.7,3.9 L16.5,7.7"+CredentialTray;
+    const string CredentialRestore="M12,3.5 V14.8 M7.5,10.6 L11.3,14.4 Q12,15.1 12.7,14.4 L16.5,10.6"+CredentialTray;
+
     internal static Geometry For(string text,bool fallback=false){
         string data=PathData(text??"");
         if(data==null){
@@ -62,6 +66,8 @@ internal static class UiIcons {
             case "连接与修复":case "连接状态":return Link;
             case "CLI 管理":return Terminal;
             case "备份与回滚":return History;
+            case "Windows 凭据备份":return CredentialBackup;
+            case "还原 Windows 凭据备份":return CredentialRestore;
             case "更新与下载":return Download;
             case "日志":return Note;
             case "远控转发":case "开启远控转发":return Switch;
