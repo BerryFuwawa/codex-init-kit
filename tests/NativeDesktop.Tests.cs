@@ -160,6 +160,76 @@ Check("代理文件一致仍补齐桌面持久代理",()=>{var f=new Fixture();v
         Check("健康组件仍在完整初始化前确认关闭",()=>{var f=new Fixture();var s=Settings();var o=NativeDesktopWorkflow.Options(s,10808);new NativeCua(f.P,f.Services).Run(true,Path.Combine(root,"healthy-running-cua"));var repair=new NativeDesktopBrowser(f.P,f.Services,f.Log.Add);repair.Repair();f.AddDesktop(42,500);repair.Repair();var pre=Core.ReadJson(Core.Json.Serialize(NativeDesktopWorkflow.Preflight(f.P,f.Services,o,s)));Assert(((System.Collections.IList)pre["processes"]).Count==2&&Convert.ToInt32(pre["runningCount"])==2&&Convert.ToBoolean(pre["requiresClose"])&&f.Process.Requested==0,"full initialization missing close confirmation");});
         Check("必要文件替换才出现关闭原因",()=>{var f=new Fixture();f.AddDesktop(42,500);var s=Settings();s["cuaRepair"]=true;var o=NativeDesktopWorkflow.Options(s,10808);var pre=Core.ReadJson(Core.Json.Serialize(NativeDesktopWorkflow.Preflight(f.P,f.Services,o,s)));Assert(Convert.ToBoolean(pre["requiresClose"])&&((System.Collections.IList)pre["processes"]).Count==2&&Core.Json.Serialize(pre).Contains("中断"),"missing close impact");s["retryStages"]="cli";pre=Core.ReadJson(Core.Json.Serialize(NativeDesktopWorkflow.Preflight(f.P,f.Services,o,s)));Assert(!Convert.ToBoolean(pre["requiresClose"])&&f.Process.Requested==0,"unrelated retry closes app");});
         Check("CLI模式相同不更改路径或关闭",()=>{var f=new Fixture();var c=f.Component();MakePackage(c.Current);f.AddDesktop(42,500);var before=Core.Json.Serialize(f.Registry.V);c.SelectCli("official-standalone");Assert(Core.Json.Serialize(f.Registry.V)==before&&!File.Exists(c.StateFile)&&f.Process.Requested==0,"unchanged CLI touched");});
+        Check("本机凭证规则使用实际工作区并可关闭",()=>{
+            var f=new Fixture();
+            const string marker="<!-- BEGIN CODEX CREDENTIAL MANAGEMENT RULES -->";
+            const string custom="# 本机自定义凭证规则\n保留现有约定。\n";
+            NativeData.Write(f.P.Agents,custom);
+            var settings=Settings();
+            var index=Path.Combine(f.P.Workspace,"Config","Credentials","索引.md");
+            Assert(f.Run(settings,false)==0,"initialization could not proceed without a personal index");
+            var rules=NativeData.Read(f.P.Agents);
+            Assert(rules.Contains(marker)&&rules.Contains(index)&&rules.Contains("先不要请用户复制密码")&&rules.Contains("只有助手实际清除并返回成功时")&&rules.StartsWith(custom),"credential rules lost the path or user text");
+            Assert(!File.Exists(index),"initialization created a personal credential index");
+            NativeData.Write(index,"fixture index");
+            settings["credentialManagement"]=false;
+            Assert(f.Run(settings,false)==0&&!NativeData.Read(f.P.Agents).Contains(marker)&&NativeData.Read(f.P.Agents).StartsWith(custom)&&NativeData.Read(index)=="fixture index","disabling changed personal credential data or retained the managed block");
+            settings["credentialManagement"]=true;
+            settings["folderManagement"]=false;
+            Assert(f.Run(settings,false)==0&&!NativeData.Read(f.P.Agents).Contains(marker),"credential rules were enabled without folder management");
+        });
+        Check("独立切换命令和局部 CLI 重试均不可用",()=>{
+            var f=new Fixture();
+            foreach(var op in new[]{"guard-native","guard-current","guard-rollback"}){
+                Assert(!NativeDesktopWorkflow.Handles(op),"legacy operation still routed: "+op);
+                Assert(Core.Worker(new[]{"--worker",op,Guid.NewGuid().ToString("N"),"C","0","0",Core.Sid})==64,"worker accepted "+op);
+            }
+            var settings=Settings();settings["cliMode"]="desktop-native";settings["retryStages"]="cli";
+            bool rejected=false;
+            try{f.Run(settings,false);}catch(ArgumentException ex){rejected=ex.Message.Contains("完整初始化");}
+            Assert(rejected&&f.Trace.Count==0&&!Directory.Exists(f.P.BackupRoot)&&Equals(f.Registry.Get("CODEX_CLI_PATH").Value,f.OriginalCli),"partial retry changed CLI");
+        });
+        Check("完整初始化可以双向选择 CLI",()=>{
+            var f=new Fixture();var c=f.Component();MakePackage(c.Current);
+            var settings=Settings();settings["desktopUpdate"]=false;settings["officialCliUpdate"]=false;settings["browserRepair"]=false;
+            foreach(var mode in new[]{"desktop-native","official-standalone"}){
+                settings["cliMode"]=mode;
+                var workflow=new NativeDesktopWorkflow(f.P,f.Services,settings,c,f.Log.Add);
+                Assert(workflow.Run(NativeDesktopWorkflow.Options(settings,10808),false)==0&&c.DetectCli()==mode,"full initialization did not apply "+mode);
+            }
+        });
+        Check("CLI 缓存回滚只适用于官方独立模式",()=>{
+            var f=new Fixture();var c=f.Component();MakePackage(c.Current);
+            var cached=Path.Combine(c.Standalone,"releases","1.2.2-fixture");MakePackage(cached,"1.2.2");
+            c.RollbackStandaloneVersion(cached);
+            Assert(Equals(f.Registry.Get("CODEX_CLI_PATH").Value,Path.Combine(cached,"bin","codex.exe")),"standalone version rollback failed");
+            f.Registry.V.Remove("CODEX_CLI_PATH");bool rejected=false;
+            try{c.RollbackStandaloneVersion(cached);}catch(InvalidOperationException){rejected=true;}
+            Assert(rejected&&!f.Registry.Get("CODEX_CLI_PATH").Exists,"rollback switched desktop CLI type");
+        });
+        Check("桌面配置回滚保留当前 CLI 环境和文件",()=>{
+            var f=new Fixture();var legacy=Path.Combine(f.P.LegacyCli,"codex-latest.exe");
+            NativeData.Write(legacy,"old legacy CLI");
+            var backup=NativeSession.Create(f.P,f.Registry,true);
+            NativeData.Write(f.P.Config,"updated config");NativeData.Write(legacy,"current legacy CLI");
+            f.Registry.V.Remove("CODEX_CLI_PATH");
+            f.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=true,Kind="String",Value="current host"});
+            var options=NativeDesktopWorkflow.Options(Settings(),10808);
+            var engine=new NativeInitializer(f.P,f.Services);
+            var result=engine.Run("rollback",options,backup.root,preserveCli:true);
+            Assert(result.state=="complete"&&NativeData.Read(f.P.Config)=="# old-config\n"&&NativeData.Read(legacy)=="current legacy CLI","configuration rollback touched CLI files");
+            Assert(!f.Registry.Get("CODEX_CLI_PATH").Exists&&Equals(f.Registry.Get("CODEX_CODE_MODE_HOST_PATH").Value,"current host"),"configuration rollback changed CLI selection");
+            result=engine.Run("reset",options,null,preserveCli:true);
+            Assert(result.state=="complete"&&Equals(f.Registry.Get("CODEX_CODE_MODE_HOST_PATH").Value,"current host")&&NativeData.Read(legacy)=="current legacy CLI","configuration reset changed the CLI environment");
+        });
+        Check("登录维护不因原生组件缺失而换用独立 CLI",()=>{
+            var f=new Fixture();var c=f.Component();MakePackage(c.Current);
+            f.Registry.V.Remove("CODEX_CLI_PATH");
+            NativeData.Write(c.StateFile,"{\"Installed\":true,\"NativeGuard\":true}");
+            File.Delete(Path.Combine(f.Services.Desktop.Discover().Install,"app","resources","codex.exe"));bool failed=false;
+            try{c.AutoMaintain();}catch(FileNotFoundException){failed=true;}
+            Assert(failed&&!f.Registry.Get("CODEX_CLI_PATH").Exists,"login fallback changed CLI type");
+        });
         Check("启动保护相同不重复替换和注册",()=>{var f=new Fixture();var c=f.Component();MakePackage(c.Current);c.Protection();var installed=Path.Combine(c.GuardRoot,"CodexInitKit.Guard.exe");var before=System.IO.File.GetLastWriteTimeUtc(NativePath.Io(installed));c.Protection();Assert(f.GuardRegistrations==1&&System.IO.File.GetLastWriteTimeUtc(NativePath.Io(installed))==before,"guard repeated");});
         Check("准备完成不冒充真实连接验收",()=>{var f=new Fixture();Assert(f.Run(Settings(),false)==0,"workflow");var result=Core.Json.Serialize(f.Result());Assert(result.Contains("真实连接待验收")&&!result.Contains("启动准备"),"missing acceptance boundary");});
         Check("浏览器工具默认跳过，单项失败可独立重试",()=>{

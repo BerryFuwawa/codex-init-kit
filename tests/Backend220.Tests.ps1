@@ -73,6 +73,31 @@ try {
     function Switch-ToOfficialCurrent {$script:fixtureGuardState.ActiveMode='OfficialCurrent'}
     function Invoke-OfficialCliUpdate {param($PayloadRoot,[switch]$OnlyIfMissing) $script:preparedOnlyIfMissing=$OnlyIfMissing.IsPresent;return 0}
     Assert220 ((Invoke-GuardOperation 'guard-current' $PayloadRoot) -eq 0 -and $script:preparedOnlyIfMissing -and $script:fixtureGuardState.ActiveMode -eq 'OfficialCurrent' -and -not $script:fixtureGuardState.Installed) 'Standalone switch did not prepare the component independently of protection.'
+    & {
+        $script:fixtureGuardState=@{Installed=$true;NativeGuard=$true;ActiveMode='OfficialCurrent';ActiveCliPath='selected-cli';OriginalCliPath='old-cli'}
+        $script:guardTaskRemoved=$false
+        $previousGuardPaths=@($script:StartupShortcut,$script:AutoLauncher,$script:AutoScript)
+        $previousTaskName=$script:AutoTaskName
+        $script:AutoTaskName='CodexGuardAuto'
+        $script:StartupShortcut=Join-Path $scratch 'guard.lnk'
+        $script:AutoLauncher=Join-Path $scratch 'guard.vbs'
+        $script:AutoScript=Join-Path $scratch 'guard.ps1'
+        $guardEntries=@($script:StartupShortcut,$script:AutoLauncher,$script:AutoScript)
+        foreach($entry in $guardEntries){[IO.File]::WriteAllText($entry,'fixture')}
+        function Get-ScheduledTask {param($TaskName,$TaskPath,$ErrorAction) return @{TaskName=$TaskName;TaskPath=$TaskPath}}
+        function Unregister-ScheduledTask {param($InputObject,$Confirm,$ErrorAction) $script:guardTaskRemoved=$InputObject.TaskName -eq 'CodexGuardAuto' -and $InputObject.TaskPath -eq '\'}
+        function Set-UserEnv {throw 'Uninstall attempted to change the CLI path.'}
+        try{
+            Remove-DesktopGuardProtection
+            Assert220 $script:guardTaskRemoved 'Guard removal retained the scheduled task.'
+            Assert220 (-not $script:fixtureGuardState.Installed -and -not $script:fixtureGuardState.NativeGuard) 'Guard removal retained the installed state.'
+            Assert220 ($script:fixtureGuardState.ActiveCliPath -eq 'selected-cli' -and $script:fixtureGuardState.ActiveMode -eq 'OfficialCurrent') 'Guard removal changed the saved CLI selection.'
+            foreach($entry in $guardEntries){Assert220 (-not (Test-Path -LiteralPath $entry)) 'Guard removal retained a startup file.'}
+        }finally{
+            $script:StartupShortcut,$script:AutoLauncher,$script:AutoScript=$previousGuardPaths
+            $script:AutoTaskName=$previousTaskName
+        }
+    }
     # Existing automatic maintenance must respect an explicitly selected standalone CLI.
     $guardText=Get-GuardPayloadText (Join-Path $PayloadRoot 'guard.cmd')
     $desktopGuard=Convert-DesktopGuardRuntime $guardText

@@ -4,19 +4,19 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.12 更新说明](docs/Release-2.3.12.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.13 更新说明](docs/Release-2.3.13.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 
 ## 开始使用
 
-1. 下载并双击打开 `CodexInitKit.exe`。所需脚本已包含在 EXE 里。
-2. 首次配置时，点击「开始初始化」，选择工作目录、代理、功能和模型。确认页会列出本次变更。请先保存正在进行的工作，再按工具提示退出 Codex。
-3. 完成后，点「启动 Codex」或用原来的图标打开 Codex。如果有步骤未完成，可以先查看日志，再选择「仅重试未完成项」。
+1. 下载并双击打开 `CodexInitKit.exe`。
+2. 首次配置时，点击「开始初始化」，依次设置网络、功能和模型。开启文件夹管理时，向导会多一步让你选择工作盘。确认页会列出本次变更。
+3. 完成后，点「启动 Codex」或用原来的图标打开 Codex。如果有步骤未完成，可以先查看日志，再按结果页提示重试。
 
 只想处理某个故障，可以直接打开「连接与修复」或「CLI 管理」。如果只需要配置代理，可以在向导里取消「开启远控转发」。[查看完整初始化选项](docs/Settings.md)
 
-「工作习惯」可设置工作目录、按需笔记和 Codex 记忆。「开发习惯」新增默认勾选的「开发时参考开源案例」，让 Codex 在设计新功能时参考 GitHub 上的类似做法，再决定复用或自行实现。六个选项分别记住上次的选择。[可选功能](docs/Settings.md#可选功能) · [防止过度防御](docs/AntiOverDefense.md)
+「工作习惯」可设置文件夹管理、本机凭证管理、按需笔记和 Codex 记忆。本机凭证管理会引导 Codex 使用你电脑上已有的凭证索引和助手。「开发习惯」可让 Codex 在设计新功能时先参考开源案例。工具会记住你的选择。[可选功能](docs/Settings.md#可选功能)
 
 ## 解决常见问题
 
@@ -25,8 +25,8 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.12 更新�
 | **Codex 怎么设置 Karing、v2rayN 或自定义代理？** | 打开「连接与修复 → 连接状态」，选择预设，或填写代理软件当前的 HTTP 代理 IP 和端口，然后保存。重新打开 Codex 后可检查模型线路。[代理设置与检查](docs/WebSocket.md#配置与检查) |
 | **关闭 TUN 后，手机上的 Codex Remote 或 Dot 找不到电脑** | 在「连接状态」开启远控转发。开启时需要管理员授权，工具会安装随 Windows 启动的服务并写入一条专用 hosts 映射。转发时请保持代理软件运行。[远控转发、换端口与卸载](docs/WebSocket.md#控制其他设备时使用远控转发) |
 | **Codex 连不上 Chrome 或无法读取网页** | 打开「连接与修复 → 浏览器」，检查组件并按需修复。重新打开 Codex 后，用页面提供的测试指令读取网页标题。[Chrome 连接排查](docs/BrowserConnection.md) |
-| **Codex 桌面版打不开，或提示「无法加载组织设置」** | 从「连接与修复 → 桌面启动」检查组件，或在「CLI 管理」按手册尝试切换到官方独立 CLI，再重新打开 Codex 验证。[桌面启动排查](docs/DesktopStartupRecovery.md) |
-| **找不到 Codex CLI 或路径不对** | 在「CLI 管理」核对已保存的 CLI 类型和路径，按需准备官方独立 CLI 或切回桌面原生 CLI。[CLI 管理说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
+| **Codex 桌面版打不开，或提示「无法加载组织设置」** | 从「连接与修复 → 桌面启动」检查组件。需要改用官方独立 CLI 时，从「初始化 → 功能选择」选定并完成初始化。[桌面启动排查](docs/DesktopStartupRecovery.md) |
+| **找不到 Codex CLI 或路径不对** | 在「CLI 管理」检查已保存的类型和路径。要更换 CLI 类型，请完成初始化。[CLI 管理说明](docs/Desktop.md#浏览器cli-与初始化顺序) |
 | **电脑操作（CUA）组件缺失，或反复显示正在准备** | 打开「连接与修复 → 电脑操作」，检查缺失的组件，并按需补齐。[组件检查入口](docs/Desktop.md#遇到问题先选哪项) |
 | **Codex 提示配置已弃用或无法识别** | 在「连接与修复 → 配置检查」查看具体警告，按提示处理。[配置兼容检查](docs/ConfigCompatibility.md) |
 | **下载慢或工具更新失败** | 在「更新与下载」开启 GitHub 镜像重试，或从发布页手动下载。[下载设置](docs/GitHubMirrors.md) |
@@ -59,7 +59,9 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.12 更新�
 <details>
 <summary>查看其他界面</summary>
 
-![概览与导航](assets/screenshots/v2.3.7/overview.png)
+![初始化功能选择](assets/screenshots/v2.3.13/feature-selection.png)
+
+![选择工作盘](assets/screenshots/v2.3.13/workspace.png)
 
 ![初始化步骤和结果](assets/screenshots/v2.3.7/initialization-progress.png)
 
@@ -69,7 +71,7 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.12 更新�
 
 ![设置 Playwright 浏览器时可选 Edge、Chrome 或 Firefox](assets/screenshots/v2.3.10/playwright-browser-choice.png)
 
-![桌面原生 CLI 与官方独立 CLI](assets/screenshots/v2.3.7/maintenance.png)
+![检查 CLI 和维护组件](assets/screenshots/v2.3.13/cli-management.png)
 
 ![更新与 GitHub 镜像设置](assets/screenshots/v2.3.7/updates.png)
 

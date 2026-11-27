@@ -9,6 +9,7 @@ public partial class MainWindow {
     void UpdateBusyControls(){
         bool locked=busy&&activeOperation=="initialize";
         foreach(var control in new Control[]{drive,proxyEnabled,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,openSourceReference,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,guard,cliNative,cliStandalone,parentModel,parentEffort,githubMirrors})control.IsEnabled=!locked;
+        UpdateCredentialManagement();
         playwrightCli.IsEnabled=chromeDevToolsMcp.IsEnabled=!locked;
         foreach(var button in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)
             .Where(button=>button.Name=="RemovePlaywrightCli"||button.Name=="RemoveChromeDevToolsMcp"))
@@ -21,7 +22,7 @@ public partial class MainWindow {
         childEffort.IsEnabled=childModel.IsEnabled&&!AutoAssign;
         maxConcurrentSubagentsInput.IsEnabled=childModel.IsEnabled;
         githubCustomMirror.IsEnabled=!locked&&githubMirrors.IsChecked==true;
-        foreach(var b in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)){var label=Convert.ToString(b.Content);if(label==UninstallRelayLabel){b.IsEnabled=!busy && relayStatus.CanRemove;continue;}bool operation=new[]{"开启远控转发","关闭远控转发","确认并开始","保存代理","检查已保存","检查组件","修复组件","检查更新","下载并更新","更新官方","更新桌面","仅保存","保存 WS","保存下载","修复并启动","修复连接","检查连接","检查 WebSocket","验证重启","检查 CUA","检查并修复","开始诊断","安装 /","卸载启动","恢复原始","撤销 WebSocket","清理已","仅重试","切换官方","切换桌面","启动 Codex"}.Any(x=>label.StartsWith(x,StringComparison.Ordinal));if(operation){b.IsEnabled=!busy;b.ToolTip=busy?"当前操作正在执行，请等待结果后再操作。":null;}}
+        foreach(var b in InitializationFlowTests.Descendants<Button>((DependencyObject)Content)){var label=Convert.ToString(b.Content);if(label==UninstallRelayLabel){b.IsEnabled=!busy && relayStatus.CanRemove;continue;}bool operation=new[]{"开启远控转发","关闭远控转发","确认并开始","保存代理","检查已保存","检查组件","修复组件","检查更新","下载并更新","更新官方","更新桌面","仅保存","保存 WS","保存下载","修复并启动","修复连接","检查连接","检查 WebSocket","验证重启","检查 CUA","检查并修复","开始诊断","安装 /","卸载启动","恢复原始","撤销 WebSocket","清理已","仅重试","重新执行初始化","启动 Codex"}.Any(x=>label.StartsWith(x,StringComparison.Ordinal));if(operation){b.IsEnabled=!busy;b.ToolTip=busy?"当前操作正在执行，请等待结果后再操作。":null;}}
         UpdateRollbackActions();
     }
     void ApplyCompactLayout(){var root=Content as FrameworkElement;bool compact=root!=null&&root.ActualHeight>0&&root.ActualHeight<500;subtitle.Visibility=compact?Visibility.Collapsed:Visibility.Visible;heading.FontSize=compact?20:24;if(page=="初始化"&&wizard==0&&pageNavigation.Children.Count>0)pageNavigation.Children[0].Visibility=compact?Visibility.Collapsed:Visibility.Visible;}

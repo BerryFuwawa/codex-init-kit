@@ -1226,8 +1226,21 @@ function Initialize-GuardRuntime {
         }
     }
 }
+function Remove-DesktopGuardProtection {
+    $task = Get-ScheduledTask -TaskName $script:AutoTaskName -TaskPath '\' -ErrorAction SilentlyContinue
+    if ($task) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
+    foreach ($path in @($script:StartupShortcut,$script:AutoLauncher,$script:AutoScript)) {
+        if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force -ErrorAction Stop }
+    }
+    $state = Load-State
+    $state['Installed'] = $false
+    $state['NativeGuard'] = $false
+    $state['LastUpdateResult'] = '启动保护已卸载'
+    Save-State $state
+    Write-BackendLine '启动保护已卸载，当前 CLI 选择保留。'
+}
 function Invoke-GuardOperation {
-    param([Parameter(Mandatory=$true)][ValidateSet('guard-install','guard-update','guard-native','guard-current','guard-rollback','guard-uninstall','doctor')][string]$Action,[Parameter(Mandatory=$true)][string]$PayloadRoot)
+    param([Parameter(Mandatory=$true)][ValidateSet('guard-install','guard-update','guard-native','guard-current','guard-uninstall','doctor')][string]$Action,[Parameter(Mandatory=$true)][string]$PayloadRoot)
     $guard = Assert-PayloadFile $PayloadRoot 'guard.cmd'
     Initialize-GuardRuntime $guard -ForModification
     if ($Action -ne 'doctor' -and (Test-DesktopRunning)) { throw 'Codex is running. Close Codex before changing startup protection.' }
@@ -1258,8 +1271,7 @@ function Invoke-GuardOperation {
         'guard-update' { if (-not (Convert-ToBoolean $beforeInstalled)) { throw 'Startup protection is not installed.' }; Update-ProtectedRuntime | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-native' { Restore-DesktopNative | ForEach-Object { Write-BackendLine $_ } | Out-Null }
         'guard-current' { [void](Invoke-OfficialCliUpdate $PayloadRoot -OnlyIfMissing); Initialize-GuardRuntime $guard -ForModification; Switch-ToOfficialCurrent | ForEach-Object { Write-BackendLine $_ } | Out-Null }
-        'guard-rollback' { Rollback-Protection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
-        'guard-uninstall' { Remove-Protection | ForEach-Object { Write-BackendLine $_ } | Out-Null }
+        'guard-uninstall' { Remove-DesktopGuardProtection }
         'doctor' { Run-Doctor | ForEach-Object { Write-BackendLine $_ } | Out-Null }
     }
     if($Action -in @('guard-install','guard-current','guard-update')){Update-DesktopGuardAutoScript}
@@ -1288,7 +1300,6 @@ function Invoke-GuardOperation {
         }
         'guard-native' { if ([string]$afterState['ActiveMode'] -ne 'DesktopNativeProtected') { throw 'Desktop native mode was not restored.' } }
         'guard-current' { if ([string]$afterState['ActiveMode'] -ne 'OfficialCurrent') { throw 'Official Current was not selected.' } }
-        'guard-rollback' { if ([string]$afterState['ActiveMode'] -ne 'Rollback') { throw 'Protection rollback did not complete.' } }
         'guard-uninstall' { if (Convert-ToBoolean $afterInstalled) { throw 'Startup protection uninstall did not complete.' } }
         'doctor' {
             $doctorLogs=@(Get-ChildItem -LiteralPath $script:LogDir -Filter 'doctor_*.txt' -File -ErrorAction SilentlyContinue |
@@ -1440,16 +1451,11 @@ function Invoke-BackendMain {
             'desktop-core-check' { return (Invoke-DesktopCoreOperation 'check' $input.PayloadRoot) }
             'desktop-core-repair' { return (Invoke-DesktopCoreOperation 'repair' $input.PayloadRoot) }
             'proxy' { return (Invoke-InitOperation 'proxy' $input.PayloadRoot $null $input.ProxyPort $input.Options) }
-            'init-rollback' { return (Invoke-InitRollback $input.PayloadRoot $input.ProxyPort) }
-            'rollback-selected' { return (Invoke-SelectedRollback $input.PayloadRoot $input.Options.rollbackId $input.ProxyPort) }
             'rollback-delete-all' { return (Remove-RollbackEntries $input.PayloadRoot $input.Options.rollbackId) }
             'cua-check' { return (Invoke-CuaOperation 'check' $input.PayloadRoot) }
             'cua-repair' { return (Invoke-CuaOperation 'repair' $input.PayloadRoot) }
             'guard-install' { return (Invoke-GuardOperation 'guard-install' $input.PayloadRoot) }
             'guard-update' { return (Invoke-GuardOperation 'guard-update' $input.PayloadRoot) }
-            'guard-native' { return (Invoke-GuardOperation 'guard-native' $input.PayloadRoot) }
-            'guard-current' { return (Invoke-GuardOperation 'guard-current' $input.PayloadRoot) }
-            'guard-rollback' { return (Invoke-GuardOperation 'guard-rollback' $input.PayloadRoot) }
             'guard-uninstall' { return (Invoke-GuardOperation 'guard-uninstall' $input.PayloadRoot) }
             'doctor' { return (Invoke-GuardOperation 'doctor' $input.PayloadRoot) }
             default { throw ('Unknown operation: ' + $input.Operation) }

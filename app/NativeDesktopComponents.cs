@@ -112,7 +112,19 @@ internal sealed class NativeDesktopComponents:IDesktopInitializationSteps {
     Dictionary<string,object> State(){return File.Exists(StateFile)?NativeData.Json.Deserialize<Dictionary<string,object>>(NativeData.Read(StateFile)):new Dictionary<string,object>();}
     internal void ModeState(string mode,string cli){if(!File.Exists(StateFile))return;var state=State();state["ActiveMode"]=mode;state["ActiveCliPath"]=cli;state["LastModeReason"]="已核对保存的 CLI 路径；当前运行实例未核验";NativeData.Write(StateFile,NativeData.Json.Serialize(state));}
     public void SelectCli(string mode){if(DetectCli()==mode){if(mode=="desktop-native")NativeCli(services.Desktop.Discover());else Package(Current);log("CLI 选择与现有设置一致，跳过切换；当前对话不中断。");return;}Stopped();if(mode=="desktop-native"){NativeCli(services.Desktop.Discover());services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=false});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("DesktopNativeProtected",null);}else{Package(Current);services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=true,Kind="String",Value=Path.Combine(Current,"bin","codex.exe")});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("OfficialCurrent",Path.Combine(Current,"bin","codex.exe"));}ConfigurationEffect.Record(changes,"cli",mode=="desktop-native"?"已移除用户 CLI 路径覆盖，保留机器级设置。":"用户 CLI 路径已指向官方独立组件，保留机器级设置。");}
-    internal void CachedCli(string root){if(!NativeData.Inside(root,Path.Combine(Standalone,"releases")))throw new IOException("回滚版本不在官方独立 CLI 缓存中。");Stopped();Package(root);var before=services.Registry.Get("CODEX_CLI_PATH");var host=services.Registry.Get("CODEX_CODE_MODE_HOST_PATH");CaptureSelection();try{var cli=Path.Combine(root,"bin","codex.exe");services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=true,Kind="String",Value=cli});services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",new RegistryValueState{Exists=false});ModeState("Rollback",cli);VerifyCli("official-standalone");log("已保存并核对官方独立 CLI 回滚路径（当前实例未核验）："+root);}catch{services.Registry.Set("CODEX_CLI_PATH",before);services.Registry.Set("CODEX_CODE_MODE_HOST_PATH",host);RestoreSelection();throw;}}
+    internal void RollbackStandaloneVersion(string root){
+        if(DetectCli()!="official-standalone")throw new InvalidOperationException("只有当前已选用官方独立 CLI 时才能回滚它的版本。更换 CLI 类型请完成初始化。");
+        if(!NativeData.Inside(root,Path.Combine(Standalone,"releases")))throw new IOException("回滚版本不在官方独立 CLI 缓存中。");
+        Stopped();Package(root);
+        var before=services.Registry.Get("CODEX_CLI_PATH");
+        CaptureSelection();
+        try{
+            var cli=Path.Combine(root,"bin","codex.exe");
+            services.Registry.Set("CODEX_CLI_PATH",new RegistryValueState{Exists=true,Kind="String",Value=cli});
+            ModeState("Rollback",cli);VerifyCli("official-standalone");
+            log("已保存并核对官方独立 CLI 回滚路径（当前实例未核验）："+root);
+        }catch{services.Registry.Set("CODEX_CLI_PATH",before);RestoreSelection();throw;}
+    }
     public void VerifyCli(string mode){if(DetectCli()!=mode)throw new IOException("保存的 CLI 路径与本次选择不符，请检查用户或机器级路径覆盖；此检查不代表当前运行实例。");}
     static bool SameTaskUser(string actual,string sid){if(String.Equals(actual,sid,StringComparison.OrdinalIgnoreCase))return true;if(String.IsNullOrWhiteSpace(actual))return false;try{return new NTAccount(actual).Translate(typeof(SecurityIdentifier)).Value==sid;}catch(IdentityNotMappedException){return false;}}
     internal static string GuardMismatch(string xml,string exe,string sid){
@@ -136,7 +148,17 @@ internal sealed class NativeDesktopComponents:IDesktopInitializationSteps {
     }
     internal static byte[] TaskFileBytes(string executable,string sid){return Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(TaskXml(executable,sid))).ToArray();}
     internal static string TaskXml(string executable,string sid){return "<?xml version=\"1.0\" encoding=\"UTF-16\"?><Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Triggers><LogonTrigger><Enabled>true</Enabled><UserId>"+sid+"</UserId></LogonTrigger></Triggers><Principals><Principal id=\"Author\"><UserId>"+sid+"</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><Hidden>true</Hidden><ExecutionTimeLimit>PT5M</ExecutionTimeLimit></Settings><Actions Context=\"Author\"><Exec><Command>"+System.Security.SecurityElement.Escape(executable)+"</Command><Arguments>--native-guard</Arguments></Exec></Actions></Task>";}
-    internal void AutoMaintain(){var app=services.Desktop.Discover();if(services.Processes.List(paths,app).Count>0){log("应用正在运行，登录维护已跳过。不会中断任务。");return;}if(!File.Exists(StateFile)||!Convert.ToBoolean(State().ContainsKey("NativeGuard")?State()["NativeGuard"]:false))return;try{NativeCli(app);log("桌面原生组件完整，保留当前用户选择。");}catch{Package(Current);if(DetectCli()=="desktop-native")SelectCli("official-standalone");}}
+    internal void AutoMaintain(){
+        var state=State();
+        if(!state.ContainsKey("NativeGuard")||!Convert.ToBoolean(state["NativeGuard"])||!ProtectionInstalled)return;
+        var app=services.Desktop.Discover();
+        if(services.Processes.List(paths,app).Count>0){log("应用正在运行，登录维护已跳过。");return;}
+        var mode=DetectCli();
+        if(mode=="desktop-native")NativeCli(app);
+        else if(mode=="official-standalone")Package(Path.GetDirectoryName(Path.GetDirectoryName(Persisted("CODEX_CLI_PATH"))));
+        else throw new IOException("无法核对所选 CLI。请在「CLI 管理」中检查组件，或通过初始化更换 CLI 类型。");
+        log("当前选择的 CLI 组件检查通过。");
+    }
     public void EnableRelay(System.Net.IPEndPoint target){RemoteRelayService.Configure(target,false);}
     public void Browser(){var browser=new NativeDesktopBrowser(paths,services,log);try{browser.Repair();}finally{if(browser.Changed){var effect=ConfigurationEffect.Create("cua","浏览器电脑操作组件已恢复为官方原始文件。");changes.Add(effect);}}}
     public string Playwright(Action beforeWrite){

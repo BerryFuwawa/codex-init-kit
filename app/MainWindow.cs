@@ -30,6 +30,7 @@ public partial class MainWindow : Window {
     readonly ProgressBar progress=new ProgressBar();
     readonly List<Button> navigation=new List<Button>();
     readonly ComboBox drive=new ComboBox();
+    readonly TextBlock workspaceDriveHint=new TextBlock();
     readonly TextBox port=new TextBox();
     readonly ComboBox proxyPortPreset=new ComboBox();
     readonly TextBlock proxyPortNotice=new TextBlock();
@@ -49,7 +50,6 @@ public partial class MainWindow : Window {
     string[] incompleteInitializationStages=new string[0];
     string initializationCloseImpact="";bool deferInitializationClose;
     int lastInitializationPort;string lastInitializationDrive;bool lastInitializationGuard;
-    Button recoveryGuide,officialSwitch;
     readonly ComboBox parentModel=new ComboBox(),childModel=new ComboBox();
     readonly ComboBox parentEffort=new ComboBox(),childEffort=new ComboBox();
     readonly TextBlock modelCheck=new TextBlock();
@@ -95,8 +95,6 @@ public partial class MainWindow : Window {
         parentModel.SelectedItem=Core.DefaultParentModel;childModel.SelectedItem="gpt-6.1-sol";parentEffort.SelectedItem=Core.DefaultParentEffort;childEffort.SelectedItem="medium";folderManagement.IsChecked=true;subagents.IsChecked=false;cuaRepair.IsChecked=true;guard.IsChecked=true;proxyHost.Text="";
         var completionDialog=CreateInitializationCompletedDialog();var completionRoot=completionDialog.Content as Border;var completionPanel=completionRoot==null?null:completionRoot.Child as Grid;if((IsVisible&&completionDialog.Owner!=this)||completionDialog.Title!="已完成初始化"||completionPanel==null||!InitializationFlowTests.Descendants<Button>(completionPanel).Select(b=>Convert.ToString(b.Content)).SequenceEqual(new[]{"启动 Codex","关闭"})||!InitializationFlowTests.Descendants<TextBlock>(completionPanel).Any(x=>x.Text=="已完成初始化"))throw new InvalidOperationException("Initialization completion actions are missing");
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"runtimeModeDetail","桌面应用自带 CLI"},{"currentCliPath",""},{"protectionInstalled",false}};Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("DesktopNative","由桌面应用自动选择");status["runtimeMode"]="OfficialStandalone";status["runtimeModeDetail"]="官方独立 CLI";status["currentCliPath"]="C:\\Users\\Test\\.codex\\bin\\codex.exe";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("OfficialStandalone","C:\\Users\\Test\\.codex\\bin\\codex.exe");status["runtimeMode"]="Unknown";Navigate("概览");UpdateLayout();VerifyRuntimeDisplay("Unknown","C:\\Users\\Test\\.codex\\bin\\codex.exe");status=null;
-        foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown",""}){status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("概览");if((recoveryGuide.Visibility==Visibility.Visible)!=(mode=="DesktopNative"))throw new InvalidOperationException("Recovery guide visibility failed");}
-        status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"}};GuideOfficialCli();HighlightOfficialSwitch();if(page!="CLI 管理"||Convert.ToString(officialSwitch.Content)!="切换官方独立 CLI"||busy||officialSwitch.Background!=Accent)throw new InvalidOperationException("Recovery navigation or reduced-motion highlight failed");
         var newDefaults=Options();foreach(var key in new[]{"browserRepair","officialCliUpdate","desktopUpdate","antiOverDefense","workJournal","commandLineFirst"})if(!(bool)newDefaults[key])throw new InvalidOperationException("New default disabled: "+key);
         antiOverDefense.IsChecked=false;if((bool)Options()["antiOverDefense"]||!InitSummary().Contains("防止过度防御：跳过"))throw new InvalidOperationException("Anti-over-defense selection or confirmation was not preserved");antiOverDefense.IsChecked=true;if(!InitSummary().Contains("HERO 中文完整规则"))throw new InvalidOperationException("Anti-over-defense confirmation was missing");
         workJournal.IsChecked=false;if((bool)Options()["workJournal"]||!InitSummary().Contains("按需笔记与文档管理：跳过"))throw new InvalidOperationException("Work journal selection or confirmation was not preserved");workJournal.IsChecked=true;
@@ -104,7 +102,7 @@ public partial class MainWindow : Window {
         if((bool)Options()["commandLineFirst"]||!(bool)Options()["workJournal"]||!InitSummary().Contains("优先使用命令行：跳过"))
             throw new InvalidOperationException("Command-line preference was not independent or missing from confirmation");
         commandLineFirst.IsChecked=true;
-        Navigate("初始化");var featurePanel=(StackPanel)((Border)content.Children[1]).Child;var featureChoices=InitializationFlowTests.Descendants<CheckBox>(featurePanel).ToArray();if(featureChoices[0]!=folderManagement||featureChoices[1]!=workJournal||featureChoices[2]!=memories||featureChoices[3]!=antiOverDefense||featureChoices[4]!=commandLineFirst||featureChoices[5]!=openSourceReference||workJournal.IsChecked!=true||commandLineFirst.IsChecked!=true||memories.IsChecked!=true||!featureChoices.Skip(featureChoices.Length-4).SequenceEqual(new[]{desktopUpdate,subagents,playwrightCli,chromeDevToolsMcp})||playwrightCli.IsChecked!=false||chromeDevToolsMcp.IsChecked!=false||antiOverDefense.IsChecked!=true||subagents.IsChecked!=false)throw new InvalidOperationException("Initialization checkbox order or defaults changed");
+        Navigate("初始化");var featurePanel=(StackPanel)((Border)content.Children[1]).Child;var featureChoices=InitializationFlowTests.Descendants<CheckBox>(featurePanel).ToArray();if(featureChoices[0]!=folderManagement||featureChoices[1]!=credentialManagement||featureChoices[2]!=workJournal||featureChoices[3]!=memories||featureChoices[4]!=antiOverDefense||featureChoices[5]!=commandLineFirst||featureChoices[6]!=openSourceReference||workJournal.IsChecked!=true||commandLineFirst.IsChecked!=true||memories.IsChecked!=true||!featureChoices.Skip(featureChoices.Length-4).SequenceEqual(new[]{desktopUpdate,subagents,playwrightCli,chromeDevToolsMcp})||playwrightCli.IsChecked!=false||chromeDevToolsMcp.IsChecked!=false||antiOverDefense.IsChecked!=true||subagents.IsChecked!=false)throw new InvalidOperationException("Initialization checkbox order or defaults changed");
         var cliChoices=featurePanel.Children.OfType<WrapPanel>().SelectMany(x=>x.Children.OfType<RadioButton>()).ToArray();if(!cliChoices.SequenceEqual(new[]{cliNative,cliStandalone})||cliNative.IsChecked!=true||cliStandalone.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("本次保存的 CLI 选择：桌面版原生 CLI"))throw new InvalidDataException("Detected native CLI choice or confirmation is incorrect");
         ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliStandalone.IsChecked!=true||cliNative.IsChecked==true||Convert.ToString(Options()["cliMode"])!="auto"||!InitSummary().Contains("本次保存的 CLI 选择：官方独立 CLI"))throw new InvalidDataException("Detected standalone CLI was not selected automatically");
         cliNative.IsChecked=true;ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","OfficialStandalone"}});if(cliNative.IsChecked!=true||Convert.ToString(Options()["cliMode"])!="desktop-native")throw new InvalidDataException("Status refresh replaced the manual CLI choice");Navigate("概览");Navigate("初始化");if(cliNative.IsChecked!=true)throw new InvalidDataException("Navigation lost the selected CLI");
@@ -145,7 +143,10 @@ public partial class MainWindow : Window {
         status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"desktopVersion","26.1103.7773.0"},{"protectionInstalled",true}};
         foreach(var name in new[]{"概览","连接与修复","CLI 管理","备份与回滚","更新与下载","日志"}){if(name=="备份与回滚"){status["rollbackEntries"]=new object[]{new Dictionary<string,object>{{"id","preview-config"},{"kind","init"},{"version","2.2.12"},{"time","2026-11-12 16:33"},{"detail","配置、代理与全局规则"},{"available",true},{"path",@"C:\Users\示例\Documents\Codex初始化备份"}},new Dictionary<string,object>{{"id","preview-cli"},{"kind","cli"},{"version","0.167.0"},{"time","2026-11-10 16:46"},{"detail","官方独立 CLI 缓存"},{"available",true},{"path",@"C:\Users\示例\.codex\packages\standalone"}}};selectedRollbackId="preview-config";status["rollbackDeleteId"]="preview-history";status["rollbackDeleteCount"]=2;}Navigate(name);RenderView(directory,name,1000,740);}
         repairTab=1;Navigate("连接与修复");RenderView(directory,"浏览器组件",1000,740);repairTab=0;modelNetworkReport=new Dictionary<string,object>{{"modelState","HTTP：官方 CLI 探针未通过；模型 WebSocket：当前提供方未启用，未进行握手"},{"configurationPath",@"C:\Users\示例\.codex\.env"},{"savedConfiguration","HTTPS_PROXY：.env 已保存 · http://127.0.0.1:3067"},{"proxyPolicy","官方 CLI 未启用 respect_system_proxy；实际路由由官方运行时决定。"}};Navigate("连接与修复");RenderView(directory,"已保存模型配置",1000,740);modelNetworkReport=null;
-        wizard=0;for(int index=0;index<3;index++){configurationTab=index;Navigate("初始化");RenderView(directory,"初始化-"+new[]{"工作区与网络","功能选择","模型设置"}[index],1000,740);}
+        wizard=0;foreach(var step in new[]{NetworkStep,FeaturesStep,WorkspaceStep,ModelsStep}){
+            GoToConfigurationStep(step);
+            RenderView(directory,"初始化-"+new[]{"网络与转发","功能选择","模型设置","工作区与目录"}[step],1000,740);
+        }
         wizard=1;Navigate("初始化");RenderView(directory,"初始化-确认",1000,740);
         initializationProgress.Reset(Options(),true);foreach(var stage in initializationProgress.Stages.Take(3))stage.State="complete";initializationProgress.Stages[3].State="running";initializationProgress.Stages[3].Detail="正在准备官方独立 CLI";busy=true;wizard=2;Navigate("初始化");RenderView(directory,"初始化-执行",1000,740);
         busy=false;initializationState="partial";foreach(var stage in initializationProgress.Stages){stage.State="complete";}initializationProgress.Stages[1].State="incomplete";initializationSummary="桌面版更新未完成，可稍后在微软商店或 Codex 内手动更新。其余所选项目已完成。";Navigate("初始化");RenderView(directory,"初始化-结果",1000,740);
@@ -158,8 +159,10 @@ public partial class MainWindow : Window {
         var view=(FrameworkElement)Content;view.Measure(new Size(width,height));view.Arrange(new Rect(0,0,width,height));view.UpdateLayout();PumpLogLayout();
         var bitmap=new RenderTargetBitmap((int)(width*dpi/96),(int)(height*dpi/96),dpi,dpi,PixelFormats.Pbgra32);bitmap.Render(view);File.WriteAllText(Path.Combine(directory,name+".layout.json"),Core.Json.Serialize(new {width=view.ActualWidth,height=view.ActualHeight,desiredWidth=view.DesiredSize.Width,desiredHeight=view.DesiredSize.Height,windowWidth=ActualWidth,windowHeight=ActualHeight,contentWidth=content.ActualWidth,contentHeight=content.ActualHeight}));var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(directory,name+".png")))encoder.Save(file);
     }
-    public MainWindow(bool isPreview) {
+    public MainWindow(bool isPreview,bool wizardPreview=false,string previewPreferences=null) {
         logViewport=new LogViewport(log);
+        initializationDesignPreview=isPreview&&wizardPreview;
+        initializationPreviewPreferences=initializationDesignPreview?previewPreferences:null;
         preview=isPreview;if(preview)StartOperation=(op,id,disk,proxy,protect,options)=>{throw new InvalidOperationException("设计预览不会执行初始化或维护操作。");};modelCatalog=preview?ModelCatalog.Preset():ModelCatalog.Load(CurrentModelSettings.CodexHome()); Title="Codex Init Kit"; Width=1000; Height=740; MinWidth=800; MinHeight=540; WindowStartupLocation=WindowStartupLocation.CenterScreen;
         SourceInitialized+=(s,e)=>{MorandiTheme.StyleWindow(this);var area=SystemParameters.WorkArea;MinWidth=Math.Min(800,Math.Max(320,area.Width-24));MinHeight=Math.Min(540,Math.Max(280,area.Height-24));Width=Math.Min(Width,Math.Max(MinWidth,area.Width-24));Height=Math.Min(Height,Math.Max(MinHeight,area.Height-24));};
         Icon=Brand.WindowIcon();UseLayoutRounding=true;SnapsToDevicePixels=true;TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);
@@ -167,8 +170,13 @@ public partial class MainWindow : Window {
         using(var styles=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("UI.Controls.xaml"))Resources.MergedDictionaries.Add((ResourceDictionary)System.Windows.Markup.XamlReader.Load(styles));
         BuildShell();
         log.IsReadOnly=true; log.AcceptsReturn=true; log.TextWrapping=TextWrapping.NoWrap; log.VerticalScrollBarVisibility=ScrollBarVisibility.Auto; log.HorizontalScrollBarVisibility=ScrollBarVisibility.Auto; log.FontFamily=new FontFamily("Consolas"); log.FontSize=12; log.Background=B("#101620"); log.Foreground=TextBrush; log.BorderThickness=new Thickness(0); log.Padding=new Thickness(14); log.Height=350;
-        drive.ItemsSource=DriveInfo.GetDrives().Where(x=>x.DriveType==DriveType.Fixed && x.IsReady).Select(x=>x.Name.Substring(0,1)).ToArray(); drive.SelectedItem="D"; if(drive.SelectedIndex<0) drive.SelectedIndex=0;
+        var availableDrives=DriveInfo.GetDrives().Where(x=>x.DriveType==DriveType.Fixed && x.IsReady).Select(x=>x.Name.Substring(0,1)).ToArray();
+        drive.ItemsSource=availableDrives;
+        if(preview){if(!initializationDesignPreview)drive.SelectedIndex=0;}
+        else drive.SelectedItem=SavedWorkspaceDrive(CurrentModelSettings.CodexHome(),availableDrives);
         drive.Style=(Style)Resources["KitCombo"];drive.FontSize=13;drive.Width=280;drive.HorizontalAlignment=HorizontalAlignment.Left;
+        workspaceDriveHint.FontSize=12;workspaceDriveHint.Foreground=MutedBrush;workspaceDriveHint.TextWrapping=TextWrapping.Wrap;
+        workspaceDriveHint.Margin=new Thickness(0,4,0,12);
         foreach(var input in new[]{port,proxyHost})input.Style=(Style)Resources["KitInput"];
         port.Width=90;port.Height=36;port.MaxLength=5;port.HorizontalAlignment=HorizontalAlignment.Left;
         proxyPortPreset.Style=(Style)Resources["KitCombo"];proxyPortPreset.Width=205;
@@ -195,7 +203,13 @@ public partial class MainWindow : Window {
         cliDetectionHint.FontSize=12;cliDetectionHint.Foreground=MutedBrush;cliDetectionHint.TextWrapping=TextWrapping.Wrap;cliDetectionHint.Margin=new Thickness(0,4,0,8);
         if(preview)ApplyCliDetection(new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});else UpdateCliDetectionHint();
         ConfigureFeatureHints();
-        if(!preview)BindWorkRulePreferences(@"HKEY_CURRENT_USER\Software\CodexInitKit\Desktop\WorkRules");
+        if(!preview)BindWorkRulePreferences(WorkRulePreferencesKey);
+        if(initializationDesignPreview)BindInitializationPreviewPreferences();
+        ConfigureCredentialManagement(initializationDesignPreview?initializationPreviewPreferences:preview?null:WorkRulePreferencesKey);
+        drive.SelectionChanged+=(s,e)=>UpdateWorkspaceDriveHint();
+        folderManagement.Checked+=(s,e)=>FolderManagementChanged();
+        folderManagement.Unchecked+=(s,e)=>FolderManagementChanged();
+        UpdateWorkspaceDriveHint();
         githubMirrors.Content="自动使用 GitHub 镜像";githubMirrors.Style=(Style)Resources["KitCheck"];
         githubCustomMirror.Style=(Style)Resources["KitInput"];githubCustomMirror.ToolTip="可选 HTTPS 镜像前缀，例如 https://example.com/proxy/";
         var network=new GitHubNetworkOptions();if(!preview)try{network=GitHubNetworkOptions.Load(Core.NetworkSettingsPath);}catch(Exception ex){networkSettingsError="下载设置未能读取，请重新保存："+ex.Message;}
@@ -227,7 +241,9 @@ public partial class MainWindow : Window {
         foreach(var choice in new[]{drive,proxyPortPreset,parentModel,childModel,parentEffort,childEffort})choice.DropDownOpened+=(s,e)=>{var combo=(ComboBox)s;var popup=combo.Template.FindName("PART_Popup",combo) as System.Windows.Controls.Primitives.Popup;if(popup!=null){popup.PopupAnimation=System.Windows.Controls.Primitives.PopupAnimation.None;var child=popup.Child as FrameworkElement;if(child!=null)Motion.Enter(child,preview,180);}};
         UpdateModelInputs();
         Closing+=(s,e)=>{if(busy){e.Cancel=true; MessageBox.Show(this,"操作正在执行，请等待结果后再关闭窗口。","正在执行",MessageBoxButton.OK,MessageBoxImage.Information);}};
-        Navigate("概览"); Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
+        if(initializationDesignPreview){banner.Text="界面预览 · 不会执行初始化";updateStatus.Text="";GoToConfigurationStep(FeaturesStep);}
+        else Navigate("概览");
+        Loaded+=async(s,e)=>{if(!preview) await Task.WhenAll(Run("status","读取当前状态",false),CheckUpdates(true));};
     }
     static Brush B(string hex) { return MorandiTheme.Legacy(hex); }
     void LoadCurrentProxyPort() {
@@ -296,11 +312,12 @@ public partial class MainWindow : Window {
         grid.ColumnDefinitions.Add(new ColumnDefinition());grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});grid.RowDefinitions.Add(new RowDefinition{Height=GridLength.Auto});
         var groups=new[]{
-            FeatureGroup("工作习惯",folderManagement,workJournal,memories),
+            FeatureGroup("工作习惯",folderManagement,credentialManagement,workJournal,memories),
             FeatureGroup("开发习惯",antiOverDefense,commandLineFirst,openSourceReference),
             FeatureGroup("修复与连接",guard,cuaRepair,browserRepair),
             FeatureGroup("组件更新",officialCliUpdate,desktopUpdate)
         };
+        ((StackPanel)groups[0].Child).Children.Insert(3,credentialManagementHint);
         for(int index=0;index<groups.Length;index++){
             var group=groups[index];Grid.SetRow(group,index/2);Grid.SetColumn(group,index%2);
             if(index%2==0)group.Margin=new Thickness(0,0,10,10);grid.Children.Add(group);
@@ -314,7 +331,7 @@ public partial class MainWindow : Window {
         parent.Children.Add(new Border{Background=MorandiTheme.Group,BorderBrush=MorandiTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(14,8,14,5),Margin=new Thickness(0,0,0,12),Child=optional});
     }
     void Row(StackPanel parent,params UIElement[] items) { var row=new WrapPanel(); foreach(var item in items)row.Children.Add(item); parent.Children.Add(row); }
-    void Navigate(string name) { RememberReading();pageScroll.StopAnimation();logViewport.Detach();if(githubViewport!=null)githubViewport.Detach();wizardActions.Children.Clear();wizardActions.Visibility=Visibility.Collapsed;foreach(var control in new FrameworkElement[]{drive,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,remoteRelay,folderManagement,antiOverDefense,workJournal,commandLineFirst,memories,openSourceReference,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,maxConcurrentSubagentsInput,maxConcurrentSubagentsError,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
+    void Navigate(string name) { RememberReading();pageScroll.StopAnimation();logViewport.Detach();if(githubViewport!=null)githubViewport.Detach();wizardActions.Children.Clear();wizardActions.Visibility=Visibility.Collapsed;workspaceTabSlot=null;featuresContinue=null;workspaceContinue=null;workspaceDrivePlaceholder=null;foreach(var control in new FrameworkElement[]{drive,workspaceDriveHint,port,proxyPortPreset,proxyPortNotice,proxyHost,guard,log,githubMirrors,githubCustomMirror,githubLogView,proxyEnabled,remoteRelay,folderManagement,credentialManagement,credentialManagementHint,antiOverDefense,workJournal,commandLineFirst,memories,openSourceReference,subagents,cuaRepair,browserRepair,officialCliUpdate,desktopUpdate,cliNative,cliStandalone,cliDetectionHint,parentModel,childModel,parentEffort,childEffort,maxConcurrentSubagentsInput,maxConcurrentSubagentsError,modelCheck}) { var parent=control.Parent as Panel; if(parent!=null)parent.Children.Remove(control);else{var holder=control.Parent as ContentControl;if(holder!=null&&holder.Content==control)holder.Content=null;} } page=name;content.Children.Clear();pageNavigation.Children.Clear();stageProgress=null;heading.Text=name;if(pageHeadingIcon!=null)pageHeadingIcon.Data=UiIcons.For(name,true);foreach(var b in navigation){var active=Convert.ToString(b.Content)==name;b.Background=active?MorandiTheme.Selection:Brushes.Transparent;b.Foreground=active?TextBrush:MutedBrush;b.BorderBrush=active?MorandiTheme.Accent:Brushes.Transparent;b.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;}
         foreach(var section in navigationSections.Values.Distinct())section.Foreground=navigationSections.ContainsKey(name)&&navigationSections[name]==section?Accent:TextBrush;
         if(name=="概览")Overview();else if(name=="初始化")Wizard();else if(name=="连接与修复")RepairPage();else if(name=="CLI 管理")CliPage();else if(name=="备份与回滚")BackupPage();else if(name=="更新与下载")Updates();else LogsPage();
         if(log.Parent!=null){UpdateLogView();logViewport.Attach();}if(githubLogView.Parent!=null&&githubViewport!=null)githubViewport.Attach();UpdateBusyControls();ApplyCompactLayout();Motion.Enter(content,preview,220);
@@ -451,18 +468,46 @@ public partial class MainWindow : Window {
     }
     string Model(ComboBox input,string fallback){var value=Convert.ToString(input.SelectedItem);if(!modelCatalog.Models.ContainsKey(value))throw new InvalidOperationException("请从下拉框选择模型。");return value;}
     string ProxyHost() { if(proxyEnabled.IsChecked!=true)return "";var text=(proxyHost.Text??"").Trim();if(text.Length==0)return Core.DefaultProxyHost;System.Net.IPAddress address;if(!System.Net.IPAddress.TryParse(text,out address))throw new InvalidOperationException("代理 IP 必须是有效的 IPv4 或 IPv6 地址。");return address.ToString(); }
-    Dictionary<string,object> Options(){if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);var p=Model(parentModel,Core.DefaultParentModel);var pe=Effort(parentEffort,Core.DefaultParentEffort);var c=AutoAssign?Core.DefaultChildModel:Model(childModel,Core.DefaultChildModel);var ce=AutoAssign?Core.DefaultChildEffort:Effort(childEffort,Core.DefaultChildEffort);modelCatalog.Check(p,pe);if(subagents.IsChecked==true&&!AutoAssign)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"remoteRelay",proxyEnabled.IsChecked==true && remoteRelay.IsChecked==true},{"folderManagement",folderManagement.IsChecked==true},{"antiOverDefense",antiOverDefense.IsChecked==true},{"workJournal",workJournal.IsChecked==true},{"commandLineFirst",commandLineFirst.IsChecked==true},{"openSourceReference",openSourceReference.IsChecked==true},{"memories",memories.IsChecked==true},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"playwrightCli",playwrightCli.IsChecked==true},{"chromeDevToolsMcp",chromeDevToolsMcp.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"cliMode",cliChoiceManual?(cliStandalone.IsChecked==true?"official-standalone":"desktop-native"):"auto"},{"parentModel",p},{"parentEffort",pe},{"maxConcurrentSubagents",ReadMaxConcurrentSubagents()},{"childAutoAssign",AutoAssign},{"childModel",c},{"childEffort",ce}};}
+    Dictionary<string,object> Options(){if(modelSettingsError.Length>0)throw new InvalidOperationException(modelSettingsError);var p=Model(parentModel,Core.DefaultParentModel);var pe=Effort(parentEffort,Core.DefaultParentEffort);var c=AutoAssign?Core.DefaultChildModel:Model(childModel,Core.DefaultChildModel);var ce=AutoAssign?Core.DefaultChildEffort:Effort(childEffort,Core.DefaultChildEffort);modelCatalog.Check(p,pe);if(subagents.IsChecked==true&&!AutoAssign)modelCatalog.Check(c,ce);return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"remoteRelay",proxyEnabled.IsChecked==true && remoteRelay.IsChecked==true},{"folderManagement",folderManagement.IsChecked==true},{"credentialManagement",credentialManagement.IsChecked==true},{"antiOverDefense",antiOverDefense.IsChecked==true},{"workJournal",workJournal.IsChecked==true},{"commandLineFirst",commandLineFirst.IsChecked==true},{"openSourceReference",openSourceReference.IsChecked==true},{"memories",memories.IsChecked==true},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror},{"subagents",subagents.IsChecked==true},{"cuaRepair",cuaRepair.IsChecked==true},{"browserRepair",browserRepair.IsChecked==true},{"playwrightCli",playwrightCli.IsChecked==true},{"chromeDevToolsMcp",chromeDevToolsMcp.IsChecked==true},{"officialCliUpdate",officialCliUpdate.IsChecked==true},{"desktopUpdate",desktopUpdate.IsChecked==true},{"cliMode",cliChoiceManual?(cliStandalone.IsChecked==true?"official-standalone":"desktop-native"):"auto"},{"parentModel",p},{"parentEffort",pe},{"maxConcurrentSubagents",ReadMaxConcurrentSubagents()},{"childAutoAssign",AutoAssign},{"childModel",c},{"childEffort",ce}};}
     Dictionary<string,object> ProxyOptions(){return new Dictionary<string,object>{{"proxyHost",ProxyHost()},{"githubMirrorEnabled",githubMirrors.IsChecked==true},{"customGithubMirror",NetworkOptions().customGithubMirror}};}
     GitHubNetworkOptions NetworkOptions(){return new GitHubNetworkOptions{githubMirrorEnabled=githubMirrors.IsChecked==true,customGithubMirror=githubMirrors.IsChecked==true?GitHubNetworkOptions.NormalizePrefix(githubCustomMirror.Text):""};}
     string ModelChecks(Dictionary<string,object> options){return modelCatalog.Source+"\n"+modelCatalog.Check(Convert.ToString(options["parentModel"]),Convert.ToString(options["parentEffort"]))+(subagents.IsChecked==true&&!AutoAssign?"\n"+modelCatalog.Check(Convert.ToString(options["childModel"]),Convert.ToString(options["childEffort"])):"")+"\n核对结果不代表账号实时调用权限。";}
     string ProxySummary(){var value=Port();if(value==0)return "关闭（不写入本地 HTTP 代理）";var host=ProxyHost();if(host.Contains(":")&&!host.StartsWith("["))host="["+host+"]";return "http://"+host+":"+value;}
-    string Drive() { if(drive.SelectedItem==null)throw new InvalidOperationException("请选择可用的工作盘。"); return Convert.ToString(drive.SelectedItem); }
+    internal static string SavedWorkspaceDrive(string home,IEnumerable<string> availableDrives) {
+        try {
+            var config=Path.Combine(home,"config.toml");
+            if(!File.Exists(config))return null;
+            var workspace=ManagedToml.ReadTableString(File.ReadAllText(config,Encoding.UTF8),"desktop","projectlessWorkspaceRoot");
+            var match=System.Text.RegularExpressions.Regex.Match(workspace??"",@"^(?<drive>[A-Z]):\\Codex\\Conversations\\?\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success?availableDrives.FirstOrDefault(item=>String.Equals(item,match.Groups["drive"].Value,StringComparison.OrdinalIgnoreCase)):null;
+        }catch(IOException){return null;}
+        catch(UnauthorizedAccessException){return null;}
+        catch(InvalidDataException){return null;}
+        catch(ArgumentException){return null;}
+        catch(InvalidOperationException){return null;}
+    }
+    void UpdateWorkspaceDriveHint(){
+        if(workspaceDrivePlaceholder!=null)workspaceDrivePlaceholder.Visibility=drive.SelectedItem==null?Visibility.Visible:Visibility.Collapsed;
+        if(workspaceContinue!=null)workspaceContinue.IsEnabled=drive.SelectedItem!=null;
+        workspaceDriveHint.Text=folderManagement.IsChecked!=true?"已关闭文件夹管理，可在「功能选择」中开启。":
+            drive.SelectedItem==null?"选定工作盘后，会显示将要使用的工作区路径。":
+            "所选工作区位置为 "+WorkspaceDirectoryLabel()+"，也可改选其他磁盘。";
+    }
+    string WorkspaceDirectoryLabel(){
+        if(folderManagement.IsChecked!=true)return "跳过文件夹管理";
+        return drive.SelectedItem==null?"请选择工作区磁盘":Convert.ToString(drive.SelectedItem)+@":\Codex";
+    }
+    string Drive() {
+        if(drive.SelectedItem!=null)return Convert.ToString(drive.SelectedItem);
+        if(folderManagement.IsChecked==true)throw new InvalidOperationException("请在「工作区与目录」中选择工作盘。");
+        return Environment.SystemDirectory.Substring(0,1);
+    }
     string RelaySummary(){
         if(proxyEnabled.IsChecked!=true)return "取消保存代理，同时移除已启用的转发";
         return remoteRelay.IsChecked==true ? "通过 "+ProxySummary()+" 转发，安装 Windows 服务并设置 chatgpt.com 的系统 hosts 映射" : "跳过安装";
     }
     static string ModelSettingLabel(object model,object effort){return ModelLabels.Display(Convert.ToString(model))+" / "+EffortLabels.Display(Convert.ToString(effort));}
-    string InitSummary() {var options=Options();var child=ModelSettingLabel(options["childModel"],options["childEffort"]);return "工作盘："+Drive()+":\n"+ParentModelLabel+"："+ModelSettingLabel(options["parentModel"],options["parentEffort"])+"\n子代理："+(AutoAssign?(subagents.IsChecked==true?AutoAssignLabel:"关闭，保留自动指派"):subagents.IsChecked==true?child:"关闭，不写入子代理规则；保留模型设置 "+child)+"\n"+MaxConcurrentSubagentsLabel+"："+options["maxConcurrentSubagents"]+(subagents.IsChecked==true?"":"（保留设置）")+"\n本次保存的 CLI 选择："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n远控转发："+RelaySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\n开发时参考开源案例："+(openSourceReference.IsChecked==true?"写入开源参考规则":"关闭并移除本工具写入的开源参考规则")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\n浏览器组件检查："+(browserRepair.IsChecked==true?"校验并按需恢复官方组件":"跳过")+"\n浏览器工具："+BrowserToolsSelection()+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 可选远控转发 → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器组件检查 → 可选浏览器工具。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、登录和用户资料保留。电脑名称和允许控制由你在 Codex/Work 中设置。完整初始化开始前确认关闭 Codex；变更前备份，未完成项可单独重试。";}
+    string InitSummary() {var options=Options();var child=ModelSettingLabel(options["childModel"],options["childEffort"]);return "工作区："+WorkspaceDirectoryLabel()+"\n"+ParentModelLabel+"："+ModelSettingLabel(options["parentModel"],options["parentEffort"])+"\n子代理："+(AutoAssign?(subagents.IsChecked==true?AutoAssignLabel:"关闭，保留自动指派"):subagents.IsChecked==true?child:"关闭，不写入子代理规则；保留模型设置 "+child)+"\n"+MaxConcurrentSubagentsLabel+"："+options["maxConcurrentSubagents"]+(subagents.IsChecked==true?"":"（保留设置）")+"\n本次保存的 CLI 选择："+CliChoiceSummary()+"\n代理："+ProxySummary()+"\n远控转发："+RelaySummary()+"\n文件夹管理："+(folderManagement.IsChecked==true?"创建并绑定标准目录":"跳过")+"\n防止过度防御："+(antiOverDefense.IsChecked==true?"写入 HERO 中文完整规则及实现、交付规则":"跳过")+"\n按需笔记与文档管理："+(workJournal.IsChecked==true?"写入 Markdown 笔记、文档与索引规则":"跳过")+"\n优先使用命令行："+(commandLineFirst.IsChecked==true?"写入 CLI 与 PowerShell 优先规则":"跳过")+"\nCodex 记忆："+(memories.IsChecked==true?"开启生成和使用":"关闭，保留已有记忆文件")+"\n开发时参考开源案例："+(openSourceReference.IsChecked==true?"写入开源参考规则":"关闭并移除本工具写入的开源参考规则")+"\nGitHub 下载："+(githubMirrors.IsChecked==true?"官方 → 自定义 → 内置 10 个镜像":"仅使用官方地址")+"\nCUA 检查与修复："+(cuaRepair.IsChecked==true?"按需执行":"跳过")+"\nCLI 启动保护与修复："+(guard.IsChecked==true?"安装，包含登录自动维护；开始执行前申请管理员权限":"跳过")+"\n浏览器组件检查："+(browserRepair.IsChecked==true?"校验并按需恢复官方组件":"跳过")+"\n浏览器工具："+BrowserToolsSelection()+"\n更新官方CLI："+(officialCliUpdate.IsChecked==true?"更新独立组件":"跳过更新；如所选组件缺失仍会准备")+"\n更新桌面版（含原生CLI）："+(desktopUpdate.IsChecked==true?"先通过 Microsoft Store 精确更新":"跳过")+"\n执行顺序：前置检查 → 桌面更新 → 配置、目录及 CUA → 可选远控转发 → 独立 CLI 更新 → 可选保护 → CLI 选择 → 浏览器组件检查 → 可选浏览器工具。未完成项目可单独重试。\n"+ModelChecks(options)+"\n先检查差异，仅更新所选功能管理的配置和规则；相同内容跳过。原有权限、自定义配置、登录和用户资料保留。电脑名称和允许控制由你在 Codex/Work 中设置。完整初始化开始前确认关闭 Codex；变更前备份，未完成项可单独重试。";}
     void ActionCard(string title,string description,string label,string op,bool danger) {
         var p=Card(title,description); p.Children.Add(Button(label,async()=>await Run(op,title,true),!danger));
     }
@@ -529,10 +574,18 @@ public partial class MainWindow : Window {
         options["allowCloseRunningApp"]=allowClose;
         await Run("initialize","初始化",false,options);
     }
-    async Task RetryIncompleteInitialization(){if(busy||lastInitializationOptions==null||incompleteInitializationStages.Length==0)return;pendingInitializationRetry=new Dictionary<string,object>(lastInitializationOptions);pendingInitializationRetry["retryContext"]=true;if(!incompleteInitializationStages.Contains("preflight"))pendingInitializationRetry["retryStages"]=String.Join(",",incompleteInitializationStages);await BeginInitialization();}
+    bool RequiresFullInitializationRetry(){return incompleteInitializationStages.Contains("preflight")||incompleteInitializationStages.Contains("cli");}
+    async Task RetryIncompleteInitialization(){
+        if(busy||lastInitializationOptions==null||incompleteInitializationStages.Length==0)return;
+        pendingInitializationRetry=new Dictionary<string,object>(lastInitializationOptions);
+        pendingInitializationRetry["retryContext"]=true;
+        if(RequiresFullInitializationRetry())pendingInitializationRetry.Remove("retryStages");
+        else pendingInitializationRetry["retryStages"]=String.Join(",",incompleteInitializationStages);
+        await BeginInitialization();
+    }
     void BackupPage(){
         subtitle.Text="选择已有备份，查看位置或确认回滚。";
-        var r=Card("恢复与回滚","选择本地初始化备份或保护器 CLI 历史缓存，可以打开所在文件夹或回滚。时间为本机备份 / 缓存时间。此处的回滚范围为初始化配置与保护器 CLI。");
+        var r=Card("恢复与回滚","可以恢复初始化配置。使用官方独立 CLI 时，也可恢复该 CLI 的历史版本。");
         rollbackList=new ListBox{ItemContainerStyle=(Style)Resources["KitRollbackItem"],Background=B("#101620"),Foreground=TextBrush,BorderThickness=new Thickness(0),MaxHeight=280,MinHeight=70,HorizontalContentAlignment=HorizontalAlignment.Stretch,Padding=new Thickness(6),Margin=new Thickness(0,2,0,10)};
         ScrollViewer.SetHorizontalScrollBarVisibility(rollbackList,ScrollBarVisibility.Disabled);
         var entries=status!=null&&status.ContainsKey("rollbackEntries")?status["rollbackEntries"] as System.Collections.IEnumerable:null;
@@ -556,9 +609,10 @@ public partial class MainWindow : Window {
         var item=rollbackList==null?null:rollbackList.SelectedItem as ListBoxItem;
         return item==null?null:item.Tag as Dictionary<string,object>;
     }
-    static bool CanRollback(Dictionary<string,object> entry){
+    bool CanRollback(Dictionary<string,object> entry){
         object available;
-        return entry!=null&&entry.TryGetValue("available",out available)&&available is bool&&(bool)available;
+        return entry!=null&&entry.TryGetValue("available",out available)&&available is bool&&(bool)available
+            &&(Core.Value(entry,"kind","")!="cli"||Core.Value(status,"runtimeMode","")=="OfficialStandalone");
     }
     void UpdateRollbackActions(){
         var entry=SelectedRollbackEntry();
@@ -581,16 +635,7 @@ public partial class MainWindow : Window {
         if(!Directory.Exists(path)){banner.Text="所选备份文件夹已移动或删除，请刷新备份列表。";return;}
         open(path);
     }
-    static string RollbackSummary(Dictionary<string,object> entry){return "目标："+(Core.Value(entry,"kind","")=="init"?"初始化配置":"保护器 CLI")+"\n版本："+Core.Value(entry,"version","版本未记录")+"\n备份 / 缓存时间："+Core.Value(entry,"time","未记录")+"\n位置："+Core.Value(entry,"path","")+"\n\n"+(Core.Value(entry,"kind","")=="init"?"将覆盖当前配置、代理、全局规则及该备份记录的运行时 / PATH 设置；不恢复 CUA，不删除对话或已创建的工作目录。":"将切换到所选本地独立 CLI，并更改桌面应用的 CLI 覆盖路径；不会降级 Microsoft Store 桌面应用。")+"\n请先保存工作并退出 Codex；检测到仍在运行时停止，不强制结束进程。";}
-    void GuideOfficialCli(){
-        Navigate("CLI 管理");
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(HighlightOfficialSwitch));
-    }
-    void HighlightOfficialSwitch(){
-            if(officialSwitch==null)return;officialSwitch.BringIntoView();officialSwitch.Focus();
-            if(SystemParameters.ClientAreaAnimation&&!preview){var animation=new DoubleAnimation(1,.45,TimeSpan.FromMilliseconds(450)){AutoReverse=true,RepeatBehavior=new RepeatBehavior(3)};officialSwitch.BeginAnimation(UIElement.OpacityProperty,animation);}
-            else {officialSwitch.Background=Accent;officialSwitch.Foreground=B("#101B31");officialSwitch.ToolTip="请点击此按钮检查并切换官方独立 CLI";}
-    }
+    static string RollbackSummary(Dictionary<string,object> entry){return "目标："+(Core.Value(entry,"kind","")=="init"?"初始化配置":"官方独立 CLI")+"\n版本："+Core.Value(entry,"version","版本未记录")+"\n备份 / 缓存时间："+Core.Value(entry,"time","未记录")+"\n位置："+Core.Value(entry,"path","")+"\n\n"+(Core.Value(entry,"kind","")=="init"?"将恢复备份中的配置、代理、全局规则和 PATH，保留当前 CLI 类型。不恢复 CUA，不删除对话或已创建的工作目录。":"将恢复所选的官方独立 CLI 版本，不会降级 Microsoft Store 桌面应用。")+"\n请先保存工作并退出 Codex；检测到仍在运行时停止，不强制结束进程。";}
     void BrowserConnection(){
         subtitle.Text="检查并按需恢复官方浏览器电脑操作组件。";
         var environment=Card("浏览器组件", "文件完整性与真实浏览器连接分别验收。");Pair(environment,"桌面版",Core.Value(status,"desktopVersion","未检测"));Pair(environment,"组件完整性",Core.Value(browserReport,"integrity","尚未检查"));Pair(environment,"运行时目录",Core.Value(browserReport,"runtime","尚未检查"));
@@ -642,9 +687,9 @@ public partial class MainWindow : Window {
     }
     void VerifyMaintenanceModes(){
         foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown"}){
-            status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("CLI 管理");UpdateLayout();var expected=mode=="DesktopNative"?"切换官方独立 CLI":mode=="OfficialStandalone"?"切换桌面原生 CLI":"重新检测 CLI";
-            if(Convert.ToString(officialSwitch.Content)!=expected)throw new InvalidDataException("CLI switch label missing");
-            var buttons=InitializationFlowTests.Descendants<Button>(content).Select(x=>Convert.ToString(x.Content)).ToArray();foreach(var label in new[]{expected,"安装 / 修复保护","更新官方独立 CLI","更新桌面版（含原生 CLI）","诊断助手","卸载启动保护"})if(!buttons.Contains(label))throw new InvalidDataException("CLI action missing: "+label);
+            status=new Dictionary<string,object>{{"runtimeMode",mode}};Navigate("CLI 管理");UpdateLayout();
+            var buttons=InitializationFlowTests.Descendants<Button>(content).Select(x=>Convert.ToString(x.Content)).ToArray();foreach(var label in new[]{"安装 / 修复保护","更新官方独立 CLI","更新桌面版（含原生 CLI）","诊断助手","卸载启动保护"})if(!buttons.Contains(label))throw new InvalidDataException("CLI action missing: "+label);
+            if(buttons.Contains("重新检测 CLI")!=(mode=="Unknown"))throw new InvalidDataException("CLI status action mismatch");
             repairTab=4;Navigate("连接与修复");if(!InitializationFlowTests.Descendants<Button>(content).Any(x=>Convert.ToString(x.Content)=="清理已废弃配置"))throw new InvalidDataException("Config cleanup missing");
             repairTab=3;Navigate("连接与修复");if(!InitializationFlowTests.Descendants<Button>(content).Any(x=>Convert.ToString(x.Content)=="修复桌面启动组件"))throw new InvalidDataException("Startup repair missing");
         }
@@ -694,10 +739,7 @@ public partial class MainWindow : Window {
             case "proxy":return "更新当前用户 Codex 的代理配置："+ProxySummary()+"。已开启的远控转发将同步新上游；取消勾选代理并保存会同时关闭转发。";
             case "config-cleanup":return "先备份用户配置、profile 及所选项目配置，再仅移除 features.code_mode_tool_description_first 和 features.guardianv2.thread_context 的可靠布尔赋值。复杂写法保留并提示。不会重置配置或关闭 Codex；session-flags 警告需单独处理。";
             case "init-rollback":return "恢复最新初始化备份，可能停止 Codex 进程。CUA 和已创建的工作目录不在此回滚范围内。";
-            case "guard-uninstall":return "移除保护器管理的登录任务、启动入口与配置。";
-            case "guard-native":return "恢复桌面应用自带 CLI，并清理保护器拥有的覆盖配置。请先关闭 Codex 桌面应用。";
-            case "guard-rollback":return "将保护器管理的 CLI 恢复到备份版本。请先关闭 Codex 桌面应用。";
-            case "guard-current":return "先检查官方独立 CLI，缺失或不完整时从官方渠道准备，再切换。请先退出 Codex。";
+            case "guard-uninstall":return "移除保护器管理的登录任务和启动入口，保留当前 CLI 选择。";
             case "official-cli-update":return "更新官方独立 CLI 组件，保留保存的 CLI 选择；不安装启动保护或登录任务。请先退出 Codex。";
             case "desktop-update":return "通过 winget 更新官方 Microsoft Store 桌面版（含原生 CLI），最长等待 20 分钟；不自动重启。请先退出 Codex。";
             case "desktop-core-repair":return "请先保存工作并彻底退出 Codex。将核对当前官方桌面版，若当前版本的用户目录缺失，则复制并逐项校验四个启动组件。若目录已有异常文件、版本变化或无法识别，操作会停止，不会强制结束任务或覆盖已有目录。完成后仍需启动 Codex 验证。";
@@ -814,7 +856,7 @@ public partial class MainWindow : Window {
         var folder=Directory.CreateDirectory(Path.Combine(Path.GetTempPath(),"CodexKit-rollback-"+Guid.NewGuid().ToString("N"))).FullName;
         var entries=new object[]{new Dictionary<string,object>{{"id",new string('a',64)},{"kind","init"},{"version","备份工具 v2.2.4"},{"time","2026-11-01 14:00:00"},{"available",true},{"path",folder}},new Dictionary<string,object>{{"id",new string('b',64)},{"kind","cli"},{"version","0.165.0"},{"time","2026-10-30 12:00:00"},{"available",true},{"path",Path.Combine(folder,"missing")}},new Dictionary<string,object>{{"id",new string('c',64)},{"kind","cli"},{"available",false},{"path",folder}}};
         try{
-            status=new Dictionary<string,object>{{"rollbackEntries",entries},{"rollbackDeleteId",new string('a',64)},{"rollbackDeleteCount",3}};selectedRollbackId="";Navigate("备份与回滚");
+            status=new Dictionary<string,object>{{"runtimeMode","DesktopNative"},{"rollbackEntries",entries},{"rollbackDeleteId",new string('a',64)},{"rollbackDeleteCount",3}};selectedRollbackId="";Navigate("备份与回滚");
             if(rollbackList.Items.Count!=3||rollbackButton.IsEnabled||rollbackFolderButton.IsEnabled||!rollbackDeleteButton.IsEnabled||
                ((SolidColorBrush)rollbackFolderButton.Background).Color!=((SolidColorBrush)MorandiTheme.Disabled).Color)throw new InvalidDataException("Rollback actions did not reflect the empty selection");
             rollbackList.SelectedIndex=0;if(!rollbackButton.IsEnabled||!rollbackFolderButton.IsEnabled||selectedRollbackId!=new string('a',64)||
@@ -822,7 +864,10 @@ public partial class MainWindow : Window {
             string opened=null;OpenSelectedRollbackFolder(path=>opened=path);if(opened!=folder)throw new InvalidDataException("Open backup folder did not resolve the selected path");
             var summary=RollbackSummary((Dictionary<string,object>)entries[0]);if(!summary.Contains("2026-11-01 14:00:00")||!summary.Contains("2.2.4")||!summary.Contains("不删除对话"))throw new InvalidDataException("Rollback confirmation lacks its exact target or impact");
             Navigate("备份与回滚");if(rollbackList.SelectedIndex!=0||!rollbackButton.IsEnabled)throw new InvalidDataException("Returning to maintenance lost the rollback selection");
-            rollbackList.SelectedIndex=1;summary=RollbackSummary((Dictionary<string,object>)entries[1]);if(!summary.Contains("0.165.0")||!summary.Contains("不会降级 Microsoft Store"))throw new InvalidDataException("CLI rollback confirmation misstates its scope");
+            rollbackList.SelectedIndex=1;if(rollbackButton.IsEnabled)throw new InvalidDataException("Desktop native mode allowed standalone CLI rollback");
+            status["runtimeMode"]="OfficialStandalone";Navigate("备份与回滚");
+            if(!rollbackButton.IsEnabled)throw new InvalidDataException("Standalone CLI version rollback was disabled within the same type");
+            summary=RollbackSummary((Dictionary<string,object>)entries[1]);if(!summary.Contains("0.165.0")||!summary.Contains("不会降级 Microsoft Store"))throw new InvalidDataException("CLI rollback confirmation misstates its scope");
             OpenSelectedRollbackFolder(path=>{throw new InvalidDataException("Missing backup directory was opened");});
             if(!banner.Text.Contains("请刷新备份列表"))throw new InvalidDataException("Missing backup folder was not reported");
             rollbackList.SelectedIndex=2;if(rollbackButton.IsEnabled||!rollbackFolderButton.IsEnabled)throw new InvalidDataException("Incomplete backup could not be inspected independently of rollback");

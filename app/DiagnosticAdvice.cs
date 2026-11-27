@@ -12,7 +12,7 @@ public static class DiagnosticAdvice {
         var suggestions=new List<string>();var findings=new List<string>();
         if(Is(context,"standaloneHealthy",false)){findings.Add("官方独立 CLI 的组件缺失、校验异常或无法运行，诊断助手可能无法启动。");suggestions.Add("先退出 Codex，点击“安装 / 修复保护”，完成后再运行诊断助手。");}
         if(Is(context,"desktopFound",false)){findings.Add("未找到当前用户安装的 Codex 桌面应用。");suggestions.Add("确认已安装 Codex 桌面应用，并使用安装它的 Windows 账号运行本工具。");}
-        else if(Is(context,"desktopHealthy",false)){findings.Add("Codex 桌面应用自带的 CLI 组件不完整。");suggestions.Add("先点击“安装 / 修复保护”准备备用组件；若仍需独立 CLI，可点击“切换官方独立 CLI”。");}
+        else if(Is(context,"desktopHealthy",false)){findings.Add("Codex 桌面应用自带的 CLI 组件不完整。");suggestions.Add("先在“连接与修复 → 桌面启动”检查组件。如需改用官方独立 CLI，请在初始化的“功能选择”中选择并完成初始化。");}
         var cleanOutput=Regex.Replace(output??"","\x1B\\[[0-?]*[ -/]*[@-~]","");
         if(cleanOutput.Contains("bundled_executable_relocation_failed")&&cleanOutput.Contains("rename_staging")&&Regex.IsMatch(cleanOutput,"EPERM",RegexOptions.IgnoreCase)){
             findings.Add("桌面版复制启动组件时出现 EPERM / rename_staging；具体原因仍需确认。");

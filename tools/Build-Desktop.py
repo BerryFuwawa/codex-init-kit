@@ -5,12 +5,15 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import uuid
 
 sys.stdout.reconfigure(encoding="utf-8")
 repo = Path(__file__).resolve().parent.parent
 work = repo
-output = Path(sys.argv[1]) if len(sys.argv)>1 else repo / "build" / "desktop-native"
+arguments = [arg for arg in sys.argv[1:] if arg != "--wizard-preview"]
+wizard_preview = "--wizard-preview" in sys.argv[1:]
+output = Path(arguments[0]) if arguments else repo / "build" / "desktop-native"
 framework = Path(os.environ["WINDIR"]) / "Microsoft.NET/Framework64/v4.0.30319"
 build = (repo / "tools/Build-Desktop.ps1").read_text(encoding="utf-8-sig")
 output.mkdir(parents=True, exist_ok=True)
@@ -31,14 +34,24 @@ for name in ("RtkRules.md", "FolderRules.md", "SubagentRules.md", "HERO-Anti-Ove
     resources["Payload." + name] = repo / "app" / name
 sources = list((repo / "app").glob("*.cs")) + list((repo / "native").glob("*.cs"))
 for data in (repo / "native/Data").iterdir(): resources["Native." + data.name] = data
-for name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","OpenSourceReference.md","FolderRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]: resources["Native.Desktop." + name] = repo / "app" / name
+for name in ["RtkRules.md","AntiOverDefense.md","WorkJournal.md","CommandLineFirst.md","OpenSourceReference.md","FolderRules.md","CredentialManagementRules.md","SubagentRules.md","HERO-Anti-OverDefense.LICENSE.txt"]: resources["Native.Desktop." + name] = repo / "app" / name
 sources += [repo / path for path in re.findall(r"\$argsList\+=\(Join-Path \$root '(tests\\[^']+\.cs)'\)", build)]
 resources["Payload.Project.LICENSE"] = repo / "LICENSE"
 args = ["/nologo", "/target:winexe", "/platform:x64", "/optimize+", "/utf8output",
-        "/out:" + str(exe), "/win32manifest:" + str(repo / "app/app.manifest"),
+        "/win32manifest:" + str(repo / "app/app.manifest"),
         "/win32icon:" + str(repo / "assets/app.ico")]
 args += ["/reference:" + str(framework / path) for path in references]
+if wizard_preview:
+    args.append("/define:INITIALIZATION_DESIGN_PREVIEW")
 args += ["/resource:" + str(path) + "," + name for name, path in resources.items()]
 args += [str(path) for path in sources]
-result = subprocess.run(["rtk", "proxy", str(framework / "csc.exe"), *args])
+compiler = ["rtk", "proxy", str(framework / "csc.exe")]
+if wizard_preview:
+    with tempfile.TemporaryDirectory(dir=output) as staging:
+        staged_exe = Path(staging) / exe.name
+        result = subprocess.run([*compiler, "/out:" + str(staged_exe), *args])
+        if result.returncode == 0:
+            staged_exe.replace(output / "CodexInitKit-WizardPreview.exe")
+else:
+    result = subprocess.run([*compiler, "/out:" + str(exe), *args])
 raise SystemExit(result.returncode)

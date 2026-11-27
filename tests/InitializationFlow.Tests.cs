@@ -215,17 +215,17 @@ public static class InitializationFlowTests {
             Assert(!labels.Contains("记忆"),"Memory still occupies a separate card");
             foreach(var title in new[]{"工作习惯","开发习惯","修复与连接","组件更新"})Assert(labels.Contains(title),"Initialization feature category missing: "+title);
             var choices=Descendants<CheckBox>(features).ToArray();
-            var workChoices=new[]{"文件夹管理功能","按需笔记与文档管理","启用 Codex 记忆","防止过度防御","优先使用命令行","开发时参考开源案例"};
-            Assert(choices.Take(6).Select(c=>Convert.ToString(c.Content)).SequenceEqual(workChoices),"Work rule order or grouping changed");
-            Assert(choices.Take(3).All(c=>c.Parent==choices[0].Parent)&&choices.Skip(3).Take(3).All(c=>c.Parent==choices[3].Parent)&&choices[0].Parent!=choices[3].Parent,"Work and development habits must use separate cards");
-            Assert(choices.Take(6).All(c=>c.IsChecked==true),"New habit selections must default on");
+            var workChoices=new[]{"文件夹管理功能","本机凭证管理","按需笔记与文档管理","启用 Codex 记忆","防止过度防御","优先使用命令行","开发时参考开源案例"};
+            Assert(choices.Take(7).Select(c=>Convert.ToString(c.Content)).SequenceEqual(workChoices),"Work rule order or grouping changed");
+            Assert(choices.Take(4).All(c=>c.Parent==choices[0].Parent)&&choices.Skip(4).Take(3).All(c=>c.Parent==choices[4].Parent)&&choices[0].Parent!=choices[4].Parent,"Work and development habits must use separate cards");
+            Assert(choices.Take(7).All(c=>c.IsChecked==true),"New habit selections must default on");
             Assert(UiIcons.For("工作习惯")!=null&&UiIcons.For("开发习惯")!=null&&UiIcons.For("工作习惯")!=UiIcons.For("开发习惯"),"Habit icons must be distinct");
-            Assert(choices.Length==14&&choices.Distinct().Count()==14&&choices.Skip(11).Cast<object>().SequenceEqual(new[]{Field(window,"subagents"),Field(window,"playwrightCli"),Field(window,"chromeDevToolsMcp")}),"Feature grouping duplicated, lost or misplaced a checkbox");
-            Assert(choices.All(choice=>choice.ToolTip is ToolTip)&&choices.Skip(12).All(choice=>choice.IsChecked==false),"Feature tooltips or browser-tool defaults are missing");
+            Assert(choices.Length==15&&choices.Distinct().Count()==15&&choices.Skip(12).Cast<object>().SequenceEqual(new[]{Field(window,"subagents"),Field(window,"playwrightCli"),Field(window,"chromeDevToolsMcp")}),"Feature grouping duplicated, lost or misplaced a checkbox");
+            Assert(choices.All(choice=>choice.ToolTip is ToolTip)&&choices.Skip(13).All(choice=>choice.IsChecked==false),"Feature tooltips or browser-tool defaults are missing");
             ((CheckBox)Field(window,"playwrightCli")).IsChecked=true;
             var journal=(CheckBox)Field(window,"workJournal");journal.IsChecked=false;Navigate(window,"概览");Navigate(window,"初始化");
             var options=(Dictionary<string,object>)Call(window,"Options");
-            Assert(journal.IsChecked==false&&(bool)options["memories"]&&(bool)options["playwrightCli"]&&!(bool)options["chromeDevToolsMcp"],"Grouping or navigation reset feature choices");
+            Assert(journal.IsChecked==false&&(bool)options["memories"]&&(bool)options["credentialManagement"]&&(bool)options["playwrightCli"]&&!(bool)options["chromeDevToolsMcp"],"Grouping or navigation reset feature choices");
             foreach(var width in new[]{1000.0,1120.0}){window.Width=width;window.UpdateLayout();Assert(choices.All(c=>c.ActualWidth>0&&c.ActualHeight>0),"Grouped feature control was hidden at supported window width");}
             var tools=new NativeBrowserTools(NativeDesktopTests.BrowserToolsFiles(browserFixture),new CodexKit.Native.NativeServices(),null);
             window.InspectBrowserTools=()=>tools;
@@ -289,27 +289,63 @@ public static class InitializationFlowTests {
         var near=alpha((int)bottom.X,(int)bottom.Y+2);
         Assert(near>alpha((int)bottom.X,(int)bottom.Y+12)&&near<255,"Dialog shadow was missing or solid");
     }
-    static void VerifyOverviewRecoveryButton(){
-        var window=new MainWindow(true){Opacity=0,ShowInTaskbar=false};
+    static void VerifyCliSelectionIsInitializationOnly(){
+        var window=new MainWindow(true);
         try{
-            window.Show();window.MinWidth=600;
-            Set(window,"status",new Dictionary<string,object>{{"runtimeMode","DesktopNative"}});
-            Navigate(window,"概览");var guide=(Button)Field(window,"recoveryGuide");var row=(Grid)guide.Parent;
-            var label=(TextBlock)guide.Content;const string caption="遇到了未知错误？尝试切换官方独立CLI";
-            Assert(label.Text==caption&&label.TextWrapping==TextWrapping.NoWrap&&guide.Tag.ToString()==UiIcons.For(caption).ToString()&&guide.Background==MorandiTheme.Danger,"Recovery button lost its caption, icon or color");
-            double fullWidth=0;
-            var refresh=row.Children.OfType<Button>().Single(b=>Equals(b.Content,"刷新状态"));
-            foreach(var width in new[]{1000,800,608,1000}){
-                window.Width=width;window.UpdateLayout();
-                if(fullWidth==0)fullWidth=guide.ActualWidth;
-                var start=guide.TranslatePoint(new Point(),row);
-                var refreshEnd=refresh.TranslatePoint(new Point(refresh.ActualWidth,0),row).X;
-                bool fitsTogether=row.ActualWidth>=fullWidth+refreshEnd+refresh.Margin.Right;
-                Assert((Grid.GetRow(guide)==0)==fitsTogether,"Recovery button row mismatch at "+width);
-                Assert(fullWidth>0&&Math.Abs(start.X+guide.ActualWidth-row.ActualWidth)<2&&Math.Abs(guide.ActualWidth-fullWidth)<1&&(start.X>=refreshEnd||start.Y>=refresh.ActualHeight),"Recovery button clipped or away from right edge at "+width);
+            foreach(var mode in new[]{"DesktopNative","OfficialStandalone","Unknown"}){
+                Set(window,"status",new Dictionary<string,object>{{"runtimeMode",mode}});
+                foreach(var page in new[]{"概览","CLI 管理"}){
+                    Navigate(window,page);
+                    var buttons=Descendants<Button>((StackPanel)Field(window,"content"));
+                    Assert(!buttons.Any(button=>(Convert.ToString(button.Content)??"").Contains("切换")),"Standalone CLI switch still appears on "+page);
+                }
             }
-            Click(guide);Assert(Equals(Field(window,"page"),"CLI 管理"),"Recovery button did not open CLI management");
+            Set(window,"configurationTab",1);Navigate(window,"初始化");
+            var choices=Descendants<RadioButton>((StackPanel)Field(window,"content"));
+            Assert(choices.Contains((RadioButton)Field(window,"cliNative"))&&choices.Contains((RadioButton)Field(window,"cliStandalone")),"Initialization lost a CLI choice");
+            Set(window,"incompleteInitializationStages",new[]{"cli"});
+            Assert((bool)Call(window,"RequiresFullInitializationRetry"),"CLI retry skipped full initialization");
+            Set(window,"incompleteInitializationStages",new[]{"browser"});
+            Assert(!(bool)Call(window,"RequiresFullInitializationRetry"),"Browser retry unnecessarily required full initialization");
         }finally{window.Close();}
+    }
+    static void VerifyInitializationDesignPreview(){
+        var registryPath=@"Software\CodexInitKit-Test-"+Guid.NewGuid().ToString("N");
+        var preferences=@"HKEY_CURRENT_USER\"+registryPath;
+        MainWindow window=null;
+        try{
+            window=new MainWindow(true,true,preferences);
+            var folder=(CheckBox)Field(window,"folderManagement");
+            var credentials=(CheckBox)Field(window,"credentialManagement");
+            var drive=(ComboBox)Field(window,"drive");
+            var next=(Button)Field(window,"featuresContinue");
+            Assert(folder.IsChecked==true&&credentials.IsEnabled&&credentials.IsChecked==true&&drive.SelectedItem==null,"Preview initial settings");
+            folder.IsChecked=false;
+            Assert(!credentials.IsEnabled&&credentials.IsChecked==false&&Equals(next.Content,"下一步：模型设置"),"Hiding the workspace did not disable credentials");
+            Assert(Equals(((Button)Field(window,"modelTab")).Content,"3  模型设置")&&Equals(Field(window,"configurationTab"),1),"Removing workspace changed the current step");
+            folder.IsChecked=true;
+            Assert(credentials.IsEnabled&&credentials.IsChecked==true&&Equals(next.Content,"下一步：工作区与目录"),"Restoring workspace did not restore credentials and next step");
+            credentials.IsChecked=false;
+            credentials.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Click(next);
+            Assert(Equals(Field(window,"configurationTab"),3)&&!((Button)Field(window,"workspaceContinue")).IsEnabled,"Missing drive did not block advancement");
+            drive.SelectedIndex=0;
+            var chosen=Convert.ToString(drive.SelectedItem);
+            var workspaceNext=(Button)Field(window,"workspaceContinue");
+            var hint=(TextBlock)Field(window,"workspaceDriveHint");
+            Assert(chosen.Length>0&&workspaceNext.IsEnabled&&hint.Text.Contains(chosen+@":\Codex"),"Confirmed drive did not enable the next step");
+            Click(workspaceNext);
+            Assert(Equals(Field(window,"configurationTab"),2),"Workspace did not lead to model settings");
+            folder.IsChecked=false;window.Close();
+            window=new MainWindow(true,true,preferences);
+            folder=(CheckBox)Field(window,"folderManagement");credentials=(CheckBox)Field(window,"credentialManagement");
+            Assert(folder.IsChecked==false&&!credentials.IsEnabled&&Convert.ToString(((ComboBox)Field(window,"drive")).SelectedItem)==chosen,"Preview preferences did not survive reopening");
+            folder.IsChecked=true;
+            Assert(credentials.IsEnabled&&credentials.IsChecked==false,"Enabling folder management forgot the saved independent credential choice");
+        }finally{
+            if(window!=null)window.Close();
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(registryPath,false);
+        }
     }
     sealed class PressableButton:Button {
         internal void Press(bool value){IsPressed=value;}
@@ -369,7 +405,22 @@ public static class InitializationFlowTests {
             Assert(attempts==2&&foregroundRequests==1,"Successful launch brought Init Kit back to the foreground");
         }
     }
+    static void VerifyWorkspaceDriveInheritance(){
+        string home=Path.Combine(Path.GetTempPath(),"InitKit-workspace-drive-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        try {
+            var available=new[]{"C","D","E"};
+            Assert(MainWindow.SavedWorkspaceDrive(home,available)==null,"A fresh setup inferred a workspace disk.");
+            var config=Path.Combine(home,"config.toml");
+            File.WriteAllText(config,"[desktop]\nprojectlessWorkspaceRoot = 'E:\\Codex\\Conversations'\n");
+            Assert(MainWindow.SavedWorkspaceDrive(home,available)=="E","The saved workspace disk was ignored.");
+            Assert(MainWindow.SavedWorkspaceDrive(home,new[]{"C","D"})==null,"An unavailable workspace disk was selected.");
+            File.WriteAllText(config,"[desktop]\nprojectlessWorkspaceRoot = 'D:\\Custom\\Conversations'\n");
+            Assert(MainWindow.SavedWorkspaceDrive(home,available)==null,"A custom path was treated as the standard workspace.");
+        }finally{Directory.Delete(home,true);}
+    }
     public static void Run(){
+        VerifyWorkspaceDriveInheritance();
         OverviewDuringInitialization();ReturnAfterInitialization();
         VerifyOutcome(0,"概览",Fixture("complete","重建配置：完成"),"已完成初始化","现在可以打开 Codex");
         VerifyLaunchRetry();VerifyAnimatedCancel();
@@ -379,7 +430,7 @@ public static class InitializationFlowTests {
         VerifyOutcome(1,"日志","模拟运行日志\r\n","初始化未完成","请查看下方日志");
         VerifyReadingPosition();VerifyAuthorizationCancellation();VerifyCliDetectionFromStatus();
         VerifyPreflight(false,false,false);VerifyPreflight(true,false,false);VerifyPreflight(true,true,false);VerifyPreflight(true,false,true);
-        VerifyInitializationGroups();VerifyWorkRulePreferences();VerifyOverviewRecoveryButton();VerifyButtonShadows();
+        VerifyInitializationGroups();VerifyWorkRulePreferences();VerifyCliSelectionIsInitializationOnly();VerifyInitializationDesignPreview();VerifyButtonShadows();
     }
 }
 }

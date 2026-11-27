@@ -286,7 +286,7 @@ internal sealed class NativeDesktopReconcile {
         var text=NativeData.Normalize(current);var normalized=NativeData.Normalize(desired);if(text==normalized)return current;
         text=text.Replace(NativeData.Normalize(NativeData.Resource("Desktop.RtkRules.md")).TrimEnd(),"");
         text=Regex.Replace(text,@"(?m)^@"+Regex.Escape(p.RtkDoc)+@"\s*$","");
-        foreach(var name in new[]{"INIT WORK","ANTI OVERDEFENSE","WORK JOURNAL","COMMAND LINE FIRST","OPEN SOURCE REFERENCE"})text=Regex.Replace(text,@"(?ms)^<!-- BEGIN CODEX "+name+@" RULES -->.*?^<!-- END CODEX "+name+@" RULES -->\s*","");
+        foreach(var name in new[]{"INIT WORK","ANTI OVERDEFENSE","WORK JOURNAL","COMMAND LINE FIRST","OPEN SOURCE REFERENCE","CREDENTIAL MANAGEMENT"})text=Regex.Replace(text,@"(?ms)^<!-- BEGIN CODEX "+name+@" RULES -->.*?^<!-- END CODEX "+name+@" RULES -->\s*","");
         foreach(var name in new[]{"FOLDER MANAGEMENT","LUNA"})text=Regex.Replace(text,@"(?ms)^BEGIN CODEX "+name+@" PROMPT V[^\r\n]*\r?\n.*?^END CODEX "+name+@" PROMPT V[^\r\n]*\s*","");
         var custom=text.Trim();var result=(custom.Length>0?custom+"\n\n":"")+normalized.TrimEnd()+"\n";return NativeData.Normalize(current)==result?current:result;
     }

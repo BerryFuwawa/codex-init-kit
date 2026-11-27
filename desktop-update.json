@@ -1,8 +1,8 @@
 {
-    "schema_version":  1,
-    "repository":  "BerryFuwawa/codex-init-kit",
-    "version":  "2.3.12",
-    "url":  "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.12/CodexInitKit.exe",
-    "sha256":  "2b694aeb85d8d3951d1182337da6e9c05d55606000f42eb3212610b788255419",
-    "notes":  "父模型和子模型优先显示桌面版型号，工具补充的型号标为「内置」。"
+  "schema_version": 1,
+  "repository": "BerryFuwawa/codex-init-kit",
+  "version": "2.3.13",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.13/CodexInitKit.exe",
+  "sha256": "bf3f0b47e0c577a8e0db33ae33f3a223f8727d000b322326f7684d8bc14143d3",
+  "notes": "初始化新增按需显示的工作盘步骤和本机凭证管理规则。更换 CLI 类型统一在初始化中完成。"
 }

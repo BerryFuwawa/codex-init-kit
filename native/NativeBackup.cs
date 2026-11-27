@@ -43,10 +43,14 @@ public sealed class NativeSession {
         var proxyBackup=Path.Combine(root,"Backups","user-proxy.before.json");if(File.Exists(proxyBackup))foreach(var entry in NativeData.Json.Deserialize<Dictionary<string,RegistryValueState>>(NativeData.Read(proxyBackup))){if(!NativeUserProxy.Keys.Contains(entry.Key))throw new InvalidDataException("代理备份包含未管理的环境变量。");legacy.registry[entry.Key]=entry.Value;}
         return legacy;
     }
-    public void Restore(INativeRegistry store){
-        foreach(var entry in files){if(!Path.IsPathRooted(entry.Target)||String.IsNullOrWhiteSpace(entry.Backup)||!NativeData.Inside(Path.Combine(root,"Backups",entry.Backup),Path.Combine(root,"Backups")))throw new InvalidDataException("回滚文件位置无效。");NativeData.NoLinks(entry.Target);if(entry.Existed&&!File.Exists(Path.Combine(root,"Backups",entry.Backup)))throw new FileNotFoundException("备份文件缺失，停止回滚。",entry.Backup);}
-        foreach(var entry in files){if(entry.Existed)NativeData.WriteBytes(entry.Target,File.ReadAllBytes(Path.Combine(root,"Backups",entry.Backup)));else if(File.Exists(entry.Target))File.Delete(entry.Target);}
-        foreach(var entry in registry)store.Set(entry.Key,entry.Value);
+    public void Restore(INativeRegistry store,string preservedCliDirectory=null){
+        var restorableFiles=preservedCliDirectory==null?files:files.Where(x=>!NativeData.Inside(x.Target,preservedCliDirectory)).ToList();
+        foreach(var entry in restorableFiles){if(!Path.IsPathRooted(entry.Target)||String.IsNullOrWhiteSpace(entry.Backup)||!NativeData.Inside(Path.Combine(root,"Backups",entry.Backup),Path.Combine(root,"Backups")))throw new InvalidDataException("回滚文件位置无效。");NativeData.NoLinks(entry.Target);if(entry.Existed&&!File.Exists(Path.Combine(root,"Backups",entry.Backup)))throw new FileNotFoundException("备份文件缺失，停止回滚。",entry.Backup);}
+        foreach(var entry in restorableFiles){if(entry.Existed)NativeData.WriteBytes(entry.Target,File.ReadAllBytes(Path.Combine(root,"Backups",entry.Backup)));else if(File.Exists(entry.Target))File.Delete(entry.Target);}
+        foreach(var entry in registry){
+            if(preservedCliDirectory!=null&&(entry.Key.Equals("CODEX_CLI_PATH",StringComparison.OrdinalIgnoreCase)||entry.Key.Equals("CODEX_CODE_MODE_HOST_PATH",StringComparison.OrdinalIgnoreCase)))continue;
+            store.Set(entry.Key,entry.Value);
+        }
     }
     public static string Latest(NativePaths paths){if(!Directory.Exists(paths.BackupRoot))throw new DirectoryNotFoundException("没有初始化备份。");var result=Directory.GetDirectories(paths.BackupRoot,"Codex_Full_Reset_*").Where(x=>File.Exists(Path.Combine(x,"session.json"))||File.Exists(Path.Combine(x,"session.meta"))).OrderByDescending(x=>Directory.GetCreationTimeUtc(x)).ThenByDescending(x=>Path.GetFileName(x),StringComparer.OrdinalIgnoreCase).FirstOrDefault();if(result==null)throw new FileNotFoundException("没有可回滚的初始化备份。");return result;}
 }

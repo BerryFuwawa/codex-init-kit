@@ -24,7 +24,7 @@ public static class NativeCli {
         }
         if(!new[]{"init","reset","proxy","rollback"}.Contains(command))throw new ArgumentException("未知命令；使用 --help 查看。");
         if(options.Confirm&&options.AllowClose)AuthorizeExisting(paths,services,options);
-        string session;values.TryGetValue("session",out session);var init=engine.Run(command,options,session);Console.WriteLine(NativeData.Json.Serialize(init));return init.ExitCode;
+        string session;values.TryGetValue("session",out session);var init=engine.Run(command,options,session,preserveCli:command!="init"&&!String.IsNullOrEmpty(entryPrefix));Console.WriteLine(NativeData.Json.Serialize(init));return init.ExitCode;
     }catch(Exception ex){var cause=ex;while(cause.InnerException!=null)cause=cause.InnerException;Console.Error.WriteLine("操作未完成："+ex.GetType().Name+"："+ex.Message+(Object.ReferenceEquals(cause,ex)?"":"；具体原因："+cause.GetType().Name+"："+cause.Message));return 1;}}
     static void AuthorizeExisting(NativePaths paths,NativeServices services,NativeOptions options){if(!options.AllowClose)return;OfficialDesktop app;try{app=services.Desktop.Discover();}catch(FileNotFoundException){app=null;}options.ApprovedProcesses=services.Processes.List(paths,app).Select(p=>p.Key).ToArray();}
     public static NativeServices Services(NativePaths paths,NativeOptions options){var networkPath=Path.Combine(paths.LocalData,"CodexInitKit","Desktop","network.json");return new NativeServices{Registry=new WindowsRegistryStore(),Commands=new NativeCommandRunner(),Downloads=new NativeGitHubDownloads(GitHubNetworkOptions.Load(networkPath),options.Proxy?options.ProxyPort:0,options.ProxyHost,Console.WriteLine),Desktop=new WindowsNativeDesktop(),Processes=new WindowsNativeProcesses(),Log=Console.WriteLine};}

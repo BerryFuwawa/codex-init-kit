@@ -102,7 +102,7 @@ public static class CurrentModelSettingsTests {
                 }
                 type.GetField("configurationTab",flags).SetValue(window,2);
                 type.GetMethod("Navigate",flags).Invoke(window,new object[]{"初始化"});
-                var review=InitializationFlowTests.Descendants<Button>((DependencyObject)window.Content).Single(button=>Equals(button.Content,"查看变更 →"));
+                var review=InitializationFlowTests.Descendants<Button>((DependencyObject)window.Content).Single(button=>Equals(button.Content,"查看变更"));
                 var limitError=(TextBlock)type.GetField("maxConcurrentSubagentsError",flags).GetValue(window);
                 limit.Text="2.5";
                 bool unexpectedDialog=false;
