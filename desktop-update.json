@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.15",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.15/CodexInitKit.exe",
-  "sha256": "4d0195084fa8bcb900c1a271b27227d3943c64518fae4d79c63f468651309f55",
-  "notes": "启动时新增「读取中请等待」动画提示，修正底栏加载图标与文字的对齐。"
+  "version": "2.3.16",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.16/CodexInitKit.exe",
+  "sha256": "dfc71f2b741dac67739e76b45497353087f713266982a1fbe0e7437c1df0b83f",
+  "notes": "新增任务归属提醒和 Windows 凭据备份入口。"
 }
