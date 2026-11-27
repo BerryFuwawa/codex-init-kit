@@ -31,7 +31,7 @@ public partial class MainWindow {
         chromeDevToolsMcp.Content="Chrome DevTools MCP";
         SetFeatureHint(folderManagement,"创建标准工作目录，并将 Codex 工作区绑定到所选盘符。");
         SetFeatureHint(antiOverDefense,"为 Codex 写入工作规则，避免为实际用不到的情况增加复杂度。");
-        SetFeatureHint(workJournal,"让 Codex 按需用 Markdown 记录重要决定、进度和排查结果。");
+        SetFeatureHint(workJournal,"让 Codex 主动记录关键进度、证据、等待项和下一步，换对话后也能接着做。");
         SetFeatureHint(commandLineFirst,"有可靠命令行工具时，让 Codex 优先直接执行和核验。");
         SetFeatureHint(openSourceReference,"开发新功能时，Codex 会参考 GitHub 上的类似做法，再决定使用现成工具、借鉴思路或自行实现。");
         SetFeatureHint(memories,"允许 Codex 生成和使用本地记忆。关闭时保留已有记忆文件。");

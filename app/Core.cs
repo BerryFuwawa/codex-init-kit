@@ -17,7 +17,7 @@ using System.Net.Sockets;
 
 namespace CodexKit {
 public static class Core {
-public const string Version = "2.3.13";
+public const string Version = "2.3.14";
     public const string Repository = "BerryFuwawa/codex-init-kit";
     public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexInitKit", "Desktop");
     public static string NetworkSettingsPath {get{return Path.Combine(Root,"network.json");}}

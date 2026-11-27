@@ -4,7 +4,7 @@ Codex Init Kit 是一个 Windows 中文桌面工具，用向导配置 OpenAI Cod
 
 **[下载 CodexInitKit.exe](https://github.com/BerryFuwawa/codex-init-kit/releases/latest/download/CodexInitKit.exe)** · [Windows 使用手册](docs/Desktop.md) · [版本与更新记录](https://github.com/BerryFuwawa/codex-init-kit/releases)
 
-Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.13 更新说明](docs/Release-2.3.13.md)
+Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.14 更新说明](docs/Release-2.3.14.md)
 
 ![Codex Init Kit 中文界面与功能总览](assets/readme-banner.png)
 
@@ -16,7 +16,7 @@ Windows x64 · .NET Framework 4.8 · Windows PowerShell 5.1 · [v2.3.13 更新�
 
 只想处理某个故障，可以直接打开「连接与修复」或「CLI 管理」。如果只需要配置代理，可以在向导里取消「开启远控转发」。[查看完整初始化选项](docs/Settings.md)
 
-「工作习惯」可设置文件夹管理、本机凭证管理、按需笔记和 Codex 记忆。本机凭证管理会引导 Codex 使用你电脑上已有的凭证索引和助手。「开发习惯」可让 Codex 在设计新功能时先参考开源案例。工具会记住你的选择。[可选功能](docs/Settings.md#可选功能)
+「工作习惯」可设置文件夹管理、本机凭证管理、按需笔记和 Codex 记忆。开启按需笔记后，Codex 会在分阶段工作或多轮排查时记录进度和下一步，方便换对话后接着做。本机凭证管理会引导 Codex 使用你电脑上已有的凭证索引和助手。「开发习惯」可让 Codex 在设计新功能时先参考开源案例。工具会记住你的选择。[可选功能](docs/Settings.md#可选功能)
 
 ## 解决常见问题
 

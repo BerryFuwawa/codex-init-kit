@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "repository": "BerryFuwawa/codex-init-kit",
-  "version": "2.3.13",
-  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.13/CodexInitKit.exe",
-  "sha256": "bf3f0b47e0c577a8e0db33ae33f3a223f8727d000b322326f7684d8bc14143d3",
-  "notes": "初始化新增按需显示的工作盘步骤和本机凭证管理规则。更换 CLI 类型统一在初始化中完成。"
+  "version": "2.3.14",
+  "url": "https://github.com/BerryFuwawa/codex-init-kit/releases/download/v2.3.14/CodexInitKit.exe",
+  "sha256": "a29c03e9a41c7ffbfa086479e4c31061bbdac57780c553a3c078da0216e3b7f3",
+  "notes": "多轮排查和分阶段任务会主动记录进度与下一步，方便换对话后继续。"
 }
